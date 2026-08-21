@@ -34,6 +34,14 @@ const TINT_WALL_LEFT := Color(0.30, 0.33, 0.41)
 const TINT_WALL_RIGHT := Color(0.22, 0.25, 0.32)
 const TINT_UNDERSIDE := Color(0.42, 0.47, 0.57)
 
+# Underside placement. WIDTH is a multiple of the board's front edge;
+# LIFT tucks the straight top edge up behind the floor so it never shows.
+const UNDERSIDE_WIDTH := 0.95
+const UNDERSIDE_LIFT := 30.0
+# Slides the island ALONG the board's edge (not just sideways), so its
+# mass sits under the board's lowest corner rather than off to one side.
+const UNDERSIDE_SLIDE := 0.12
+
 var grid: Array = []
 var goal_pos := Vector2.ZERO
 
@@ -87,34 +95,40 @@ func _draw() -> void:
 
 
 # The island underside art is drawn front-on with a straight top edge,
-# while the board is isometric. Rather than fight that, we line its
-# widest point up with the board's widest point and let the board's
-# own walls hide the join.
+# while the board is skewed into isometric. Drawing it as a plain
+# rectangle left it sitting flat while the map leaned — so instead we
+# SHEAR it, mapping the image's horizontal axis onto the board's own
+# +x edge. Its top edge then runs at exactly the map's angle and tucks
+# in under the floor instead of cutting across it.
 func _draw_underside() -> void:
-	var span_x := float(Iso.cols + Iso.rows) * Iso.TILE * Iso.ISO_X
-	var mid_y := float(Iso.cols + Iso.rows) * Iso.TILE * Iso.ISO_Y * 0.5
-	var origin := Iso.origin()
+	# The board's front-left edge, from the left corner down to the
+	# lowest corner. This is the line the island hangs from.
+	var left_corner := Iso.to_screen(Vector2(0.0, float(Iso.rows) * Iso.TILE), 0.0)
+	var edge_run := float(Iso.cols) * Iso.TILE * Iso.ISO_X
 
-	# The board's centre of mass and its lowest corner are NOT in the same
-	# place once it's skewed into isometric. The art is symmetrical, so we
-	# hang it between the two: under the mass, but pulled toward the point
-	# the platform actually dips to.
-	var centroid_x := origin.x + float(Iso.cols - Iso.rows) * Iso.TILE * Iso.ISO_X * 0.5
-	var low_x := origin.x + float(Iso.cols - Iso.rows) * Iso.TILE * Iso.ISO_X
-	var centre_x: float = lerp(centroid_x, low_x, 0.25)
-
-	# Why 0.66 and not full width: the art has a STRAIGHT top edge, but the
-	# board is a rhombus whose thickness tapers to nothing at its left and
-	# right corners. A straight edge can only hide where there is thickness
-	# to hide behind, so the island has to be narrower than the board or the
-	# top edge shows as a hard horizontal line across the screen.
-	var w := span_x * 0.66
-	var left_x := centre_x - w * 0.5
-	var top_y := origin.y + mid_y * 1.08
+	var w := edge_run * UNDERSIDE_WIDTH
 	var h := w * float(TEX_UNDERSIDE.get_height()) / float(TEX_UNDERSIDE.get_width())
 
-	draw_texture_rect(TEX_UNDERSIDE, Rect2(Vector2(left_x, top_y), Vector2(w, h)),
+	# Lifted slightly so the straight top edge sits INSIDE the board and
+	# the floor covers it. Drawn first, so the overlap is hidden.
+	# Everything slides ALONG the edge direction (1, ISO_Y/ISO_X), width
+	# centering included — nudging x alone would drop the top edge off the
+	# edge line and expose it.
+	var along := Vector2(1.0, Iso.ISO_Y / Iso.ISO_X)
+	var slide := edge_run * UNDERSIDE_SLIDE - edge_run * (UNDERSIDE_WIDTH - 1.0) * 0.5
+	var anchor := left_corner + along * slide - Vector2(0.0, UNDERSIDE_LIFT)
+
+	# x maps along the board's edge (down-right at the iso angle),
+	# y stays screen-vertical because the rock hangs straight down.
+	var xf := Transform2D(
+		Vector2(1.0, Iso.ISO_Y / Iso.ISO_X),
+		Vector2(0.0, 1.0),
+		anchor)
+
+	draw_set_transform_matrix(xf)
+	draw_texture_rect(TEX_UNDERSIDE, Rect2(Vector2.ZERO, Vector2(w, h)),
 		false, TINT_UNDERSIDE)
+	draw_set_transform_matrix(Transform2D.IDENTITY)
 
 
 # UVs are derived from WORLD position, not from the tile, so the rock

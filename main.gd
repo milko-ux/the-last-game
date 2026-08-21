@@ -37,6 +37,7 @@ const HAZARD_SCENES := {
 	"sweep": preload("res://entities/hazard_line.tscn"),
 	"chain": preload("res://entities/hazard_chain.tscn"),
 	"chaser": preload("res://entities/hazard_chaser.tscn"),
+	"blinker": preload("res://entities/hazard_blinker.tscn"),
 }
 
 @onready var board: Node2D = $Board
@@ -113,11 +114,14 @@ func load_levels() -> void:
 		var level_hazards: Array = []
 		for h in entry.get("hazards", []):
 			var haz: Dictionary = {"type": h["type"], "speed": float(h["speed"])}
-			for key in ["a", "b", "pivot", "start"]:
+			for key in ["a", "b", "pivot", "start", "at"]:
 				if h.has(key):
 					haz[key] = Vector2(float(h[key][0]), float(h[key][1]))
-			if h.has("radius"):
-				haz["radius"] = float(h["radius"])
+			for num in ["radius", "period", "duty", "phase"]:
+				if h.has(num):
+					haz[num] = float(h[num])
+			if h.has("arms"):
+				haz["arms"] = int(h["arms"])
 			level_hazards.append(haz)
 
 		levels.append({

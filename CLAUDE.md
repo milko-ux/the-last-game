@@ -29,13 +29,16 @@ Work happens in this order unless Milko says otherwise — don't jump ahead to a
   - ✅ Player and each hazard type are their own reusable scenes; projection and palette moved to autoloads; UI moved to its own CanvasLayer.
   - ✅ Real glow/bloom on the world via HDR 2D + a `WorldEnvironment`. Scoped to the world only — the glass touch controls are excluded by sitting on their own CanvasLayer.
   - ✅ Motion trails on hazards and the player (`entities/trail.gd`). The goal marker already had an animated pulse from Phase 0.
-- **Phase 2 — Core Loop & Progression** 🔄 in progress. Difficulty tiers, checkpoints, unlock persistence and the difficulty select screen are built. **Remaining: Milko is authoring 30 levels in `levels.json`** (he designs them all; see the `_readme` in that file). Onboarding beyond the difficulty screen is still open.
+- **Phase 2 — Core Loop & Progression** 🔄 in progress. Difficulty tiers, checkpoints, unlock persistence, the difficulty select screen and **all 30 levels** are built. **Remaining: onboarding** (account sign-up + username) — see the note below, it overlaps Phase 3.
 - **Phase 3 — Backend & Persistence.** Talo leaderboard integration (global + country-selected), registration deferred to results screen, GDPR/EU consent handling.
 - **Phase 4 — Monetization.** Rewarded video ads only, never on death.
 - **Phase 5 — Native Build & Store Prep.** iOS export (Xcode/provisioning/App Store Connect), Android export (Play Console/signing), store listing assets, TestFlight/internal testing.
 - **Phase 6 — Launch.** Store submission, review, release, post-launch monitoring.
 
 **Deferred, agreed 2026-08-21 — restore the itch.io build.** The listing is currently private/404. Milko wants it public again so friends and testers can play, but explicitly parked it until the phases above are built. Day-to-day testing until then is local (see below). Don't spend time on itch.io before Phase 5 unless Milko raises it.
+
+### Serve with no-cache headers (learned the hard way)
+Browsers cache `index.pck` aggressively, and Godot re-fetches it on every load. A stale `.pck` will silently run an OLD build while every file on disk looks correct — the symptom is the game reporting the wrong level count or missing new content, with the network tab still showing 200s. Always serve the build with `Cache-Control: no-store`, and when in doubt change the port to get a fresh origin.
 
 ### Testing on a real phone (local, no itch.io)
 Godot web builds require a **secure context**, which browsers only grant to `localhost`/`127.0.0.1` or real HTTPS. A plain `http://<LAN-IP>` URL fails with *"Secure Context - Check web server configuration (use HTTPS)"* — this is the expected failure, not a broken build.
@@ -105,7 +108,8 @@ As of Phase 1.5, the game is split into small single-purpose files instead of on
 - **`entities/trail.gd`** — a small reusable motion ribbon (`Trail`). Remembers where something has been and draws it as shrinking, fading dots through `Palette.glow()`, so trails bloom like the rest of the neon without needing their own particle material. **Samples on a fixed time interval, not per frame**, so a trail is the same length in seconds at 30, 60 or 120fps. Used by the player and every hazard.
 - **`entities/hazard.gd`** — shared base class. `tick()` is final: it calls the subclass's `_move()`, then updates the trail and redraws, so every hazard type stays in step. Owns the box-vs-circle hit test (unchanged, so difficulty is unchanged) and the `jumpable` flag.
 - **`entities/hazard_line.gd`** — covers `patrol` and `sweep`; slides between two points. Low, so jumping clears it.
-- **`entities/hazard_chain.gd`** — orbits a pivot. TALL: `jumpable = false`, so you must go around.
+- **`entities/hazard_chain.gd`** — orbits a pivot. TALL: `jumpable = false`, so you must go around. `arms` puts 2+ orbs on one pivot; every arm can kill.
+- **`entities/hazard_blinker.gd`** — sits still and pulses on/off; only kills while lit. Dormant blinkers still draw as a faint ring so the rhythm is readable instead of an ambush. `period`/`duty`/`phase` let several alternate with each other.
 - **`entities/hazard_chaser.gd`** — homes in on the player. Low.
 
 **UI:**
@@ -149,7 +153,8 @@ The game renders in HDR (`rendering/viewport/hdr_2d` in `project.godot`), which 
 
 **Two switches if performance is a problem on a real phone:** set `Palette.NEON` to `1.0` to drop the over-bright everywhere, or `glow_enabled = false` on the Environment in `main.tscn` to remove the bloom pass entirely. Both are safe, reversible, and leave gameplay untouched.
 - **`entities/trail.gd`** — reusable motion ribbon, see above.
-- **`levels.json`** — all level data: ASCII grids (`#` wall, `.` floor, `P` start, `G` goal, `O` pit, `C` checkpoint coin) plus a `hazards` list per level. 5 levels. **Milko can edit this file directly in any text editor to design levels — no Godot or code needed.** The `_readme` block at the top documents the symbols and hazard types.
+- **`levels.json`** — all level data: ASCII grids (`#` wall, `.` floor, `P` start, `G` goal, `O` pit, `C` checkpoint coin) plus a `hazards` list per level. **30 levels**, curve documented in its `_readme`: 1-5 teach, 6-9 build, 10 checkpoint, 11-19 introduce chaser/blinker/twin-arm chains, 20 checkpoint, 21-29 combinations at speed, 30 finale. Coins on 10/20/30. **Milko can edit this file directly in any text editor — no Godot or code needed.**
+  - The generator that produced them (with a solvability validator: reachable goal, jumpable pit runs, no hazard buried in a wall) is not in the repo — it lived in the session scratchpad. Levels are hand-tunable from here; edit the JSON directly.
 - **`project.godot`** — engine config. Base viewport 960x540, stretch `canvas_items` / aspect `expand` (what makes the itch.io embed scale instead of clip), `mobile` renderer, and the two autoloads above.
 - **`export_presets.cfg`** — single "Web" preset, output `game test 1/index.html`. Committed (small config, not a build artifact).
 - **`game test 1/`** — the exported web build. Build artifact — gitignored.

@@ -13,22 +13,29 @@
     "  Only does anything on STANDARD difficulty. Pick it up and this",
     "  level becomes your fallback: lose all 3 lives later and you",
     "  restart HERE with a fresh 3 lives instead of going back to 1.",
-    "  Put it somewhere that costs something to reach - a detour past",
-    "  a hazard - so taking it is a real decision, not a freebie.",
-    "  Planned placement: every 10th level (10, 20, 30).",
+    "  Placed on levels 10, 20 and 30, each time behind something",
+    "  dangerous so taking it is a real decision, not a freebie.",
     "",
     "HAZARD TYPES (positions are [column, row], counting from 0):",
-    "  patrol - moves from a to b. LOW, so you CAN jump over it.",
-    "  sweep  - same as patrol but fast. LOW, you MUST jump it.",
-    "  chain  - spins around pivot at the given radius. TALL, you CANNOT jump it. Go around.",
-    "  chaser - follows the player. LOW.",
+    "  patrol  - moves a to b. LOW, so you CAN jump over it.",
+    "  sweep   - same as patrol but fast. LOW, you MUST jump it.",
+    "  chain   - spins around pivot. TALL, you CANNOT jump it. Go around.",
+    "            'arms' puts 2+ orbs on one pivot, evenly spaced.",
+    "  chaser  - follows the player, forever. LOW.",
+    "  blinker - sits still and pulses on/off. Only kills while lit.",
+    "            'period' = seconds per cycle, 'duty' = share of the cycle",
+    "            it is lethal, 'phase' = 0..1 offset so several blinkers",
+    "            alternate with each other.",
     "",
-    "'speed' is a multiplier - bigger is faster."
+    "'speed' is a multiplier - bigger is faster.",
+    "",
+    "DIFFICULTY CURVE: 1-5 teach, 6-9 build, 10 checkpoint,",
+    "11-19 introduce chaser/blinker/twin-arm chains, 20 checkpoint,",
+    "21-29 combinations at speed, 30 is the finale."
   ],
-
   "levels": [
     {
-      "name": "Learn to move",
+      "name": "First steps",
       "grid": [
         "###############",
         "#.............#",
@@ -42,7 +49,7 @@
       "hazards": []
     },
     {
-      "name": "Learn to jump",
+      "name": "Something moves",
       "grid": [
         "###############",
         "#.............#",
@@ -54,59 +61,1135 @@
         "###############"
       ],
       "hazards": [
-        { "type": "sweep", "a": [7, 1], "b": [7, 6], "speed": 3.4 }
+        {
+          "type": "patrol",
+          "a": [
+            7,
+            1
+          ],
+          "b": [
+            7,
+            6
+          ],
+          "speed": 1.8
+        }
       ]
     },
     {
-      "name": "The chain - go around",
+      "name": "Jump it",
+      "grid": [
+        "###############",
+        "#.............#",
+        "#.............#",
+        "#.P.........G.#",
+        "#.............#",
+        "#.............#",
+        "#.............#",
+        "###############"
+      ],
+      "hazards": [
+        {
+          "type": "sweep",
+          "a": [
+            7,
+            1
+          ],
+          "b": [
+            7,
+            6
+          ],
+          "speed": 3.4
+        }
+      ]
+    },
+    {
+      "name": "Two of them",
       "grid": [
         "###############",
         "#.............#",
         "#.P...........#",
         "#.............#",
-        "#......C......#",
+        "#.............#",
         "#...........G.#",
         "#.............#",
         "###############"
       ],
       "hazards": [
-        { "type": "chain", "pivot": [7, 3], "radius": 2.2, "speed": 1.6 },
-        { "type": "patrol", "a": [11, 1], "b": [11, 6], "speed": 2.2 }
+        {
+          "type": "patrol",
+          "a": [
+            5,
+            1
+          ],
+          "b": [
+            5,
+            6
+          ],
+          "speed": 2.0
+        },
+        {
+          "type": "patrol",
+          "a": [
+            9,
+            6
+          ],
+          "b": [
+            9,
+            1
+          ],
+          "speed": 2.2
+        }
       ]
     },
     {
-      "name": "Pits - jump them or fall",
+      "name": "Mind the gap",
+      "grid": [
+        "###############",
+        "#.............#",
+        "#.P...OO......#",
+        "#......OO.....#",
+        "#.............#",
+        "#.........G...#",
+        "#.............#",
+        "###############"
+      ],
+      "hazards": [
+        {
+          "type": "patrol",
+          "a": [
+            11,
+            1
+          ],
+          "b": [
+            11,
+            6
+          ],
+          "speed": 2.0
+        }
+      ]
+    },
+    {
+      "name": "Gap and guard",
       "grid": [
         "###############",
         "#.............#",
         "#.P..OO...OO..#",
         "#....OO...OO..#",
         "#.............#",
-        "#..OO.....OO.G#",
-        "#..OO.....OO..#",
+        "#...........G.#",
+        "#.............#",
         "###############"
       ],
       "hazards": [
-        { "type": "sweep", "a": [8, 1], "b": [8, 6], "speed": 3.8 },
-        { "type": "patrol", "a": [13, 1], "b": [13, 6], "speed": 2.6 }
+        {
+          "type": "sweep",
+          "a": [
+            8,
+            1
+          ],
+          "b": [
+            8,
+            6
+          ],
+          "speed": 3.2
+        }
       ]
     },
     {
-      "name": "Everything at once",
+      "name": "The chain",
       "grid": [
         "###############",
         "#.............#",
-        "#.P...OO......#",
-        "#.....OO..#...#",
-        "#.........#...#",
-        "#..OO.....#...#",
-        "#..OO........G#",
+        "#.P...........#",
+        "#.............#",
+        "#.............#",
+        "#...........G.#",
+        "#.............#",
         "###############"
       ],
       "hazards": [
-        { "type": "chain", "pivot": [7, 4], "radius": 2.0, "speed": 2.0 },
-        { "type": "sweep", "a": [11, 1], "b": [11, 6], "speed": 4.0 },
-        { "type": "chaser", "start": [1, 6], "speed": 1.0 }
+        {
+          "type": "chain",
+          "pivot": [
+            7,
+            3
+          ],
+          "radius": 2.2,
+          "speed": 1.6
+        }
+      ]
+    },
+    {
+      "name": "Chain and sweep",
+      "grid": [
+        "###############",
+        "#.............#",
+        "#.P...........#",
+        "#.............#",
+        "#.............#",
+        "#...........G.#",
+        "#.............#",
+        "###############"
+      ],
+      "hazards": [
+        {
+          "type": "chain",
+          "pivot": [
+            6,
+            3
+          ],
+          "radius": 2.0,
+          "speed": 1.8
+        },
+        {
+          "type": "sweep",
+          "a": [
+            11,
+            1
+          ],
+          "b": [
+            11,
+            6
+          ],
+          "speed": 3.6
+        }
+      ]
+    },
+    {
+      "name": "Corridor",
+      "grid": [
+        "###############",
+        "#.............#",
+        "#.P..#....#...#",
+        "#....#....#...#",
+        "#....#....#...#",
+        "#....#....#.G.#",
+        "#.............#",
+        "###############"
+      ],
+      "hazards": [
+        {
+          "type": "sweep",
+          "a": [
+            7,
+            1
+          ],
+          "b": [
+            7,
+            6
+          ],
+          "speed": 3.4
+        },
+        {
+          "type": "patrol",
+          "a": [
+            12,
+            1
+          ],
+          "b": [
+            12,
+            6
+          ],
+          "speed": 2.2
+        }
+      ]
+    },
+    {
+      "name": "Checkpoint - worth the risk",
+      "grid": [
+        "###############",
+        "#.............#",
+        "#.P...........#",
+        "#.....OCO.....#",
+        "#.............#",
+        "#...........G.#",
+        "#.............#",
+        "###############"
+      ],
+      "hazards": [
+        {
+          "type": "chain",
+          "pivot": [
+            7,
+            3
+          ],
+          "radius": 2.4,
+          "speed": 2.0
+        },
+        {
+          "type": "patrol",
+          "a": [
+            11,
+            1
+          ],
+          "b": [
+            11,
+            6
+          ],
+          "speed": 2.4
+        }
+      ]
+    },
+    {
+      "name": "It follows",
+      "grid": [
+        "###############",
+        "#.............#",
+        "#.P...........#",
+        "#.............#",
+        "#.............#",
+        "#...........G.#",
+        "#.............#",
+        "###############"
+      ],
+      "hazards": [
+        {
+          "type": "chaser",
+          "start": [
+            12,
+            1
+          ],
+          "speed": 0.85
+        }
+      ]
+    },
+    {
+      "name": "Followed over gaps",
+      "grid": [
+        "###############",
+        "#.............#",
+        "#.P..OO.......#",
+        "#.....OO......#",
+        "#.......OO....#",
+        "#...........G.#",
+        "#.............#",
+        "###############"
+      ],
+      "hazards": [
+        {
+          "type": "chaser",
+          "start": [
+            12,
+            6
+          ],
+          "speed": 0.95
+        },
+        {
+          "type": "patrol",
+          "a": [
+            9,
+            1
+          ],
+          "b": [
+            9,
+            6
+          ],
+          "speed": 2.2
+        }
+      ]
+    },
+    {
+      "name": "On the beat",
+      "grid": [
+        "###############",
+        "#.............#",
+        "#.P...........#",
+        "#.............#",
+        "#.............#",
+        "#...........G.#",
+        "#.............#",
+        "###############"
+      ],
+      "hazards": [
+        {
+          "type": "blinker",
+          "at": [
+            5,
+            3
+          ],
+          "speed": 1.0,
+          "period": 2.0,
+          "duty": 0.5,
+          "phase": 0.0
+        },
+        {
+          "type": "blinker",
+          "at": [
+            9,
+            3
+          ],
+          "speed": 1.0,
+          "period": 2.0,
+          "duty": 0.5,
+          "phase": 0.5
+        }
+      ]
+    },
+    {
+      "name": "Off the beat",
+      "grid": [
+        "###############",
+        "#.....#.......#",
+        "#.P...#.......#",
+        "#.....#.......#",
+        "#.....#.......#",
+        "#.....#.....G.#",
+        "#.............#",
+        "###############"
+      ],
+      "hazards": [
+        {
+          "type": "blinker",
+          "at": [
+            7,
+            1
+          ],
+          "speed": 1.0,
+          "period": 1.6,
+          "duty": 0.45,
+          "phase": 0.0
+        },
+        {
+          "type": "blinker",
+          "at": [
+            7,
+            3
+          ],
+          "speed": 1.0,
+          "period": 1.6,
+          "duty": 0.45,
+          "phase": 0.33
+        },
+        {
+          "type": "blinker",
+          "at": [
+            7,
+            5
+          ],
+          "speed": 1.0,
+          "period": 1.6,
+          "duty": 0.45,
+          "phase": 0.66
+        }
+      ]
+    },
+    {
+      "name": "Twin arms",
+      "grid": [
+        "###############",
+        "#.............#",
+        "#.P...........#",
+        "#.............#",
+        "#.............#",
+        "#...........G.#",
+        "#.............#",
+        "###############"
+      ],
+      "hazards": [
+        {
+          "type": "chain",
+          "pivot": [
+            7,
+            3
+          ],
+          "radius": 2.4,
+          "speed": 1.7,
+          "arms": 2
+        }
+      ]
+    },
+    {
+      "name": "Arms over the void",
+      "grid": [
+        "###############",
+        "#.............#",
+        "#.P.....OO....#",
+        "#.......OO....#",
+        "#.............#",
+        "#...........G.#",
+        "#.............#",
+        "###############"
+      ],
+      "hazards": [
+        {
+          "type": "chain",
+          "pivot": [
+            6,
+            3
+          ],
+          "radius": 2.2,
+          "speed": 1.9,
+          "arms": 2
+        },
+        {
+          "type": "patrol",
+          "a": [
+            11,
+            1
+          ],
+          "b": [
+            11,
+            6
+          ],
+          "speed": 2.4
+        }
+      ]
+    },
+    {
+      "name": "Hunted on the beat",
+      "grid": [
+        "###############",
+        "#.............#",
+        "#.P...........#",
+        "#.............#",
+        "#.............#",
+        "#...........G.#",
+        "#.............#",
+        "###############"
+      ],
+      "hazards": [
+        {
+          "type": "chaser",
+          "start": [
+            12,
+            1
+          ],
+          "speed": 1.0
+        },
+        {
+          "type": "blinker",
+          "at": [
+            6,
+            2
+          ],
+          "speed": 1.0,
+          "period": 1.8,
+          "duty": 0.5,
+          "phase": 0.0
+        },
+        {
+          "type": "blinker",
+          "at": [
+            6,
+            4
+          ],
+          "speed": 1.0,
+          "period": 1.8,
+          "duty": 0.5,
+          "phase": 0.5
+        }
+      ]
+    },
+    {
+      "name": "Sweep storm",
+      "grid": [
+        "###############",
+        "#.............#",
+        "#.P...........#",
+        "#.............#",
+        "#.............#",
+        "#...........G.#",
+        "#.............#",
+        "###############"
+      ],
+      "hazards": [
+        {
+          "type": "sweep",
+          "a": [
+            4,
+            1
+          ],
+          "b": [
+            4,
+            6
+          ],
+          "speed": 3.8
+        },
+        {
+          "type": "sweep",
+          "a": [
+            7,
+            6
+          ],
+          "b": [
+            7,
+            1
+          ],
+          "speed": 4.0
+        },
+        {
+          "type": "sweep",
+          "a": [
+            10,
+            1
+          ],
+          "b": [
+            10,
+            6
+          ],
+          "speed": 4.2
+        }
+      ]
+    },
+    {
+      "name": "The pen",
+      "grid": [
+        "###############",
+        "#.............#",
+        "#.P..#####....#",
+        "#....#...#....#",
+        "#....#...#....#",
+        "#....#####..G.#",
+        "#.............#",
+        "###############"
+      ],
+      "hazards": [
+        {
+          "type": "chaser",
+          "start": [
+            2,
+            6
+          ],
+          "speed": 1.05
+        },
+        {
+          "type": "sweep",
+          "a": [
+            11,
+            1
+          ],
+          "b": [
+            11,
+            6
+          ],
+          "speed": 3.8
+        }
+      ]
+    },
+    {
+      "name": "Checkpoint - through the teeth",
+      "grid": [
+        "###############",
+        "#.............#",
+        "#.P...........#",
+        "#....OO.OO....#",
+        "#.......C.....#",
+        "#...........G.#",
+        "#.............#",
+        "###############"
+      ],
+      "hazards": [
+        {
+          "type": "chain",
+          "pivot": [
+            7,
+            3
+          ],
+          "radius": 2.6,
+          "speed": 2.2,
+          "arms": 2
+        },
+        {
+          "type": "chaser",
+          "start": [
+            12,
+            6
+          ],
+          "speed": 1.0
+        }
+      ]
+    },
+    {
+      "name": "Pit rhythm",
+      "grid": [
+        "###############",
+        "#.............#",
+        "#.P.OO..OO..O.#",
+        "#...OO..OO..O.#",
+        "#.............#",
+        "#...........G.#",
+        "#.............#",
+        "###############"
+      ],
+      "hazards": [
+        {
+          "type": "sweep",
+          "a": [
+            6,
+            1
+          ],
+          "b": [
+            6,
+            6
+          ],
+          "speed": 4.0
+        },
+        {
+          "type": "blinker",
+          "at": [
+            10,
+            3
+          ],
+          "speed": 1.0,
+          "period": 1.5,
+          "duty": 0.5,
+          "phase": 0.25
+        }
+      ]
+    },
+    {
+      "name": "Double pivot",
+      "grid": [
+        "###############",
+        "#.............#",
+        "#.P...........#",
+        "#.............#",
+        "#.............#",
+        "#...........G.#",
+        "#.............#",
+        "###############"
+      ],
+      "hazards": [
+        {
+          "type": "chain",
+          "pivot": [
+            5,
+            3
+          ],
+          "radius": 1.9,
+          "speed": 2.1,
+          "arms": 2
+        },
+        {
+          "type": "chain",
+          "pivot": [
+            10,
+            3
+          ],
+          "radius": 1.9,
+          "speed": 2.1,
+          "arms": 2
+        }
+      ]
+    },
+    {
+      "name": "Narrow beat",
+      "grid": [
+        "###############",
+        "#.....#.#.#...#",
+        "#.P...#.#.#...#",
+        "#.....#.#.#...#",
+        "#.............#",
+        "#...........G.#",
+        "#.............#",
+        "###############"
+      ],
+      "hazards": [
+        {
+          "type": "blinker",
+          "at": [
+            7,
+            1
+          ],
+          "speed": 1.0,
+          "period": 1.4,
+          "duty": 0.45,
+          "phase": 0.0
+        },
+        {
+          "type": "blinker",
+          "at": [
+            7,
+            3
+          ],
+          "speed": 1.0,
+          "period": 1.4,
+          "duty": 0.45,
+          "phase": 0.0
+        },
+        {
+          "type": "blinker",
+          "at": [
+            9,
+            1
+          ],
+          "speed": 1.0,
+          "period": 1.4,
+          "duty": 0.45,
+          "phase": 0.5
+        },
+        {
+          "type": "blinker",
+          "at": [
+            9,
+            3
+          ],
+          "speed": 1.0,
+          "period": 1.4,
+          "duty": 0.45,
+          "phase": 0.5
+        },
+        {
+          "type": "chaser",
+          "start": [
+            2,
+            6
+          ],
+          "speed": 1.0
+        }
+      ]
+    },
+    {
+      "name": "Three hunters",
+      "grid": [
+        "###############",
+        "#.............#",
+        "#.P...........#",
+        "#.............#",
+        "#.............#",
+        "#...........G.#",
+        "#.............#",
+        "###############"
+      ],
+      "hazards": [
+        {
+          "type": "chaser",
+          "start": [
+            12,
+            1
+          ],
+          "speed": 0.95
+        },
+        {
+          "type": "chaser",
+          "start": [
+            12,
+            6
+          ],
+          "speed": 0.95
+        },
+        {
+          "type": "sweep",
+          "a": [
+            7,
+            1
+          ],
+          "b": [
+            7,
+            6
+          ],
+          "speed": 4.0
+        }
+      ]
+    },
+    {
+      "name": "Spiral",
+      "grid": [
+        "###############",
+        "#.............#",
+        "#.P.#########.#",
+        "#...#.......#.#",
+        "#...#.#####.#.#",
+        "#...#...#G#.#.#",
+        "#.......#...#.#",
+        "###############"
+      ],
+      "hazards": [
+        {
+          "type": "chain",
+          "pivot": [
+            7,
+            3
+          ],
+          "radius": 2.0,
+          "speed": 2.2,
+          "arms": 2
+        },
+        {
+          "type": "sweep",
+          "a": [
+            2,
+            1
+          ],
+          "b": [
+            2,
+            6
+          ],
+          "speed": 3.6
+        }
+      ]
+    },
+    {
+      "name": "Gauntlet",
+      "grid": [
+        "###############",
+        "#.............#",
+        "#.P..OO...OO..#",
+        "#....OO...OO..#",
+        "#.............#",
+        "#...........G.#",
+        "#.............#",
+        "###############"
+      ],
+      "hazards": [
+        {
+          "type": "sweep",
+          "a": [
+            4,
+            1
+          ],
+          "b": [
+            4,
+            6
+          ],
+          "speed": 4.2
+        },
+        {
+          "type": "sweep",
+          "a": [
+            8,
+            6
+          ],
+          "b": [
+            8,
+            1
+          ],
+          "speed": 4.4
+        },
+        {
+          "type": "chain",
+          "pivot": [
+            11,
+            3
+          ],
+          "radius": 1.7,
+          "speed": 2.4,
+          "arms": 2
+        }
+      ]
+    },
+    {
+      "name": "Blind corners",
+      "grid": [
+        "###############",
+        "#....##...##..#",
+        "#.P..##...##..#",
+        "#.............#",
+        "#..##...##....#",
+        "#..##...##..G.#",
+        "#.............#",
+        "###############"
+      ],
+      "hazards": [
+        {
+          "type": "chaser",
+          "start": [
+            12,
+            1
+          ],
+          "speed": 1.1
+        },
+        {
+          "type": "chaser",
+          "start": [
+            2,
+            6
+          ],
+          "speed": 1.05
+        },
+        {
+          "type": "blinker",
+          "at": [
+            7,
+            2
+          ],
+          "speed": 1.0,
+          "period": 1.3,
+          "duty": 0.5,
+          "phase": 0.0
+        }
+      ]
+    },
+    {
+      "name": "Metronome",
+      "grid": [
+        "###############",
+        "#.............#",
+        "#.P...........#",
+        "#.............#",
+        "#.............#",
+        "#...........G.#",
+        "#.............#",
+        "###############"
+      ],
+      "hazards": [
+        {
+          "type": "blinker",
+          "at": [
+            4,
+            2
+          ],
+          "speed": 1.0,
+          "period": 1.2,
+          "duty": 0.5,
+          "phase": 0.0
+        },
+        {
+          "type": "blinker",
+          "at": [
+            6,
+            4
+          ],
+          "speed": 1.0,
+          "period": 1.2,
+          "duty": 0.5,
+          "phase": 0.25
+        },
+        {
+          "type": "blinker",
+          "at": [
+            8,
+            2
+          ],
+          "speed": 1.0,
+          "period": 1.2,
+          "duty": 0.5,
+          "phase": 0.5
+        },
+        {
+          "type": "blinker",
+          "at": [
+            10,
+            4
+          ],
+          "speed": 1.0,
+          "period": 1.2,
+          "duty": 0.5,
+          "phase": 0.75
+        },
+        {
+          "type": "sweep",
+          "a": [
+            7,
+            1
+          ],
+          "b": [
+            7,
+            6
+          ],
+          "speed": 4.2
+        }
+      ]
+    },
+    {
+      "name": "No safe ground",
+      "grid": [
+        "###############",
+        "#.............#",
+        "#.P.OO..OO..OO#",
+        "#...OO..OO..OO#",
+        "#.............#",
+        "#..........G..#",
+        "#.............#",
+        "###############"
+      ],
+      "hazards": [
+        {
+          "type": "chain",
+          "pivot": [
+            6,
+            3
+          ],
+          "radius": 2.1,
+          "speed": 2.5,
+          "arms": 2
+        },
+        {
+          "type": "chaser",
+          "start": [
+            12,
+            6
+          ],
+          "speed": 1.1
+        },
+        {
+          "type": "sweep",
+          "a": [
+            9,
+            1
+          ],
+          "b": [
+            9,
+            6
+          ],
+          "speed": 4.4
+        }
+      ]
+    },
+    {
+      "name": "The last game",
+      "grid": [
+        "###############",
+        "#.............#",
+        "#.P..OO...OO..#",
+        "#....OO.C.OO..#",
+        "#.............#",
+        "#...........G.#",
+        "#.............#",
+        "###############"
+      ],
+      "hazards": [
+        {
+          "type": "chain",
+          "pivot": [
+            4,
+            3
+          ],
+          "radius": 1.8,
+          "speed": 2.4,
+          "arms": 2
+        },
+        {
+          "type": "chain",
+          "pivot": [
+            10,
+            3
+          ],
+          "radius": 1.8,
+          "speed": 2.4,
+          "arms": 2
+        },
+        {
+          "type": "chaser",
+          "start": [
+            12,
+            1
+          ],
+          "speed": 1.15
+        },
+        {
+          "type": "sweep",
+          "a": [
+            7,
+            1
+          ],
+          "b": [
+            7,
+            6
+          ],
+          "speed": 4.6
+        },
+        {
+          "type": "blinker",
+          "at": [
+            7,
+            4
+          ],
+          "speed": 1.0,
+          "period": 1.1,
+          "duty": 0.5,
+          "phase": 0.5
+        }
       ]
     }
   ]
