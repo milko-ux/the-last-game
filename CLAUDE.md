@@ -37,6 +37,9 @@ Work happens in this order unless Milko says otherwise — don't jump ahead to a
 
 **Deferred, agreed 2026-08-21 — restore the itch.io build.** The listing is currently private/404. Milko wants it public again so friends and testers can play, but explicitly parked it until the phases above are built. Day-to-day testing until then is local (see below). Don't spend time on itch.io before Phase 5 unless Milko raises it.
 
+### Packaging a build for itch.io
+Run `tools/package_web.sh` — it exports, zips, and then UNZIPS the archive and checks that copy contains the current last level from `levels.json`, refusing to hand over a stale zip. This exists because a stale zip has already been handed over twice; nothing errors and every file on disk looks correct, the old build just quietly runs. Never zip the build folder by hand.
+
 ### Serve with no-cache headers (learned the hard way)
 Browsers cache `index.pck` aggressively, and Godot re-fetches it on every load. A stale `.pck` will silently run an OLD build while every file on disk looks correct — the symptom is the game reporting the wrong level count or missing new content, with the network tab still showing 200s. Always serve the build with `Cache-Control: no-store`, and when in doubt change the port to get a fresh origin.
 
