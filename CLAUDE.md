@@ -27,7 +27,8 @@ Work happens in this order unless Milko says otherwise — don't jump ahead to a
 - **Phase 1.5 — Architecture Refactor** 🔄 in progress. Goal: identical visual identity, more capable foundation for everything after it. Existing logic gets relocated, not rewritten from scratch.
   - ✅ Levels become data a loader reads (`levels.json`) instead of living inline in the script.
   - ✅ Player and each hazard type are their own reusable scenes; projection and palette moved to autoloads; UI moved to its own CanvasLayer.
-  - ⏭️ Remaining: the neon look moves from hand-drawn `_draw()` calls to real Godot shaders (glow/bloom, animated pulse, particle trails). Scope this to the WORLD only — the glass touch controls stay as they are.
+  - ✅ Real glow/bloom on the world via HDR 2D + a `WorldEnvironment`. Scoped to the world only — the glass touch controls are excluded by sitting on their own CanvasLayer.
+  - ⏭️ Remaining: particle trails (hazard/player motion trails). The goal marker already has an animated pulse from Phase 0.
 - **Phase 2 — Core Loop & Progression.** 3-lives system, difficulty unlock progression (Standard/Hard/Extreme), shareable death screen polish, guest-first onboarding.
 - **Phase 3 — Backend & Persistence.** Talo leaderboard integration (global + country-selected), registration deferred to results screen, GDPR/EU consent handling.
 - **Phase 4 — Monetization.** Rewarded video ads only, never on death.
@@ -72,10 +73,11 @@ As of Phase 1.5, the game is split into small single-purpose files instead of on
 
 **Autoloads (global helpers):**
 - **`autoload/iso.gd`** (`Iso`) — the isometric projection. The world underneath is a plain flat grid; isometric is only how it's DRAWN, which is what keeps level files readable as text. Everything that draws calls `Iso.to_screen()` so they all agree on where things are. Also owns `TILE`, `WALL_H`, and `set_board_size()` — the view now centres itself from the actual level dimensions, so a bigger maze in `levels.json` just works.
-- **`autoload/palette.gd`** (`Palette`) — the fixed colour language (magenta = death, cyan = safe, amber = goal). Every entity reads colours from here so the meaning stays consistent. **Non-negotiable — see above.**
+- **`autoload/palette.gd`** (`Palette`) — the fixed colour language (magenta = death, cyan = safe, amber = goal). Every entity reads colours from here so the meaning stays consistent. **Non-negotiable — see above.** Also owns `glow()` and the `NEON` multiplier that drive the bloom (see "How the glow works" below).
 
 **Entities (each one is its own scene):**
-- **`entities/board.gd`** — draws the static world: floor tiles, pits, wall cubes (sorted back-to-front) and the goal marker.
+- **`entities/background.gd`** — the far starfield, drawn behind everything and scaled to COVER the screen so stars never stretch out of shape. (Real parallax needs a moving camera; this game's view is fixed per level, so there's nothing to move against yet — this is the node to give a slow scroll to if that changes.)
+- **`entities/board.gd`** — draws the static world: rock floor tiles, pits, wall cubes (sorted back-to-front), the hanging island underside, and the goal marker. See "How the rock textures work" below.
 - **`entities/player.gd`** — position, jump, gravity, wall collision (axis-separated so you slide along walls instead of sticking), and its own drawing. The physics numbers are unchanged from the original, so the feel is identical.
 - **`entities/hazard.gd`** — shared base class. Owns the box-vs-circle hit test (unchanged, so difficulty is unchanged) and the `jumpable` flag.
 - **`entities/hazard_line.gd`** — covers `patrol` and `sweep`; slides between two points. Low, so jumping clears it.
@@ -87,7 +89,32 @@ As of Phase 1.5, the game is split into small single-purpose files instead of on
 
 **Root:**
 - **`main.gd`** — now just the referee: owns the run (lives, deaths, current level), loads `levels.json`, spawns entities, and decides when you died or won. Also the share/brag text and keyboard shortcuts (Space/R/C).
-- **`main.tscn`** — scene tree: `Main` → `Board`, `Entities` (hazards then player, so the player draws on top), `UI` (CanvasLayer) → `Screen`.
+- **`main.tscn`** — scene tree: `Main` → `WorldEnvironment` (the glow settings), `Board`, `Entities` (hazards then player, so the player draws on top), `UI` (CanvasLayer) → `Screen`.
+
+### How the rock textures work (read before touching it)
+All art lives in `assets/`, downscaled from the originals (the source art was 2048²/2752px, ~24MB total — far too heavy for a phone; it's 3.6MB now):
+
+- `space_far.png` — starfield background
+- `rock_floor.png` — tiled across walkable floor tiles AND wall tops
+- `rock_wall.png` — tiled across the vertical wall faces
+- `island_underside.png` — the hanging underside (transparent PNG)
+
+Three things that are easy to get wrong here:
+
+1. **UVs come from WORLD position, not from the tile.** That's what makes the rock flow continuously across neighbouring tiles instead of restarting on each one. `_world_uvs()` does this; `texture_repeat` is enabled on the Board in `_ready()`.
+2. **Wall faces need a much bigger texture scale than the floor** (`WALL_TEX_WORLD` 900 vs `FLOOR_TEX_WORLD` 384). The isometric angle squashes a wall face to roughly a third of its width on screen, so at floor scale the rock detail compresses into what looks like a picket fence.
+3. **The island underside is narrower than the board on purpose.** Its art has a straight top edge, but the board is a rhombus whose thickness tapers to nothing at the left and right corners — so a straight edge has nothing to hide behind out there and shows as a hard horizontal line across the screen. `0.66 × board width` keeps both top corners inside the board's thickness. It's drawn FIRST so the board's own rock sides cover the join.
+
+The rock is deliberately dark — the `TINT_*` constants multiply the mid-grey source art down so neon stays the brightest thing on screen. Raise them to lighten the rock. Pits stay flat black (no texture) so they still read as holes.
+
+### How the glow works (read before touching it)
+The game renders in HDR (`rendering/viewport/hdr_2d` in `project.godot`), which lets a colour be *brighter than pure white*. The bloom pass in `main.tscn` only picks up things brighter than white (`glow_hdr_threshold = 1.0`). So:
+
+- Anything drawn through `Palette.glow(colour, amount)` blooms. Anything not drawn through it never does.
+- That's why the dark floor stays dark, and why the frosted-glass touch controls keep their exact look — `ui/ui.gd` never calls `glow()`, and the UI CanvasLayer is excluded via `background_canvas_max_layer = 0`.
+- **Boost amounts are per-element on purpose.** A colour with a zero channel (cyan `EDGE`, `#00fff2`) can be boosted hard (2.5x) and keeps its hue. A colour with high channels (the player's `#7dfaff`) clips toward white and goes grey-white if pushed — so those get a gentle 1.2–1.3x. If you raise a boost and something turns white, that's why.
+
+**Two switches if performance is a problem on a real phone:** set `Palette.NEON` to `1.0` to drop the over-bright everywhere, or `glow_enabled = false` on the Environment in `main.tscn` to remove the bloom pass entirely. Both are safe, reversible, and leave gameplay untouched.
 - **`levels.json`** — all level data: ASCII grids (`#` wall, `.` floor, `P` start, `G` goal, `O` pit) plus a `hazards` list per level. 5 levels. **Milko can edit this file directly in any text editor to design levels — no Godot or code needed.** The `_readme` block at the top documents the symbols and hazard types.
 - **`project.godot`** — engine config. Base viewport 960x540, stretch `canvas_items` / aspect `expand` (what makes the itch.io embed scale instead of clip), `mobile` renderer, and the two autoloads above.
 - **`export_presets.cfg`** — single "Web" preset, output `game test 1/index.html`. Committed (small config, not a build artifact).

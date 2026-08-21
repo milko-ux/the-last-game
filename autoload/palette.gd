@@ -22,3 +22,24 @@ const CHASER := Color("ff2b6b")
 const GOAL := Color("ffd23d")        # amber - goal
 const PIT := Color("05030a")
 const TEXT := Color("a89fc2")
+
+
+# ============================================================
+# NEON GLOW
+#
+# The game renders in HDR, which means a colour is allowed to be
+# BRIGHTER than pure white. The bloom pass is set to only pick up
+# things brighter than white (glow threshold = 1.0).
+#
+# So: anything passed through glow() below lights up, and anything
+# not passed through it never does. That's how the dark floor stays
+# dark while the neon edges bloom — and it's why the touch controls,
+# which never call this, keep their exact frosted-glass look.
+#
+# Turn NEON down to 1.0 to switch the bloom off everywhere at once.
+# ============================================================
+const NEON := 2.0
+
+
+func glow(c: Color, amount: float = NEON) -> Color:
+	return Color(c.r * amount, c.g * amount, c.b * amount, c.a)

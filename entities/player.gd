@@ -136,7 +136,7 @@ func _draw() -> void:
 	draw_colored_polygon(PackedVector2Array([
 		body + Vector2(0, -s), body + Vector2(s, 0),
 		body + Vector2(0, s), body + Vector2(-s, 0)
-	]), col)
+	]), Palette.glow(col, 1.2))
 	draw_polyline(PackedVector2Array([
 		body + Vector2(0, -s), body + Vector2(s, 0),
 		body + Vector2(0, s), body + Vector2(-s, 0), body + Vector2(0, -s)

@@ -37,5 +37,5 @@ func _draw() -> void:
 	draw_line(p_top, h_top, Color(Palette.CHAIN.r, Palette.CHAIN.g, Palette.CHAIN.b, 0.7), 2.0)
 
 	draw_circle(h_top, RADIUS + 8.0, Color(Palette.CHAIN.r, Palette.CHAIN.g, Palette.CHAIN.b, 0.2))
-	draw_circle(h_top, RADIUS, Palette.CHAIN)
+	draw_circle(h_top, RADIUS, Palette.glow(Palette.CHAIN, 1.3))
 	draw_circle(h_top - Vector2(3, 3), RADIUS * 0.35, Color(1, 1, 1, 0.6))

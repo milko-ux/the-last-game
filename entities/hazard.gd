@@ -58,5 +58,5 @@ func _draw_shadow() -> void:
 func _draw_orb(tint: Color, height: float) -> void:
 	var sp := Iso.to_screen(world_pos, height)
 	draw_circle(sp, RADIUS + 7.0, Color(tint.r, tint.g, tint.b, 0.2))
-	draw_circle(sp, RADIUS, tint)
+	draw_circle(sp, RADIUS, Palette.glow(tint, 1.3))
 	draw_circle(sp - Vector2(3, 3), RADIUS * 0.35, Color(1, 1, 1, 0.55))
