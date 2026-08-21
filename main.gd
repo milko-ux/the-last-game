@@ -43,6 +43,10 @@ const CTRL_MARGIN := Vector2(125.0, 118.0)
 const HAZ_R := 15.0
 const CHASER_SPEED := 115.0
 
+# --- Haptics (ms). No-op on platforms/browsers without vibration support. ---
+const HAPTIC_DEATH_MS := 35
+const HAPTIC_WIN_MS := 80
+
 const COLS := 15
 const ROWS := 8
 
@@ -378,7 +382,9 @@ func update_hazards(delta: float) -> void:
 # COLLISIONS
 # ============================================================
 func check_collisions() -> void:
-	if player_z < 4.0:
+	# on_ground (not raw z height) so a jump pressed the instant you
+	# step onto a pit still saves you, even before z has risen.
+	if on_ground:
 		var col := int(floor(player_pos.x / TILE))
 		var row := int(floor(player_pos.y / TILE))
 		if cell_char(col, row) == "O":
@@ -410,6 +416,7 @@ func die() -> void:
 	death_timer = DEATH_PAUSE
 	total_deaths += 1
 	lives -= 1
+	Input.vibrate_handheld(HAPTIC_DEATH_MS)
 
 
 func enter_results(won_flag: bool) -> void:
@@ -418,6 +425,8 @@ func enter_results(won_flag: bool) -> void:
 	is_dead = false
 	stick_touch_id = -1
 	jump_touch_id = -1
+	if won_flag:
+		Input.vibrate_handheld(HAPTIC_WIN_MS)
 
 
 func brag_text() -> String:
