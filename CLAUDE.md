@@ -23,8 +23,11 @@ Design synthesis: **World's Hardest Game** (punishing top-down dodge mechanics, 
 Work happens in this order unless Milko says otherwise — don't jump ahead to a later phase without flagging it first.
 
 - **Phase 0 — Foundation** ✅ done. Core prototype: isometric maze, jump mechanic, hazards (spinner/sweep/chain/chaser), 5 levels, deployed to itch.io.
-- **Phase 1 — Mobile Feel** 🔄 in progress. Glass touch controls (confirmed working well on-device), responsiveness, portrait handling, performance on real phone hardware.
-- **Phase 1.5 — Architecture Refactor** ⏭️ next. Move off the single-file/single-scene setup: player and each hazard type become their own reusable scenes, levels become data a loader reads instead of living inline in the script, and the neon look moves from hand-drawn `_draw()` calls to real Godot shaders (glow/bloom, animated pulse, particle trails). Goal: identical visual identity, more capable foundation for everything after it. Existing logic gets relocated, not rewritten from scratch.
+- **Phase 1 — Mobile Feel** ✅ done. Glass touch controls (confirmed working well on-device), responsiveness, portrait handling, performance on real phone hardware. Closed out with a framerate-independent pit-death fix and haptics on death/win.
+- **Phase 1.5 — Architecture Refactor** 🔄 in progress. Goal: identical visual identity, more capable foundation for everything after it. Existing logic gets relocated, not rewritten from scratch.
+  - ✅ Levels become data a loader reads (`levels.json`) instead of living inline in the script.
+  - ✅ Player and each hazard type are their own reusable scenes; projection and palette moved to autoloads; UI moved to its own CanvasLayer.
+  - ⏭️ Remaining: the neon look moves from hand-drawn `_draw()` calls to real Godot shaders (glow/bloom, animated pulse, particle trails). Scope this to the WORLD only — the glass touch controls stay as they are.
 - **Phase 2 — Core Loop & Progression.** 3-lives system, difficulty unlock progression (Standard/Hard/Extreme), shareable death screen polish, guest-first onboarding.
 - **Phase 3 — Backend & Persistence.** Talo leaderboard integration (global + country-selected), registration deferred to results screen, GDPR/EU consent handling.
 - **Phase 4 — Monetization.** Rewarded video ads only, never on death.
@@ -46,9 +49,10 @@ Do not change or drift from these without explicitly flagging it to Milko first:
 **Note on Phase 1.5:** moving from hand-drawn rendering to scenes/shaders is a pre-approved architecture change, not a violation of the visual non-negotiables above — the goal is the identical look on a better-built foundation. Still flag it if the actual visual result (glow intensity, exact colors, control feel) ends up noticeably different from what's live now.
 
 ## Current status
-Currently finishing **Phase 1**, about to start **Phase 1.5** (see Roadmap above).
+Mid **Phase 1.5** — the code restructure is done, shaders are what's left (see Roadmap above).
 
-- Deployed and playable on itch.io; GitHub repo is live and up to date.
+- GitHub repo is live and up to date.
+- ⚠️ The itch.io page (`mivasthecreator.itch.io/the-last-game`) returned "we couldn't find your page" on 2026-08-21, so the listing is currently private/unlisted/draft rather than publicly playable. Local testing does not depend on it — export and serve the build locally instead.
 - Frosted-glass touch controls shipped and confirmed to feel good on an actual phone.
 - Known fixes already in place: missing `main.gd` resolved, export templates installed (required "Go Online" in Godot's offline mode), portrait letterboxing fixed via itch.io embed settings + Godot stretch mode.
 
@@ -64,31 +68,34 @@ Godot and its export templates are already installed locally — use them direct
 7. Keep this file (`CLAUDE.md`) current — when a phase completes, update its status marker in the Roadmap section above.
 
 ## Repo structure
-*Note: this reflects the pre-Phase-1.5 structure. Once the architecture refactor lands, this section needs a rewrite — don't treat it as current after Phase 1.5 starts.*
+As of Phase 1.5, the game is split into small single-purpose files instead of one big script. A "scene" in Godot is a reusable building block (a `.tscn` file); an "autoload" is a script Godot loads once at startup that any other script can call.
 
-The whole game is deliberately small — one scene, one script, no autoloads yet.
+**Autoloads (global helpers):**
+- **`autoload/iso.gd`** (`Iso`) — the isometric projection. The world underneath is a plain flat grid; isometric is only how it's DRAWN, which is what keeps level files readable as text. Everything that draws calls `Iso.to_screen()` so they all agree on where things are. Also owns `TILE`, `WALL_H`, and `set_board_size()` — the view now centres itself from the actual level dimensions, so a bigger maze in `levels.json` just works.
+- **`autoload/palette.gd`** (`Palette`) — the fixed colour language (magenta = death, cyan = safe, amber = goal). Every entity reads colours from here so the meaning stays consistent. **Non-negotiable — see above.**
 
-- **`project.godot`** — engine config. Name "THE LAST GAME", main scene `main.tscn`, base viewport 960×540, stretch mode `canvas_items` / aspect `expand` (this is what makes the itch.io embed scale instead of clip), renderer set to `mobile`, features `4.7` + `Mobile`.
-- **`main.tscn`** — the entire game: a single `Node2D` named "Main" with `main.gd` attached. No child nodes — everything (level geometry, hazards, player, touch controls, HUD, results screen) is procedural, drawn each frame in `_draw()`. No other scenes exist yet (no menu scene, no pause scene).
-- **`main.gd`** — the whole game logic in one file (~830 lines), currently labelled "Phase 2d" in its header comment. Organized top-to-bottom as:
-  - **Tuning constants** (top of file): movement/physics (`TILE`, `PLAYER_SPEED`, `JUMP_VELOCITY`, `GRAVITY`), isometric projection (`ISO_X`, `ISO_Y`, `WALL_H`), touch control sizing (`STICK_RADIUS`, `JUMP_BTN_RADIUS`, `CTRL_MARGIN`), hazard tuning, and the full non-negotiable color palette (`COL_HAZ` = magenta death, `COL_EDGE`/`COL_PLAYER` = cyan safe, `COL_GOAL` = amber).
-  - **`levels` array** — hardcoded level data as ASCII grids (`#` wall, `.` floor, `P` start, `O` pit) plus a `hazards` array per level. 5 levels currently defined. Hazard types: `sweep` (back-and-forth on a line), `patrol` (same, different framing), `chain` (orbits a pivot point), `chaser` (homes in on the player).
-  - **Runtime state vars** — lives (3-life system per the non-negotiables), `current_level`, `total_deaths`, results-screen state, and multi-touch tracking (`stick_touch_id`, `jump_touch_id` — supports simultaneous move+jump).
-  - **`_ready()` / `_process()`** — game loop: hazard update → player movement → gravity → collision checks → redraw. Results screen and death-pause states short-circuit the loop.
-  - **Level loading** (`load_level`, `start_new_run`, `cell_center`, `cell_char`, `is_wall`) — reads the ASCII grid.
-  - **Movement** (`move_player`, `screen_dir_to_world`, `blocked`, `jump`, `apply_gravity`) — grid-based movement with axis-separated collision (slide along walls), plus jump/gravity for the pit-clearing mechanic. `screen_dir_to_world` converts joystick drag direction into isometric world-space movement.
-  - **Hazards** (`update_hazards`) — recomputes hazard positions per frame from level data + elapsed time.
-  - **Collisions** (`check_collisions`, `die`, `enter_results`) — pit/hazard death checks (skipped for non-chain hazards while airborne, i.e. jumping clears ground hazards), goal-reached → next level or results.
-  - **Results/share** (`brag_text`, `copy_brag`) — generates the roast-style brag text (tiered by death count) and copies it to clipboard. This is the shareable death-screen mechanic called out as non-negotiable.
-  - **Input** (`_input`) — touch (left half = joystick, right half = jump), keyboard fallback (Space/R/C), and mouse fallback for desktop browser testing.
-  - **Isometric projection** (`iso_origin`, `to_screen`, `tile_quad`) — world-to-screen transform.
-  - **Drawing** (`_draw()` and helpers) — everything is immediate-mode `draw_*` calls: floor tiles, wall cubes (painter's-algorithm sorted by col+row), goal marker, hazards, player, HUD, frosted-glass touch controls (`draw_glass_disc`), and the results screen. Portrait orientation shows a "ROTATE YOUR PHONE" message instead of the game.
-- **`export_presets.cfg`** — single export preset named "Web", output path `game test 1/index.html`. This is the itch.io test-build export target. Committed to git (small config, not a build artifact).
-- **`game test 1/`** — the exported web build (index.html/js/wasm/pck + assets). Build artifact, not source — gitignored.
-- **`.gitignore`** — excludes `game test 1/` (build output) and `.DS_Store` (macOS junk file) from version control.
-- **`CLAUDE.md`** — this file. The shared brief Claude Code reads at the start of every session: the plan, the non-negotiables, and where the project stands. Keep it updated as phases complete.
+**Entities (each one is its own scene):**
+- **`entities/board.gd`** — draws the static world: floor tiles, pits, wall cubes (sorted back-to-front) and the goal marker.
+- **`entities/player.gd`** — position, jump, gravity, wall collision (axis-separated so you slide along walls instead of sticking), and its own drawing. The physics numbers are unchanged from the original, so the feel is identical.
+- **`entities/hazard.gd`** — shared base class. Owns the box-vs-circle hit test (unchanged, so difficulty is unchanged) and the `jumpable` flag.
+- **`entities/hazard_line.gd`** — covers `patrol` and `sweep`; slides between two points. Low, so jumping clears it.
+- **`entities/hazard_chain.gd`** — orbits a pivot. TALL: `jumpable = false`, so you must go around.
+- **`entities/hazard_chaser.gd`** — homes in on the player. Low.
+
+**UI:**
+- **`ui/ui.gd`** — HUD, the frosted-glass touch controls, the results/share screen and the portrait "rotate your phone" prompt. Sits on a `CanvasLayer` so it always draws on top of the world. Owns all touch/mouse input and reports up via signals (`jump_pressed`, `restart_requested`, `copy_requested`). **The glass control drawing here is carried over unchanged from what Milko confirmed on-device — treat edits to it as touching a non-negotiable.** The CanvasLayer is also what will let world glow/bloom be added later without blooming the controls.
+
+**Root:**
+- **`main.gd`** — now just the referee: owns the run (lives, deaths, current level), loads `levels.json`, spawns entities, and decides when you died or won. Also the share/brag text and keyboard shortcuts (Space/R/C).
+- **`main.tscn`** — scene tree: `Main` → `Board`, `Entities` (hazards then player, so the player draws on top), `UI` (CanvasLayer) → `Screen`.
+- **`levels.json`** — all level data: ASCII grids (`#` wall, `.` floor, `P` start, `G` goal, `O` pit) plus a `hazards` list per level. 5 levels. **Milko can edit this file directly in any text editor to design levels — no Godot or code needed.** The `_readme` block at the top documents the symbols and hazard types.
+- **`project.godot`** — engine config. Base viewport 960x540, stretch `canvas_items` / aspect `expand` (what makes the itch.io embed scale instead of clip), `mobile` renderer, and the two autoloads above.
+- **`export_presets.cfg`** — single "Web" preset, output `game test 1/index.html`. Committed (small config, not a build artifact).
+- **`game test 1/`** — the exported web build. Build artifact — gitignored.
+- **`.gitignore`** — excludes `game test 1/`, `.DS_Store`, `.godot/`.
+- **`CLAUDE.md`** — this file. Keep it updated as phases complete.
 - **`icon.svg`** — app/project icon.
-- No autoloads/singletons, no `.tscn` subscenes, no resource folders (sprites/audio) yet — all visuals are vector-drawn and there's no audio in the codebase yet.
+- Still no sprite/audio assets — all visuals are vector-drawn, no audio yet.
 
 ## Tools & resources
 - **Engine:** Godot 4 (GDScript)

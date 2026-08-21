@@ -1,0 +1,104 @@
+{
+  "_readme": [
+    "LEVEL DATA FOR THE LAST GAME.",
+    "You can edit this file in any text editor - no Godot needed.",
+    "",
+    "GRID SYMBOLS:",
+    "  #  wall        .  floor",
+    "  P  player start (exactly one per level)",
+    "  G  goal         O  pit (fall in and you die - jump over it)",
+    "",
+    "HAZARD TYPES (positions are [column, row], counting from 0):",
+    "  patrol - moves from a to b. LOW, so you CAN jump over it.",
+    "  sweep  - same as patrol but fast. LOW, you MUST jump it.",
+    "  chain  - spins around pivot at the given radius. TALL, you CANNOT jump it. Go around.",
+    "  chaser - follows the player. LOW.",
+    "",
+    "'speed' is a multiplier - bigger is faster."
+  ],
+
+  "levels": [
+    {
+      "name": "Learn to move",
+      "grid": [
+        "###############",
+        "#.............#",
+        "#.............#",
+        "#.P.........G.#",
+        "#.............#",
+        "#.............#",
+        "#.............#",
+        "###############"
+      ],
+      "hazards": []
+    },
+    {
+      "name": "Learn to jump",
+      "grid": [
+        "###############",
+        "#.............#",
+        "#.............#",
+        "#.P.........G.#",
+        "#.............#",
+        "#.............#",
+        "#.............#",
+        "###############"
+      ],
+      "hazards": [
+        { "type": "sweep", "a": [7, 1], "b": [7, 6], "speed": 3.4 }
+      ]
+    },
+    {
+      "name": "The chain - go around",
+      "grid": [
+        "###############",
+        "#.............#",
+        "#.P...........#",
+        "#.............#",
+        "#.............#",
+        "#...........G.#",
+        "#.............#",
+        "###############"
+      ],
+      "hazards": [
+        { "type": "chain", "pivot": [7, 3], "radius": 2.2, "speed": 1.6 },
+        { "type": "patrol", "a": [11, 1], "b": [11, 6], "speed": 2.2 }
+      ]
+    },
+    {
+      "name": "Pits - jump them or fall",
+      "grid": [
+        "###############",
+        "#.............#",
+        "#.P..OO...OO..#",
+        "#....OO...OO..#",
+        "#.............#",
+        "#..OO.....OO.G#",
+        "#..OO.....OO..#",
+        "###############"
+      ],
+      "hazards": [
+        { "type": "sweep", "a": [8, 1], "b": [8, 6], "speed": 3.8 },
+        { "type": "patrol", "a": [13, 1], "b": [13, 6], "speed": 2.6 }
+      ]
+    },
+    {
+      "name": "Everything at once",
+      "grid": [
+        "###############",
+        "#.............#",
+        "#.P...OO......#",
+        "#.....OO..#...#",
+        "#.........#...#",
+        "#..OO.....#...#",
+        "#..OO........G#",
+        "###############"
+      ],
+      "hazards": [
+        { "type": "chain", "pivot": [7, 4], "radius": 2.0, "speed": 2.0 },
+        { "type": "sweep", "a": [11, 1], "b": [11, 6], "speed": 4.0 },
+        { "type": "chaser", "start": [1, 6], "speed": 1.0 }
+      ]
+    }
+  ]
+}
