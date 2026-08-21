@@ -14,6 +14,8 @@ extends Node2D
 signal jump_pressed
 signal restart_requested
 signal copy_requested
+signal difficulty_chosen(d: int)
+signal menu_requested
 
 # --- Touch control sizing (tune these for thumb comfort) ---
 const STICK_RADIUS := 76.0
@@ -29,10 +31,17 @@ var lives := 3
 var deaths := 0
 var player_dead := false
 
+# --- Difficulty select (the first thing you see; guest-first, no login) ---
+var showing_menu := true
+var _tier_rects: Array = []
+
 # --- Results screen ---
 var showing_results := false
+var menu_button_rect := Rect2()
 var result_won := false
 var level_reached := 0
+# >= 0 means a checkpoint is armed and continuing resumes there.
+var resume_level := -1
 var copy_flash_timer := 0.0
 var copy_button_rect := Rect2()
 
@@ -76,12 +85,13 @@ func set_status(idx: int, count: int, l: int, d: int, is_dead: bool) -> void:
 	player_dead = is_dead
 
 
-func enter_results(won: bool, reached: int, count: int, d: int) -> void:
+func enter_results(won: bool, reached: int, count: int, d: int, resume: int = -1) -> void:
 	showing_results = true
 	result_won = won
 	level_reached = reached
 	level_count = count
 	deaths = d
+	resume_level = resume
 	# Drop any held touches so the next tap is read cleanly.
 	stick_touch_id = -1
 	jump_touch_id = -1
@@ -89,6 +99,17 @@ func enter_results(won: bool, reached: int, count: int, d: int) -> void:
 
 func leave_results() -> void:
 	showing_results = false
+
+
+func enter_menu() -> void:
+	showing_menu = true
+	showing_results = false
+	stick_touch_id = -1
+	jump_touch_id = -1
+
+
+func leave_menu() -> void:
+	showing_menu = false
 
 
 func flash_copied() -> void:
@@ -108,6 +129,9 @@ func _input(event: InputEvent) -> void:
 
 	if event is InputEventScreenTouch:
 		if event.pressed:
+			if showing_menu:
+				_tap_menu(event.position)
+				return
 			if showing_results:
 				_tap_results(event.position)
 				return
@@ -133,6 +157,9 @@ func _input(event: InputEvent) -> void:
 	# Mouse fallback so the game is testable in a desktop browser.
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 		if event.pressed:
+			if showing_menu:
+				_tap_menu(event.position)
+				return
 			if showing_results:
 				_tap_results(event.position)
 				return
@@ -152,8 +179,18 @@ func _input(event: InputEvent) -> void:
 func _tap_results(pos: Vector2) -> void:
 	if copy_button_rect.has_point(pos):
 		copy_requested.emit()
+	elif menu_button_rect.has_point(pos):
+		menu_requested.emit()
 	else:
 		restart_requested.emit()
+
+
+func _tap_menu(pos: Vector2) -> void:
+	var tiers := [Progress.Diff.STANDARD, Progress.Diff.HARD, Progress.Diff.EXTREME]
+	for i in range(_tier_rects.size()):
+		if _tier_rects[i].has_point(pos) and Progress.is_unlocked(tiers[i]):
+			difficulty_chosen.emit(tiers[i])
+			return
 
 
 func _fire_jump() -> void:
@@ -208,6 +245,10 @@ func _draw() -> void:
 			Vector2(screen.x * 0.5, screen.y * 0.5 - 24), 26, Palette.EDGE)
 		centre_text(font, "This one is played sideways",
 			Vector2(screen.x * 0.5, screen.y * 0.5 + 18), 16, Palette.TEXT)
+		return
+
+	if showing_menu:
+		_draw_menu(screen, font)
 		return
 
 	if showing_results:
@@ -270,6 +311,55 @@ func _draw_touch_controls(screen: Vector2, font) -> void:
 			Color(1, 1, 1, 0.35))
 
 
+# Locked tiers are shown, not hidden — seeing what you haven't earned yet
+# is the point. They're dimmed and crossed through.
+func _draw_menu(screen: Vector2, font) -> void:
+	var cx := screen.x * 0.5
+	centre_text(font, "THE LAST GAME", Vector2(cx, screen.y * 0.20), 38, Palette.glow(Palette.EDGE, 2.0))
+	centre_text(font, "Choose your difficulty", Vector2(cx, screen.y * 0.20 + 38), 14,
+		Color(Palette.TEXT.r, Palette.TEXT.g, Palette.TEXT.b, 0.8))
+
+	var tiers := [Progress.Diff.STANDARD, Progress.Diff.HARD, Progress.Diff.EXTREME]
+	var accents := [Palette.EDGE, Palette.GOAL, Palette.HAZ]
+	var cw := minf(240.0, (screen.x - 100.0) / 3.0 - 20.0)
+	var ch := 118.0
+	var gap := 20.0
+	var x := cx - (cw * 3.0 + gap * 2.0) * 0.5
+	var y := screen.y * 0.46
+	_tier_rects = []
+
+	for i in range(tiers.size()):
+		var d: int = tiers[i]
+		var rect := Rect2(Vector2(x, y), Vector2(cw, ch))
+		_tier_rects.append(rect)
+
+		var open: bool = Progress.is_unlocked(d)
+		var accent: Color = accents[i]
+		var a: float = 1.0 if open else 0.3
+
+		draw_rect(rect, Color(1, 1, 1, 0.05 if open else 0.02), true)
+		draw_rect(rect, Color(accent.r, accent.g, accent.b, 0.6 * a), false, 2.0)
+		if open:
+			draw_line(rect.position + Vector2(4, 2), rect.position + Vector2(cw - 4, 2),
+				Color(1, 1, 1, 0.25), 1.5)
+
+		centre_text(font, Progress.tier_name(d), rect.position + Vector2(cw * 0.5, 44), 22,
+			Color(accent.r, accent.g, accent.b, a))
+		centre_text(font, String(Progress.rules(d)["blurb"]),
+			rect.position + Vector2(cw * 0.5, 76), 11,
+			Color(Palette.TEXT.r, Palette.TEXT.g, Palette.TEXT.b, a))
+
+		if not open:
+			draw_line(rect.position, rect.position + rect.size, Color(1, 1, 1, 0.16), 2.0)
+			draw_line(rect.position + Vector2(0, ch), rect.position + Vector2(cw, 0),
+				Color(1, 1, 1, 0.16), 2.0)
+		x += cw + gap
+
+	if not Progress.standard_cleared:
+		centre_text(font, "Finish all %d levels on STANDARD to unlock the difficulties" % level_count,
+			Vector2(cx, y + ch + 42), 14, Color(1, 1, 1, 0.45))
+
+
 func _draw_results(screen: Vector2, font) -> void:
 	var accent := Palette.GOAL if result_won else Palette.HAZ
 	var title := "YOU CLEARED THE LOOP" if result_won else "THE LOOP RESET"
@@ -294,13 +384,24 @@ func _draw_results(screen: Vector2, font) -> void:
 	var label := "COPIED!" if copy_flash_timer > 0.0 else "TAP TO COPY BRAG"
 	centre_text(font, label, Vector2(cx, by + bh * 0.5), 18, Palette.EDGE)
 
-	centre_text(font, "Tap anywhere else to try again",
-		Vector2(cx, by + 105), 14, Color(1, 1, 1, 0.4))
+	var again := "Tap anywhere else to try again"
+	if not result_won and resume_level >= 0:
+		again = "Tap anywhere else to continue from level %d" % (resume_level + 1)
+	centre_text(font, again, Vector2(cx, by + 100), 14, Color(1, 1, 1, 0.4))
+
+	menu_button_rect = Rect2(Vector2(cx - 110.0, by + 118.0), Vector2(220.0, 34.0))
+	draw_rect(menu_button_rect, Color(1, 1, 1, 0.03), true)
+	draw_rect(menu_button_rect, Color(Palette.TEXT.r, Palette.TEXT.g, Palette.TEXT.b, 0.35), false, 1.0)
+	centre_text(font, "CHANGE DIFFICULTY",
+		menu_button_rect.position + Vector2(110.0, 17.0), 13,
+		Color(Palette.TEXT.r, Palette.TEXT.g, Palette.TEXT.b, 0.85))
 
 
 func _draw_hud(screen: Vector2, font) -> void:
 	draw_string(font, Vector2(18, 32), "LEVEL %d / %d" % [level_index + 1, level_count],
 		HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Palette.EDGE)
+	draw_string(font, Vector2(18, 54), Progress.tier_name(),
+		HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(Palette.TEXT.r, Palette.TEXT.g, Palette.TEXT.b, 0.7))
 	draw_string(font, Vector2(screen.x - 230, 32), "LIVES %d" % lives,
 		HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Palette.HAZ)
 	draw_string(font, Vector2(screen.x - 125, 32), "DEATHS %d" % deaths,

@@ -14,6 +14,9 @@ const GRAVITY := 950.0
 const HALF := 12.0
 # Above this height you clear low hazards.
 const AIRBORNE_HEIGHT := 16.0
+# Effective on-screen radius of the drawn diamond, used for hazard hit tests.
+# (HALF is the wall-collision box on the grid — a different thing.)
+const HIT_R := 9.0
 
 # Where we are on the flat grid underneath, plus how high we've jumped.
 var world_pos := Vector2.ZERO
@@ -30,6 +33,10 @@ var dead := false
 # The level's ASCII grid, so we can test for walls ourselves.
 var _grid: Array = []
 
+# Motion ribbon. When you stand still every sample lands on the same
+# spot, so the trail collapses on its own — no special case needed.
+var trail := Trail.new(8)
+
 
 func setup(grid: Array, start: Vector2) -> void:
 	_grid = grid
@@ -39,11 +46,13 @@ func setup(grid: Array, start: Vector2) -> void:
 	on_ground = true
 	move_dir = Vector2.ZERO
 	dead = false
+	trail.clear()
 
 
 func tick(delta: float) -> void:
 	_move(delta)
 	_apply_gravity(delta)
+	trail.update(delta, world_pos)
 	queue_redraw()
 
 
@@ -120,6 +129,10 @@ func current_cell() -> String:
 
 
 func _draw() -> void:
+	# Trail first so the player body always sits on top of its own wake.
+	trail.draw_into(self, Palette.HAZ if dead else Palette.PLAYER,
+		HALF * 0.8, z + 10.0, 1.2, 0.38)
+
 	var ground := Iso.to_screen(world_pos, 0.0)
 	var body := Iso.to_screen(world_pos, z + 10.0)
 

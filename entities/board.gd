@@ -37,6 +37,11 @@ const TINT_UNDERSIDE := Color(0.42, 0.47, 0.57)
 var grid: Array = []
 var goal_pos := Vector2.ZERO
 
+# Checkpoint coin. has_coin is false on levels that don't place a 'C'.
+var has_coin := false
+var coin_pos := Vector2.ZERO
+var coin_taken := false
+
 # Drives the goal marker's gentle bobbing.
 var pulse := 0.0
 
@@ -47,9 +52,12 @@ func _ready() -> void:
 	texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
 
 
-func setup(new_grid: Array, new_goal: Vector2) -> void:
+func setup(new_grid: Array, new_goal: Vector2, new_coin: Vector2, coin_present: bool) -> void:
 	grid = new_grid
 	goal_pos = new_goal
+	coin_pos = new_coin
+	has_coin = coin_present
+	coin_taken = false
 	queue_redraw()
 
 
@@ -75,6 +83,7 @@ func _draw() -> void:
 	_draw_floor()
 	_draw_walls()
 	_draw_goal()
+	_draw_coin()
 
 
 # The island underside art is drawn front-on with a straight top edge,
@@ -212,6 +221,25 @@ func _draw_cube(col: int, row: int) -> void:
 			Iso.to_screen(Vector2(x1, y1), h),
 			Iso.to_screen(Vector2(x1, y1), 0.0),
 			Color(Palette.EDGE.r, Palette.EDGE.g, Palette.EDGE.b, 0.5) * Color(1.6, 1.6, 1.6, 1.0), 1.5)
+
+
+# The checkpoint pickup. Deliberately drawn in cyan (the "safe" colour)
+# so it never reads as a hazard, and it bobs like the goal does.
+func _draw_coin() -> void:
+	if not has_coin or coin_taken:
+		return
+	var lift := 14.0 + sin(pulse * 3.2) * 5.0
+	var base := Iso.to_screen(coin_pos, 0.0)
+	var top := Iso.to_screen(coin_pos, lift)
+
+	draw_circle(base, 13.0, Color(0, 0, 0, 0.4))
+	draw_circle(top, 22.0, Color(Palette.EDGE.r, Palette.EDGE.g, Palette.EDGE.b, 0.16))
+	draw_circle(top, 11.0, Palette.glow(Palette.EDGE, 2.0))
+
+	# A "+" cut out of the middle, so it reads as "extra", not "collect".
+	var arm := 5.5
+	draw_line(top - Vector2(arm, 0), top + Vector2(arm, 0), Palette.BG, 3.0)
+	draw_line(top - Vector2(0, arm), top + Vector2(0, arm), Palette.BG, 3.0)
 
 
 func _draw_goal() -> void:

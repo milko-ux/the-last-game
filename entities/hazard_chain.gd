@@ -19,13 +19,13 @@ func _configure(data: Dictionary) -> void:
 	world_pos = pivot + Vector2(radius_tiles * Iso.TILE, 0.0)
 
 
-func tick(_delta: float, elapsed: float, _player_pos: Vector2) -> void:
+func _move(_delta: float, elapsed: float, _player_pos: Vector2) -> void:
 	var ang := elapsed * speed
 	world_pos = pivot + Vector2(cos(ang), sin(ang)) * (radius_tiles * Iso.TILE)
-	queue_redraw()
 
 
 func _draw() -> void:
+	_draw_trail(Palette.CHAIN, TETHER_HEIGHT)
 	_draw_shadow()
 
 	# The tether, drawn from the top of the pivot post to the orb.

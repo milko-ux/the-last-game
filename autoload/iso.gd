@@ -53,6 +53,13 @@ func cell_center(col: int, row: int) -> Vector2:
 	return Vector2((col + 0.5) * TILE, (row + 0.5) * TILE)
 
 
+# The on-screen offset between two world points. Same projection as
+# to_screen() but without the origin, since that cancels out for a
+# difference. Used for hit tests that need to match what's DRAWN.
+func project_offset(w: Vector2) -> Vector2:
+	return Vector2((w.x - w.y) * ISO_X, (w.x + w.y) * ISO_Y)
+
+
 # The four screen corners of one tile, at height z.
 func tile_quad(col: int, row: int, z: float) -> PackedVector2Array:
 	var x0 := col * TILE

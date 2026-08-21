@@ -17,15 +17,15 @@ func _configure(data: Dictionary) -> void:
 	world_pos = point_a
 
 
-func tick(_delta: float, elapsed: float, _player_pos: Vector2) -> void:
+func _move(_delta: float, elapsed: float, _player_pos: Vector2) -> void:
 	# Ping-pong 0 -> 1 -> 0 along the line.
 	var t: float = fmod(elapsed * speed * 0.5, 2.0)
 	if t > 1.0:
 		t = 2.0 - t
 	world_pos = point_a.lerp(point_b, t)
-	queue_redraw()
 
 
 func _draw() -> void:
+	_draw_trail(Palette.HAZ, 10.0)
 	_draw_shadow()
 	_draw_orb(Palette.HAZ, 10.0)

@@ -25,11 +25,11 @@ const SHARE_URL := "https://mivasthecreator.itch.io/the-last-game"
 const LEVELS_PATH := "res://levels.json"
 
 const DEATH_PAUSE := 0.40
-const STARTING_LIVES := 3
 
 # --- Haptics (ms). No-op on platforms/browsers without vibration support. ---
 const HAPTIC_DEATH_MS := 35
 const HAPTIC_WIN_MS := 80
+const HAPTIC_COIN_MS := 25
 
 const PLAYER_SCENE := preload("res://entities/player.tscn")
 const HAZARD_SCENES := {
@@ -47,9 +47,18 @@ var levels: Array = []
 
 # --- Run state ---
 var current_level := 0
-var lives := STARTING_LIVES
+var lives := 3
 var total_deaths := 0
 var run_highest_level := 0
+
+# Level to fall back to when all lives are gone. -1 = no checkpoint armed,
+# so a wipe sends you back to the very start. Run-scoped on purpose: the
+# loop resetting has to mean something.
+var checkpoint_level := -1
+
+# Levels whose coin has already been collected this run, so a coin you
+# took doesn't reappear when you die and replay that level.
+var coins_taken: Array[int] = []
 
 var player: Node2D = null
 var hazards: Array = []
@@ -64,9 +73,25 @@ var result_won := false
 func _ready() -> void:
 	load_levels()
 	ui.jump_pressed.connect(_on_jump_pressed)
-	ui.restart_requested.connect(start_new_run)
+	ui.restart_requested.connect(_on_restart_requested)
 	ui.copy_requested.connect(copy_brag)
+	ui.difficulty_chosen.connect(_on_difficulty_chosen)
+	ui.menu_requested.connect(_on_menu_requested)
+	# The difficulty screen is the entry point — guest-first, no login,
+	# straight into choosing how badly you want to suffer.
+	ui.level_count = levels.size()
+	ui.enter_menu()
 	load_level(0)
+
+
+func _on_difficulty_chosen(d: int) -> void:
+	Progress.selected = d
+	ui.leave_menu()
+	start_new_run()
+
+
+func _on_menu_requested() -> void:
+	ui.enter_menu()
 
 
 # ============================================================
@@ -116,6 +141,8 @@ func load_level(index: int) -> void:
 
 	var start := Vector2.ZERO
 	var goal := Vector2.ZERO
+	var coin := Vector2.ZERO
+	var coin_present := false
 	for row in range(grid.size()):
 		var line: String = grid[row]
 		for col in range(line.length()):
@@ -123,8 +150,14 @@ func load_level(index: int) -> void:
 				start = Iso.cell_center(col, row)
 			elif line[col] == "G":
 				goal = Iso.cell_center(col, row)
+			elif line[col] == "C":
+				coin = Iso.cell_center(col, row)
+				coin_present = true
 
-	board.setup(grid, goal)
+	# The coin only exists in modes that actually have checkpoints, so it
+	# never appears as a pickup that does nothing on Hard or Extreme.
+	board.setup(grid, goal, coin, coin_present and Progress.checkpoints_allowed())
+	board.coin_taken = index in coins_taken
 	_spawn_entities(grid, start, levels[index]["hazards"])
 	_tick_hazards(0.0)
 
@@ -158,13 +191,32 @@ func _spawn_entities(grid: Array, start: Vector2, haz_data: Array) -> void:
 
 
 func start_new_run() -> void:
-	lives = STARTING_LIVES
+	lives = Progress.lives_for()
 	total_deaths = 0
 	run_highest_level = 0
+	checkpoint_level = -1
+	coins_taken.clear()
 	showing_results = false
 	result_won = false
 	ui.leave_results()
 	load_level(0)
+
+
+# Losing every life with a checkpoint armed drops you back to it with a
+# full set of lives, rather than ending the run.
+func resume_from_checkpoint() -> void:
+	lives = Progress.lives_for()
+	showing_results = false
+	result_won = false
+	ui.leave_results()
+	load_level(max(checkpoint_level, 0))
+
+
+func _on_restart_requested() -> void:
+	if checkpoint_level >= 0 and Progress.checkpoints_allowed():
+		resume_from_checkpoint()
+	else:
+		start_new_run()
 
 
 # ============================================================
@@ -173,11 +225,11 @@ func start_new_run() -> void:
 func _process(delta: float) -> void:
 	board.pulse += delta
 
-	var hide_world: bool = showing_results or ui.portrait()
+	var hide_world: bool = showing_results or ui.showing_menu or ui.portrait()
 	board.visible = not hide_world
 	entities.visible = not hide_world
 
-	if showing_results:
+	if showing_results or ui.showing_menu:
 		return
 
 	ui.set_status(current_level, levels.size(), lives, total_deaths, is_dead)
@@ -224,9 +276,18 @@ func _check_collisions() -> void:
 		return
 
 	for haz in hazards:
-		if haz.hits(player.world_pos, player.HALF, player.airborne()):
+		if haz.hits(player.world_pos, player.HIT_R, player.airborne()):
 			die()
 			return
+
+	if board.has_coin and not board.coin_taken \
+			and player.world_pos.distance_to(board.coin_pos) < Iso.TILE * 0.5:
+		board.coin_taken = true
+		if current_level not in coins_taken:
+			coins_taken.append(current_level)
+		checkpoint_level = current_level
+		board.queue_redraw()
+		Input.vibrate_handheld(HAPTIC_COIN_MS)
 
 	if player.world_pos.distance_to(board.goal_pos) < Iso.TILE * 0.45:
 		if current_level + 1 >= levels.size():
@@ -249,7 +310,13 @@ func enter_results(won_flag: bool) -> void:
 	showing_results = true
 	result_won = won_flag
 	is_dead = false
-	ui.enter_results(won_flag, run_highest_level, levels.size(), total_deaths)
+	if won_flag:
+		Progress.mark_cleared(Progress.selected)
+	# The share screen shows on every wipe, checkpoint or not — it's the
+	# viral mechanic, so it must not be skipped just because the player
+	# has a checkpoint to fall back to. Only the continue action changes.
+	var resume: int = checkpoint_level if Progress.checkpoints_allowed() else -1
+	ui.enter_results(won_flag, run_highest_level, levels.size(), total_deaths, resume)
 	if won_flag:
 		Input.vibrate_handheld(HAPTIC_WIN_MS)
 

@@ -20,11 +20,16 @@ var speed := 1.0
 # Tall hazards (the chain) cannot be jumped over.
 var jumpable := true
 
+# Motion ribbon. Lives on the base so every hazard type gets one and
+# they all behave identically.
+var trail := Trail.new(9)
+
 
 # Called once when the level loads. `data` is one entry from levels.json.
 func setup(data: Dictionary) -> void:
 	speed = float(data.get("speed", 1.0))
 	_configure(data)
+	trail.clear()
 
 
 # Overridden by each hazard type.
@@ -33,20 +38,40 @@ func _configure(_data: Dictionary) -> void:
 
 
 # `elapsed` is time since the level started; `player_pos` lets chasers home in.
-func tick(_delta: float, _elapsed: float, _player_pos: Vector2) -> void:
+# Subclasses override _move(); the trail and the redraw are handled here so
+# every hazard type keeps them in step.
+func tick(delta: float, elapsed: float, player_pos: Vector2) -> void:
+	_move(delta, elapsed, player_pos)
+	trail.update(delta, world_pos)
+	queue_redraw()
+
+
+func _move(_delta: float, _elapsed: float, _player_pos: Vector2) -> void:
 	pass
 
 
-# Did this hazard catch the player? Uses the same box-vs-circle test the
-# original single-file version used, so difficulty is unchanged.
-func hits(player_pos: Vector2, player_half: float, player_airborne: bool) -> bool:
+# Did this hazard catch the player?
+#
+# WHAT YOU SEE IS WHAT KILLS YOU. This test used to be measured on the flat
+# grid underneath, but everything is DRAWN in isometric, which squashes the
+# vertical axis to half. That made the real kill zone roughly half as tall as
+# the ball looks on screen, so you could overlap the art from above or below
+# and survive — while the same gap from the side killed you. Measuring the
+# offset in SCREEN space instead makes contact mean contact from every
+# direction, and is what makes the hazards feel sharp rather than mushy.
+#
+# `player_r` is the drawn size of the player, not its wall-collision box —
+# wall collision stays on the grid, where it belongs.
+func hits(player_pos: Vector2, player_r: float, player_airborne: bool) -> bool:
 	if jumpable and player_airborne:
 		return false
-	var closest := Vector2(
-		clamp(world_pos.x, player_pos.x - player_half, player_pos.x + player_half),
-		clamp(world_pos.y, player_pos.y - player_half, player_pos.y + player_half)
-	)
-	return closest.distance_to(world_pos) < RADIUS
+	var offset := Iso.project_offset(world_pos - player_pos)
+	return offset.length() < RADIUS + player_r
+
+
+# Shared motion ribbon, drawn under the orb so the orb stays the brightest part.
+func _draw_trail(tint: Color, height: float) -> void:
+	trail.draw_into(self, tint, RADIUS * 0.8, height, 1.3)
 
 
 # Shared floor shadow, drawn by every hazard type.

@@ -24,25 +24,47 @@ Work happens in this order unless Milko says otherwise — don't jump ahead to a
 
 - **Phase 0 — Foundation** ✅ done. Core prototype: isometric maze, jump mechanic, hazards (spinner/sweep/chain/chaser), 5 levels, deployed to itch.io.
 - **Phase 1 — Mobile Feel** ✅ done. Glass touch controls (confirmed working well on-device), responsiveness, portrait handling, performance on real phone hardware. Closed out with a framerate-independent pit-death fix and haptics on death/win.
-- **Phase 1.5 — Architecture Refactor** 🔄 in progress. Goal: identical visual identity, more capable foundation for everything after it. Existing logic gets relocated, not rewritten from scratch.
+- **Phase 1.5 — Architecture Refactor** ✅ done. Goal: identical visual identity, more capable foundation for everything after it. Existing logic gets relocated, not rewritten from scratch.
   - ✅ Levels become data a loader reads (`levels.json`) instead of living inline in the script.
   - ✅ Player and each hazard type are their own reusable scenes; projection and palette moved to autoloads; UI moved to its own CanvasLayer.
   - ✅ Real glow/bloom on the world via HDR 2D + a `WorldEnvironment`. Scoped to the world only — the glass touch controls are excluded by sitting on their own CanvasLayer.
-  - ⏭️ Remaining: particle trails (hazard/player motion trails). The goal marker already has an animated pulse from Phase 0.
-- **Phase 2 — Core Loop & Progression.** 3-lives system, difficulty unlock progression (Standard/Hard/Extreme), shareable death screen polish, guest-first onboarding.
+  - ✅ Motion trails on hazards and the player (`entities/trail.gd`). The goal marker already had an animated pulse from Phase 0.
+- **Phase 2 — Core Loop & Progression** 🔄 in progress. Difficulty tiers, checkpoints, unlock persistence and the difficulty select screen are built. **Remaining: Milko is authoring 30 levels in `levels.json`** (he designs them all; see the `_readme` in that file). Onboarding beyond the difficulty screen is still open.
 - **Phase 3 — Backend & Persistence.** Talo leaderboard integration (global + country-selected), registration deferred to results screen, GDPR/EU consent handling.
 - **Phase 4 — Monetization.** Rewarded video ads only, never on death.
 - **Phase 5 — Native Build & Store Prep.** iOS export (Xcode/provisioning/App Store Connect), Android export (Play Console/signing), store listing assets, TestFlight/internal testing.
 - **Phase 6 — Launch.** Store submission, review, release, post-launch monitoring.
+
+**Deferred, agreed 2026-08-21 — restore the itch.io build.** The listing is currently private/404. Milko wants it public again so friends and testers can play, but explicitly parked it until the phases above are built. Day-to-day testing until then is local (see below). Don't spend time on itch.io before Phase 5 unless Milko raises it.
+
+### Testing on a real phone (local, no itch.io)
+Godot web builds require a **secure context**, which browsers only grant to `localhost`/`127.0.0.1` or real HTTPS. A plain `http://<LAN-IP>` URL fails with *"Secure Context - Check web server configuration (use HTTPS)"* — this is the expected failure, not a broken build.
+
+So serve over HTTPS with a self-signed cert (kept in the session scratchpad, never in the repo):
+
+```
+openssl req -x509 -newkey rsa:2048 -keyout key.pem -out cert.pem -days 365 -nodes \
+  -subj "/CN=<LAN-IP>" -addext "subjectAltName=IP:<LAN-IP>,IP:127.0.0.1,DNS:localhost"
+```
+
+then a Python `http.server` wrapped in `ssl.SSLContext` on port 8443, bound to `0.0.0.0`. Get the IP with `ipconfig getifaddr en0`. The phone must accept the certificate warning once. If that ever proves insufficient, `cloudflared` is installed and gives a real trusted cert — but it exposes the build publicly, so ask Milko first.
 
 ## Non-negotiables — flag before touching any of these
 Do not change or drift from these without explicitly flagging it to Milko first:
 
 - **Visual identity:** dark synthwave / neon aesthetic. Color logic is fixed — magenta = death, cyan = safe, amber = goal.
 - **Touch controls:** frosted-glass, Apple-style. Milko has confirmed on-device that the current glass controls feel good — don't regress this.
-- **Core loop:** 3-lives system. Losing all 3 lives resets the full loop to level 1 (no mid-run checkpoints).
+- **Core loop:** 3 lives on Standard and Hard, 1 life on Extreme. Losing them all resets the loop. **Standard has checkpoints** — see the difficulty table below. (This supersedes the earlier "no mid-run checkpoints" rule; Milko changed it on 2026-08-21 when specifying the tiers.)
 - **Death screen:** must stay shareable — roast-style brag text plus clipboard copy. This is a core viral/retention mechanic, not a nice-to-have.
-- **Difficulty:** Standard/Hard/Extreme are unlocked through play progression, not chosen upfront in a menu.
+- **Difficulty:** Standard/Hard/Extreme. Everyone starts on Standard; Hard and Extreme are **shown but crossed out** until Standard is cleared, so the player can see what they haven't earned. Never a free upfront choice.
+
+| Tier | Lives | Checkpoints | Unlocked by |
+|---|---|---|---|
+| Standard | 3 | Yes — the `C` coin | always available |
+| Hard | 3 | No | clearing every level on Standard |
+| Extreme | **1** | No | clearing every level on Standard |
+
+Clearing Standard unlocks **both** Hard and Extreme (Milko's wording was "unlock the difficulties" — change `Progress.is_unlocked()` if it should be staged instead).
 - **Ads:** rewarded video only. **Never show an ad on death** — this was explicitly rejected earlier and should not resurface.
 - **Onboarding:** guest-first. Registration is deferred to the results screen, not forced upfront.
 - **Data & privacy (GDPR/EU):** any feature that collects or stores player data (accounts, leaderboards) needs consent handling before it ships. Flag this before implementing Phase 3.
@@ -50,7 +72,7 @@ Do not change or drift from these without explicitly flagging it to Milko first:
 **Note on Phase 1.5:** moving from hand-drawn rendering to scenes/shaders is a pre-approved architecture change, not a violation of the visual non-negotiables above — the goal is the identical look on a better-built foundation. Still flag it if the actual visual result (glow intensity, exact colors, control feel) ends up noticeably different from what's live now.
 
 ## Current status
-Mid **Phase 1.5** — the code restructure is done, shaders are what's left (see Roadmap above).
+**Phase 1.5 complete.** Starting **Phase 2 — Core Loop & Progression**.
 
 - GitHub repo is live and up to date.
 - ⚠️ The itch.io page (`mivasthecreator.itch.io/the-last-game`) returned "we couldn't find your page" on 2026-08-21, so the listing is currently private/unlisted/draft rather than publicly playable. Local testing does not depend on it — export and serve the build locally instead.
@@ -73,13 +95,15 @@ As of Phase 1.5, the game is split into small single-purpose files instead of on
 
 **Autoloads (global helpers):**
 - **`autoload/iso.gd`** (`Iso`) — the isometric projection. The world underneath is a plain flat grid; isometric is only how it's DRAWN, which is what keeps level files readable as text. Everything that draws calls `Iso.to_screen()` so they all agree on where things are. Also owns `TILE`, `WALL_H`, and `set_board_size()` — the view now centres itself from the actual level dimensions, so a bigger maze in `levels.json` just works.
+- **`autoload/progress.gd`** (`Progress`) — which difficulties are unlocked and the rules of each (lives, checkpoints). Saves to `user://progress.save`. Progression only, no personal data, so no GDPR consent needed — that starts at Phase 3.
 - **`autoload/palette.gd`** (`Palette`) — the fixed colour language (magenta = death, cyan = safe, amber = goal). Every entity reads colours from here so the meaning stays consistent. **Non-negotiable — see above.** Also owns `glow()` and the `NEON` multiplier that drive the bloom (see "How the glow works" below).
 
 **Entities (each one is its own scene):**
 - **`entities/background.gd`** — the far starfield, drawn behind everything and scaled to COVER the screen so stars never stretch out of shape. (Real parallax needs a moving camera; this game's view is fixed per level, so there's nothing to move against yet — this is the node to give a slow scroll to if that changes.)
 - **`entities/board.gd`** — draws the static world: rock floor tiles, pits, wall cubes (sorted back-to-front), the hanging island underside, and the goal marker. See "How the rock textures work" below.
 - **`entities/player.gd`** — position, jump, gravity, wall collision (axis-separated so you slide along walls instead of sticking), and its own drawing. The physics numbers are unchanged from the original, so the feel is identical.
-- **`entities/hazard.gd`** — shared base class. Owns the box-vs-circle hit test (unchanged, so difficulty is unchanged) and the `jumpable` flag.
+- **`entities/trail.gd`** — a small reusable motion ribbon (`Trail`). Remembers where something has been and draws it as shrinking, fading dots through `Palette.glow()`, so trails bloom like the rest of the neon without needing their own particle material. **Samples on a fixed time interval, not per frame**, so a trail is the same length in seconds at 30, 60 or 120fps. Used by the player and every hazard.
+- **`entities/hazard.gd`** — shared base class. `tick()` is final: it calls the subclass's `_move()`, then updates the trail and redraws, so every hazard type stays in step. Owns the box-vs-circle hit test (unchanged, so difficulty is unchanged) and the `jumpable` flag.
 - **`entities/hazard_line.gd`** — covers `patrol` and `sweep`; slides between two points. Low, so jumping clears it.
 - **`entities/hazard_chain.gd`** — orbits a pivot. TALL: `jumpable = false`, so you must go around.
 - **`entities/hazard_chaser.gd`** — homes in on the player. Low.
@@ -90,6 +114,15 @@ As of Phase 1.5, the game is split into small single-purpose files instead of on
 **Root:**
 - **`main.gd`** — now just the referee: owns the run (lives, deaths, current level), loads `levels.json`, spawns entities, and decides when you died or won. Also the share/brag text and keyboard shortcuts (Space/R/C).
 - **`main.tscn`** — scene tree: `Main` → `WorldEnvironment` (the glow settings), `Board`, `Entities` (hazards then player, so the player draws on top), `UI` (CanvasLayer) → `Screen`.
+
+### How hazard collision works (read before tuning difficulty)
+Hazard hit tests are measured in **screen space**, not on the flat grid — `Hazard.hits()` uses `Iso.project_offset()`. This is deliberate and was a bug fix on 2026-08-21.
+
+The grid underneath is flat, but everything is DRAWN isometrically, which squashes the vertical axis to half. Testing on the grid made the real kill zone about **half as tall as the ball looks on screen**: you could overlap the art from above or below and live, while the same gap from the side killed you. Measuring the projected offset instead means contact means contact from every direction — what you see is what kills you.
+
+Practical effect: hazards became roughly **twice as sensitive** along the screen-vertical axis, which is what Milko asked for after playtesting. Wall collision is unchanged and still grid-based (`Player._blocked()`) — that's a different problem and belongs on the grid.
+
+If difficulty needs tuning later, change `Hazard.RADIUS` or `Player.HIT_R`, not the projection.
 
 ### How the rock textures work (read before touching it)
 All art lives in `assets/`, downscaled from the originals (the source art was 2048²/2752px, ~24MB total — far too heavy for a phone; it's 3.6MB now):
@@ -115,7 +148,8 @@ The game renders in HDR (`rendering/viewport/hdr_2d` in `project.godot`), which 
 - **Boost amounts are per-element on purpose.** A colour with a zero channel (cyan `EDGE`, `#00fff2`) can be boosted hard (2.5x) and keeps its hue. A colour with high channels (the player's `#7dfaff`) clips toward white and goes grey-white if pushed — so those get a gentle 1.2–1.3x. If you raise a boost and something turns white, that's why.
 
 **Two switches if performance is a problem on a real phone:** set `Palette.NEON` to `1.0` to drop the over-bright everywhere, or `glow_enabled = false` on the Environment in `main.tscn` to remove the bloom pass entirely. Both are safe, reversible, and leave gameplay untouched.
-- **`levels.json`** — all level data: ASCII grids (`#` wall, `.` floor, `P` start, `G` goal, `O` pit) plus a `hazards` list per level. 5 levels. **Milko can edit this file directly in any text editor to design levels — no Godot or code needed.** The `_readme` block at the top documents the symbols and hazard types.
+- **`entities/trail.gd`** — reusable motion ribbon, see above.
+- **`levels.json`** — all level data: ASCII grids (`#` wall, `.` floor, `P` start, `G` goal, `O` pit, `C` checkpoint coin) plus a `hazards` list per level. 5 levels. **Milko can edit this file directly in any text editor to design levels — no Godot or code needed.** The `_readme` block at the top documents the symbols and hazard types.
 - **`project.godot`** — engine config. Base viewport 960x540, stretch `canvas_items` / aspect `expand` (what makes the itch.io embed scale instead of clip), `mobile` renderer, and the two autoloads above.
 - **`export_presets.cfg`** — single "Web" preset, output `game test 1/index.html`. Committed (small config, not a build artifact).
 - **`game test 1/`** — the exported web build. Build artifact — gitignored.
