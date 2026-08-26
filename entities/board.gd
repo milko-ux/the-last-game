@@ -34,13 +34,10 @@ const TINT_WALL_LEFT := Color(0.30, 0.33, 0.41)
 const TINT_WALL_RIGHT := Color(0.22, 0.25, 0.32)
 const TINT_UNDERSIDE := Color(0.42, 0.47, 0.57)
 
-# Underside placement. WIDTH is a multiple of the board's front edge;
-# LIFT tucks the straight top edge up behind the floor so it never shows.
-const UNDERSIDE_WIDTH := 1.15
-const UNDERSIDE_LIFT := 45.0
-# Slides the island ALONG the board's edge (not just sideways), so its
-# mass sits under the board's lowest corner rather than off to one side.
-const UNDERSIDE_SLIDE := 0.02
+# Underside placement. LIFT tucks the art's straight top edge up behind
+# the floor so it never shows; DEPTH scales how far the rock hangs down.
+const UNDERSIDE_LIFT := 26.0
+const UNDERSIDE_DEPTH := 0.85
 
 var grid: Array = []
 var goal_pos := Vector2.ZERO
@@ -94,40 +91,57 @@ func _draw() -> void:
 	_draw_coin()
 
 
-# The island underside art is drawn front-on with a straight top edge,
-# while the board is skewed into isometric. Drawing it as a plain
-# rectangle left it sitting flat while the map leaned — so instead we
-# SHEAR it, mapping the image's horizontal axis onto the board's own
-# +x edge. Its top edge then runs at exactly the map's angle and tucks
-# in under the floor instead of cutting across it.
+# THE ISLAND UNDERSIDE.
+#
+# The board's underside is a V: it runs from the left corner DOWN to the
+# lowest corner, then back UP to the right corner. Earlier versions hung
+# the art along only the left arm of that V, which left the whole right
+# half of the platform with nothing under it — the rock read as a
+# separate object floating below rather than as the island's belly.
+#
+# So the art is split down the middle and each half is sheared onto its
+# own arm of the V. The image tapers to a point at its centre, and both
+# halves meet at the board's lowest corner, so the island's deepest
+# point ends up directly beneath the platform's deepest point.
 func _draw_underside() -> void:
-	# The board's front-left edge, from the left corner down to the
-	# lowest corner. This is the line the island hangs from.
-	var left_corner := Iso.to_screen(Vector2(0.0, float(Iso.rows) * Iso.TILE), 0.0)
-	var edge_run := float(Iso.cols) * Iso.TILE * Iso.ISO_X
+	var cols_px := float(Iso.cols) * Iso.TILE
+	var rows_px := float(Iso.rows) * Iso.TILE
 
-	var w := edge_run * UNDERSIDE_WIDTH
-	var h := w * float(TEX_UNDERSIDE.get_height()) / float(TEX_UNDERSIDE.get_width())
+	var left_corner   := Iso.to_screen(Vector2(0.0, rows_px), 0.0)
+	var lowest_corner := Iso.to_screen(Vector2(cols_px, rows_px), 0.0)
+	var right_corner  := Iso.to_screen(Vector2(cols_px, 0.0), 0.0)
 
-	# Lifted slightly so the straight top edge sits INSIDE the board and
-	# the floor covers it. Drawn first, so the overlap is hidden.
-	# Everything slides ALONG the edge direction (1, ISO_Y/ISO_X), width
-	# centering included — nudging x alone would drop the top edge off the
-	# edge line and expose it.
-	var along := Vector2(1.0, Iso.ISO_Y / Iso.ISO_X)
-	var slide := edge_run * UNDERSIDE_SLIDE - edge_run * (UNDERSIDE_WIDTH - 1.0) * 0.5
-	var anchor := left_corner + along * slide - Vector2(0.0, UNDERSIDE_LIFT)
+	var tw := float(TEX_UNDERSIDE.get_width())
+	var th := float(TEX_UNDERSIDE.get_height())
+	var slope := Iso.ISO_Y / Iso.ISO_X
 
-	# x maps along the board's edge (down-right at the iso angle),
-	# y stays screen-vertical because the rock hangs straight down.
-	var xf := Transform2D(
-		Vector2(1.0, Iso.ISO_Y / Iso.ISO_X),
-		Vector2(0.0, 1.0),
-		anchor)
+	# One depth for both halves so the rock reads as continuous.
+	var depth := (right_corner.x - left_corner.x) * (th / tw) * UNDERSIDE_DEPTH
+	var lift := Vector2(0.0, UNDERSIDE_LIFT)
 
-	draw_set_transform_matrix(xf)
-	draw_texture_rect(TEX_UNDERSIDE, Rect2(Vector2.ZERO, Vector2(w, h)),
-		false, TINT_UNDERSIDE)
+	# Left half hangs along left corner -> lowest corner (sloping down).
+	_draw_underside_half(
+		Rect2(0.0, 0.0, tw * 0.5, th),
+		left_corner - lift,
+		lowest_corner.x - left_corner.x,
+		depth, slope)
+
+	# Right half hangs along lowest corner -> right corner (sloping up).
+	_draw_underside_half(
+		Rect2(tw * 0.5, 0.0, tw * 0.5, th),
+		lowest_corner - lift,
+		right_corner.x - lowest_corner.x,
+		depth, -slope)
+
+
+# Draws one half of the island, sheared so its top edge runs along a
+# board edge. x maps along that edge; y stays screen-vertical, because
+# the rock hangs straight down whatever the board is doing.
+func _draw_underside_half(src: Rect2, anchor: Vector2, run: float,
+		depth: float, slope: float) -> void:
+	draw_set_transform_matrix(Transform2D(Vector2(1.0, slope), Vector2(0.0, 1.0), anchor))
+	draw_texture_rect_region(TEX_UNDERSIDE,
+		Rect2(Vector2.ZERO, Vector2(run, depth)), src, TINT_UNDERSIDE)
 	draw_set_transform_matrix(Transform2D.IDENTITY)
 
 
