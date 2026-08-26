@@ -20,6 +20,7 @@ config/icon="res://icon.svg"
 Iso="*res://autoload/iso.gd"
 Palette="*res://autoload/palette.gd"
 Progress="*res://autoload/progress.gd"
+Profile="*res://autoload/profile.gd"
 
 [display]
 

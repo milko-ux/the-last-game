@@ -35,6 +35,15 @@ var player_dead := false
 var showing_menu := true
 var _tier_rects: Array = []
 
+# Name row on the menu. The player already HAS a name by the time they
+# get here (Profile hands one out on first launch), so this is about
+# changing it, never about filling in a blank.
+var _name_rect := Rect2()
+var _reroll_rect := Rect2()
+var _edit_rect := Rect2()
+var _editing_name := false
+@onready var _name_edit: LineEdit = get_parent().get_node("NameEdit")
+
 # --- Results screen ---
 var showing_results := false
 var menu_button_rect := Rect2()
@@ -54,7 +63,59 @@ var jump_flash := 0.0
 var stick_fade := 0.0
 
 
+func _ready() -> void:
+	_style_name_edit()
+	_name_edit.text_submitted.connect(_on_name_submitted)
+	_name_edit.focus_exited.connect(_finish_name_edit)
+
+
+# Matches the frosted-glass language without touching the touch controls
+# themselves, which are a non-negotiable.
+func _style_name_edit() -> void:
+	var box := StyleBoxFlat.new()
+	box.bg_color = Color(1, 1, 1, 0.06)
+	box.border_color = Color(Palette.EDGE.r, Palette.EDGE.g, Palette.EDGE.b, 0.7)
+	box.set_border_width_all(2)
+	box.set_corner_radius_all(4)
+	box.content_margin_left = 10.0
+	box.content_margin_right = 10.0
+	_name_edit.add_theme_stylebox_override("normal", box)
+	_name_edit.add_theme_stylebox_override("focus", box)
+	_name_edit.add_theme_color_override("font_color", Palette.EDGE)
+	_name_edit.add_theme_color_override("caret_color", Palette.EDGE)
+	_name_edit.add_theme_font_size_override("font_size", 20)
+
+
+func _begin_name_edit() -> void:
+	_editing_name = true
+	_name_edit.text = Profile.username
+	_name_edit.visible = true
+	_name_edit.position = _name_rect.position
+	_name_edit.size = _name_rect.size
+	_name_edit.grab_focus()
+	_name_edit.select_all()
+
+
+func _on_name_submitted(text: String) -> void:
+	# A rejected name (blank, too short, symbols only) just leaves the
+	# old one in place rather than wiping it.
+	Profile.set_username(text)
+	_finish_name_edit()
+
+
+func _finish_name_edit() -> void:
+	if not _editing_name:
+		return
+	_editing_name = false
+	_name_edit.visible = false
+	_name_edit.release_focus()
+
+
 func _process(delta: float) -> void:
+	# The name field only ever exists on the menu.
+	if _editing_name and not showing_menu:
+		_finish_name_edit()
+
 	if copy_flash_timer > 0.0:
 		copy_flash_timer -= delta
 	if jump_flash > 0.0:
@@ -186,6 +247,16 @@ func _tap_results(pos: Vector2) -> void:
 
 
 func _tap_menu(pos: Vector2) -> void:
+	if _reroll_rect.has_point(pos):
+		Profile.reroll()
+		return
+	if _edit_rect.has_point(pos) or _name_rect.has_point(pos):
+		_begin_name_edit()
+		return
+	if _editing_name:
+		_finish_name_edit()
+		return
+
 	var tiers := [Progress.Diff.STANDARD, Progress.Diff.HARD, Progress.Diff.EXTREME]
 	for i in range(_tier_rects.size()):
 		if _tier_rects[i].has_point(pos) and Progress.is_unlocked(tiers[i]):
@@ -325,7 +396,7 @@ func _draw_menu(screen: Vector2, font) -> void:
 	var ch := 118.0
 	var gap := 20.0
 	var x := cx - (cw * 3.0 + gap * 2.0) * 0.5
-	var y := screen.y * 0.46
+	var y := screen.y * 0.40
 	_tier_rects = []
 
 	for i in range(tiers.size()):
@@ -359,6 +430,38 @@ func _draw_menu(screen: Vector2, font) -> void:
 		centre_text(font, "Finish all %d levels on STANDARD to unlock the difficulties" % level_count,
 			Vector2(cx, y + ch + 42), 14, Color(1, 1, 1, 0.45))
 
+	_draw_name_row(cx, y + ch + 84, font)
+
+
+# "Playing as <name>" with reroll and edit. No account, no login — the
+# name already exists, so this is a nicety, not a gate.
+func _draw_name_row(cx: float, row_y: float, font) -> void:
+	centre_text(font, "PLAYING AS", Vector2(cx, row_y - 22), 11,
+		Color(Palette.TEXT.r, Palette.TEXT.g, Palette.TEXT.b, 0.55))
+
+	var nw: float = maxf(190.0,
+		font.get_string_size(Profile.username, HORIZONTAL_ALIGNMENT_LEFT, -1, 20).x + 40.0)
+	_name_rect = Rect2(Vector2(cx - nw * 0.5, row_y - 2), Vector2(nw, 34))
+
+	# While the LineEdit is up it draws itself, so skip the painted version.
+	if not _editing_name:
+		draw_rect(_name_rect, Color(1, 1, 1, 0.04), true)
+		draw_rect(_name_rect, Color(Palette.EDGE.r, Palette.EDGE.g, Palette.EDGE.b, 0.35), false, 1.0)
+		centre_text(font, Profile.username,
+			_name_rect.position + Vector2(nw * 0.5, 17), 20, Palette.EDGE)
+
+	var bw := 92.0
+	var by := row_y + 40.0
+	_reroll_rect = Rect2(Vector2(cx - bw - 6.0, by), Vector2(bw, 28))
+	_edit_rect   = Rect2(Vector2(cx + 6.0, by), Vector2(bw, 28))
+
+	for pair in [[_reroll_rect, "RANDOM"], [_edit_rect, "EDIT"]]:
+		var r: Rect2 = pair[0]
+		draw_rect(r, Color(1, 1, 1, 0.03), true)
+		draw_rect(r, Color(Palette.TEXT.r, Palette.TEXT.g, Palette.TEXT.b, 0.30), false, 1.0)
+		centre_text(font, String(pair[1]), r.position + Vector2(bw * 0.5, 14), 12,
+			Color(Palette.TEXT.r, Palette.TEXT.g, Palette.TEXT.b, 0.85))
+
 
 func _draw_results(screen: Vector2, font) -> void:
 	var accent := Palette.GOAL if result_won else Palette.HAZ
@@ -366,10 +469,12 @@ func _draw_results(screen: Vector2, font) -> void:
 	var cx := screen.x * 0.5
 
 	centre_text(font, title, Vector2(cx, screen.y * 0.5 - 130), 34, accent)
+	centre_text(font, Profile.username, Vector2(cx, screen.y * 0.5 - 100), 15,
+		Color(Palette.EDGE.r, Palette.EDGE.g, Palette.EDGE.b, 0.75))
 	centre_text(font, "Level reached: %d / %d" % [level_reached + 1, level_count],
-		Vector2(cx, screen.y * 0.5 - 80), 20, Palette.TEXT)
+		Vector2(cx, screen.y * 0.5 - 74), 20, Palette.TEXT)
 	centre_text(font, "Deaths: %d" % deaths,
-		Vector2(cx, screen.y * 0.5 - 48), 20, Palette.TEXT)
+		Vector2(cx, screen.y * 0.5 - 44), 20, Palette.TEXT)
 
 	var bw := 320.0
 	var bh := 60.0

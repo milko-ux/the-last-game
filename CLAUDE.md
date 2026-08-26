@@ -72,7 +72,7 @@ Do not change or drift from these without explicitly flagging it to Milko first:
 
 Clearing Standard unlocks **both** Hard and Extreme (Milko's wording was "unlock the difficulties" — change `Progress.is_unlocked()` if it should be staged instead).
 - **Ads:** rewarded video only. **Never show an ad on death** — this was explicitly rejected earlier and should not resurface.
-- **Onboarding:** guest-first. Registration is deferred to the results screen, not forced upfront.
+- **Onboarding:** guest-first. Registration is deferred to the results screen, not forced upfront. **Milko asked for upfront sign-up on 2026-08-22; this entry is the agreed outcome after pushing back** — a signup wall is the biggest drop-off point in a free game, and Talo only offers email/password + Google Play Games natively anyway (no Apple/Facebook without custom work, and offering Google on iOS may drag in Sign in with Apple).
 - **Data & privacy (GDPR/EU):** any feature that collects or stores player data (accounts, leaderboards) needs consent handling before it ships. Flag this before implementing Phase 3.
 
 **Note on Phase 1.5:** moving from hand-drawn rendering to scenes/shaders is a pre-approved architecture change, not a violation of the visual non-negotiables above — the goal is the identical look on a better-built foundation. Still flag it if the actual visual result (glow intensity, exact colors, control feel) ends up noticeably different from what's live now.
@@ -101,6 +101,7 @@ As of Phase 1.5, the game is split into small single-purpose files instead of on
 
 **Autoloads (global helpers):**
 - **`autoload/iso.gd`** (`Iso`) — the isometric projection. The world underneath is a plain flat grid; isometric is only how it's DRAWN, which is what keeps level files readable as text. Everything that draws calls `Iso.to_screen()` so they all agree on where things are. Also owns `TILE`, `WALL_H`, and `set_board_size()` — the view now centres itself from the actual level dimensions, so a bigger maze in `levels.json` just works.
+- **`autoload/profile.gd`** (`Profile`) — the player's name before they have an account. Guest-first: a generated name (`GlitchSignal`, `CinderDodger`) is handed out on first launch and saved to `user://profile.save`, so nobody ever faces an empty text field. `claimed` stays false until Phase 3 registration. Local nickname only — no personal data, so still no consent needed.
 - **`autoload/progress.gd`** (`Progress`) — which difficulties are unlocked and the rules of each (lives, checkpoints). Saves to `user://progress.save`. Progression only, no personal data, so no GDPR consent needed — that starts at Phase 3.
 - **`autoload/palette.gd`** (`Palette`) — the fixed colour language (magenta = death, cyan = safe, amber = goal). Every entity reads colours from here so the meaning stays consistent. **Non-negotiable — see above.** Also owns `glow()` and the `NEON` multiplier that drive the bloom (see "How the glow works" below).
 
