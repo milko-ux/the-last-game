@@ -36,11 +36,11 @@ const TINT_UNDERSIDE := Color(0.42, 0.47, 0.57)
 
 # Underside placement. WIDTH is a multiple of the board's front edge;
 # LIFT tucks the straight top edge up behind the floor so it never shows.
-const UNDERSIDE_WIDTH := 0.95
-const UNDERSIDE_LIFT := 30.0
+const UNDERSIDE_WIDTH := 1.15
+const UNDERSIDE_LIFT := 45.0
 # Slides the island ALONG the board's edge (not just sideways), so its
 # mass sits under the board's lowest corner rather than off to one side.
-const UNDERSIDE_SLIDE := 0.12
+const UNDERSIDE_SLIDE := 0.02
 
 var grid: Array = []
 var goal_pos := Vector2.ZERO
