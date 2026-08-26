@@ -34,10 +34,18 @@ const TINT_WALL_LEFT := Color(0.30, 0.33, 0.41)
 const TINT_WALL_RIGHT := Color(0.22, 0.25, 0.32)
 const TINT_UNDERSIDE := Color(0.42, 0.47, 0.57)
 
-# Underside placement. LIFT tucks the art's straight top edge up behind
-# the floor so it never shows; DEPTH scales how far the rock hangs down.
-const UNDERSIDE_LIFT := 26.0
-const UNDERSIDE_DEPTH := 0.85
+# Underside placement.
+#
+# The art carries a lot of empty space: the top 14.2% of the PNG is fully
+# transparent and the rock spans only 83% of the image width. Drawing the
+# whole image therefore anchored the PADDING to the board edge instead of
+# the rock, which is why the island kept looking detached no matter how
+# it was nudged. These are the measured opaque bounds — using them as the
+# source rect makes the rock's own top edge the thing that meets the board.
+const UNDERSIDE_SRC := Rect2(116.0, 109.0, 1142.0, 631.0)
+# LIFT tucks that edge up behind the floor; DEPTH scales the hang.
+const UNDERSIDE_LIFT := 14.0
+const UNDERSIDE_DEPTH := 0.92
 
 var grid: Array = []
 var goal_pos := Vector2.ZERO
@@ -111,24 +119,25 @@ func _draw_underside() -> void:
 	var lowest_corner := Iso.to_screen(Vector2(cols_px, rows_px), 0.0)
 	var right_corner  := Iso.to_screen(Vector2(cols_px, 0.0), 0.0)
 
-	var tw := float(TEX_UNDERSIDE.get_width())
-	var th := float(TEX_UNDERSIDE.get_height())
 	var slope := Iso.ISO_Y / Iso.ISO_X
 
-	# One depth for both halves so the rock reads as continuous.
-	var depth := (right_corner.x - left_corner.x) * (th / tw) * UNDERSIDE_DEPTH
+	# Depth follows the CROPPED aspect, so the rock keeps its proportions.
+	var depth := (right_corner.x - left_corner.x) \
+		* (UNDERSIDE_SRC.size.y / UNDERSIDE_SRC.size.x) * UNDERSIDE_DEPTH
 	var lift := Vector2(0.0, UNDERSIDE_LIFT)
+	var half_w := UNDERSIDE_SRC.size.x * 0.5
 
 	# Left half hangs along left corner -> lowest corner (sloping down).
 	_draw_underside_half(
-		Rect2(0.0, 0.0, tw * 0.5, th),
+		Rect2(UNDERSIDE_SRC.position, Vector2(half_w, UNDERSIDE_SRC.size.y)),
 		left_corner - lift,
 		lowest_corner.x - left_corner.x,
 		depth, slope)
 
 	# Right half hangs along lowest corner -> right corner (sloping up).
 	_draw_underside_half(
-		Rect2(tw * 0.5, 0.0, tw * 0.5, th),
+		Rect2(UNDERSIDE_SRC.position + Vector2(half_w, 0.0),
+			Vector2(half_w, UNDERSIDE_SRC.size.y)),
 		lowest_corner - lift,
 		right_corner.x - lowest_corner.x,
 		depth, -slope)
