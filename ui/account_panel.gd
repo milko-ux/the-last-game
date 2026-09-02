@@ -16,6 +16,18 @@ extends Node2D
 # Sits on the UI CanvasLayer above the menu/results screens. ui.gd
 # ignores input while any overlay is visible, so taps never leak
 # through to the screen underneath.
+#
+# VISUAL PASS (2026-09-02): restyled after a Google Stitch mockup —
+# sharp-cornered glass panel with a glowing top edge and corner
+# brackets, darker recessed fields that light up on focus, underline
+# tabs instead of boxed ones. The UI CanvasLayer never blooms (see
+# ui.gd / main.tscn), so "glow" here is faked by layering translucent
+# outlines (_glow_rect / _glow_line) the same way ui.gd's
+# draw_glass_disc() fakes it for the touch controls — never
+# Palette.glow(), which only matters on the world layer.
+# All tap-target rects and layout offsets are unchanged from before
+# this pass; only how they're painted (plus the new password
+# show/hide toggle) changed.
 # ============================================================
 
 signal closed
@@ -28,6 +40,7 @@ var mode: int = Mode.CONSENT
 var form_login := false   # false = create account, true = log in
 var busy := false
 var error_text := ""
+var _pass_visible := false
 
 # Tap targets, recorded while drawing (same pattern as ui.gd).
 var _rects := {}          # name -> Rect2
@@ -49,20 +62,32 @@ func _ready() -> void:
 	_country_edit.focus_exited.connect(_finish_country_edit)
 
 
+# Dark, sharp-cornered "recessed glass" field: dim border at rest,
+# a bright border plus a real StyleBoxFlat drop-shadow on focus — a
+# native Godot glow, no manual redraw needed while the control is
+# focused.
 func _make_edit(max_len: int) -> LineEdit:
 	var e := LineEdit.new()
 	e.max_length = max_len
 	e.visible = false
 	e.alignment = HORIZONTAL_ALIGNMENT_LEFT
-	var box := StyleBoxFlat.new()
-	box.bg_color = Color(1, 1, 1, 0.06)
-	box.border_color = Color(Palette.EDGE.r, Palette.EDGE.g, Palette.EDGE.b, 0.6)
-	box.set_border_width_all(1)
-	box.set_corner_radius_all(4)
-	box.content_margin_left = 10.0
-	box.content_margin_right = 10.0
-	e.add_theme_stylebox_override("normal", box)
-	e.add_theme_stylebox_override("focus", box)
+
+	var normal := StyleBoxFlat.new()
+	normal.bg_color = Color(0, 0, 0, 0.4)
+	normal.border_color = Color(Palette.EDGE.r, Palette.EDGE.g, Palette.EDGE.b, 0.3)
+	normal.set_border_width_all(1)
+	normal.set_corner_radius_all(0)
+	normal.content_margin_left = 10.0
+	normal.content_margin_right = 10.0
+
+	var focus: StyleBoxFlat = normal.duplicate()
+	focus.border_color = Color(Palette.EDGE.r, Palette.EDGE.g, Palette.EDGE.b, 0.9)
+	focus.bg_color = Color(0, 0, 0, 0.5)
+	focus.shadow_color = Color(Palette.EDGE.r, Palette.EDGE.g, Palette.EDGE.b, 0.28)
+	focus.shadow_size = 6
+
+	e.add_theme_stylebox_override("normal", normal)
+	e.add_theme_stylebox_override("focus", focus)
 	e.add_theme_color_override("font_color", Palette.TEXT)
 	e.add_theme_color_override("caret_color", Palette.EDGE)
 	e.add_theme_font_size_override("font_size", 16)
@@ -74,6 +99,7 @@ func open() -> void:
 	error_text = ""
 	busy = false
 	_editing_country = false
+	_pass_visible = false
 	if Talo.logged_in():
 		mode = Mode.SIGNED_IN
 	elif Consent.needs_consent():
@@ -160,6 +186,8 @@ func _tap(what: String) -> void:
 			error_text = ""
 		"submit":
 			_submit_form()
+		"pass_toggle":
+			_pass_visible = not _pass_visible
 		"country":
 			_begin_country_edit()
 		"country_show":
@@ -246,6 +274,33 @@ func _finish_country_edit() -> void:
 
 
 # ============================================================
+# GLOW HELPERS
+# Immediate-mode fakes for the "glowing border" look — layered
+# translucent outlines growing outward with falling alpha, same
+# technique as ui.gd's draw_glass_disc(). Shared by every panel mode.
+# ============================================================
+func _glow_rect(rect: Rect2, color: Color, strength: float = 1.0, width: float = 1.5) -> void:
+	for i in range(3, 0, -1):
+		var grown := rect.grow(float(i) * 2.0)
+		draw_rect(grown, Color(color.r, color.g, color.b, 0.035 * strength / i), false, width)
+	draw_rect(rect, Color(color.r, color.g, color.b, 0.7 * strength), false, width)
+
+
+func _glow_line(a: Vector2, b: Vector2, color: Color, strength: float = 1.0) -> void:
+	draw_line(a, b, Color(color.r, color.g, color.b, 0.12 * strength), 7.0)
+	draw_line(a, b, Color(color.r, color.g, color.b, 0.28 * strength), 3.0)
+	draw_line(a, b, Color(1, 1, 1, 0.85 * strength), 1.5)
+
+
+# A filled, glow-bordered button with centred text — the one button
+# style every mode of this panel uses.
+func _glow_button(rect: Rect2, accent: Color, label: String, font, strength: float = 1.0) -> void:
+	draw_rect(rect, Color(0, 0, 0, 0.32), true)
+	_glow_rect(rect, accent, strength, 1.5)
+	_centre(font, label, rect.get_center(), 15, accent)
+
+
+# ============================================================
 # DRAWING
 # ============================================================
 func _draw() -> void:
@@ -260,10 +315,13 @@ func _draw() -> void:
 	var h := 470.0 if mode == Mode.CONSENT else 420.0
 	var panel := Rect2(Vector2((screen.x - w) * 0.5, (screen.y - h) * 0.5), Vector2(w, h))
 
-	draw_rect(panel, Color(1, 1, 1, 0.04), true)
-	draw_rect(panel, Color(Palette.EDGE.r, Palette.EDGE.g, Palette.EDGE.b, 0.5), false, 2.0)
-	draw_line(panel.position + Vector2(4, 2), panel.position + Vector2(w - 4, 2),
-		Color(1, 1, 1, 0.25), 1.5)
+	# Card fill is the world's own rock-floor colour, near-opaque — the
+	# panel reads as part of the same material as the game, not a
+	# generic app sheet dropped on top of it.
+	draw_rect(panel, Color(Palette.FLOOR.r, Palette.FLOOR.g, Palette.FLOOR.b, 0.94), true)
+	_glow_rect(panel, Palette.EDGE, 0.9, 1.5)
+	_glow_line(panel.position + Vector2(3, 1), panel.position + Vector2(w - 3, 1), Palette.EDGE, 1.0)
+	_draw_corner_brackets(panel, Palette.EDGE)
 
 	# Close "X", top-right — except mid-delete, where BACK is explicit.
 	if mode != Mode.DELETE and not busy:
@@ -283,6 +341,19 @@ func _draw() -> void:
 
 	if busy:
 		_centre(font, "...", Vector2(panel.get_center().x, panel.end.y - 22), 18, Palette.EDGE)
+
+
+# Small L-shaped accents at the bottom corners — a light structural
+# detail borrowed from the Stitch reference, cheap and unobtrusive.
+func _draw_corner_brackets(panel: Rect2, color: Color) -> void:
+	var arm := 12.0
+	var col := Color(color.r, color.g, color.b, 0.55)
+	var bl := panel.position + Vector2(0, panel.size.y)
+	draw_line(bl, bl + Vector2(arm, 0), col, 2.0)
+	draw_line(bl, bl + Vector2(0, -arm), col, 2.0)
+	var br := panel.end
+	draw_line(br, br + Vector2(-arm, 0), col, 2.0)
+	draw_line(br, br + Vector2(0, -arm), col, 2.0)
 
 
 func _draw_consent(panel: Rect2, font) -> void:
@@ -316,9 +387,7 @@ func _draw_consent(panel: Rect2, font) -> void:
 	var bw := minf(320.0, panel.size.x - 60.0)
 	var agree := Rect2(Vector2(cx - bw * 0.5, y + 8.0), Vector2(bw, 44.0))
 	_rects["agree"] = agree
-	draw_rect(agree, Color(1, 1, 1, 0.05), true)
-	draw_rect(agree, Color(Palette.EDGE.r, Palette.EDGE.g, Palette.EDGE.b, 0.6), false, 2.0)
-	_centre(font, "I AGREE - LET'S GO", agree.get_center(), 16, Palette.EDGE)
+	_glow_button(agree, Palette.EDGE, "I AGREE - LET'S GO", font)
 
 	var later := Rect2(Vector2(cx - 70.0, agree.end.y + 10.0), Vector2(140.0, 28.0))
 	_rects["close2"] = later
@@ -331,7 +400,8 @@ func _draw_form(panel: Rect2, font) -> void:
 	var fw := panel.size.x - 80.0
 	var y := panel.position.y + 24.0
 
-	# Tabs.
+	# Underline tabs: label plus a glowing rule under the active one.
+	# Same tap zones as before, just repainted without the boxed look.
 	var tw := 150.0
 	var tab_r := Rect2(Vector2(cx - tw - 8.0, y), Vector2(tw, 32.0))
 	var tab_l := Rect2(Vector2(cx + 8.0, y), Vector2(tw, 32.0))
@@ -340,10 +410,11 @@ func _draw_form(panel: Rect2, font) -> void:
 	for pair in [[tab_r, "CREATE ACCOUNT", not form_login], [tab_l, "LOG IN", form_login]]:
 		var r: Rect2 = pair[0]
 		var on: bool = pair[2]
-		draw_rect(r, Color(1, 1, 1, 0.06 if on else 0.02), true)
-		draw_rect(r, Color(Palette.EDGE.r, Palette.EDGE.g, Palette.EDGE.b, 0.6 if on else 0.2), false, 1.5)
-		_centre(font, String(pair[1]), r.get_center(), 13,
+		_centre(font, String(pair[1]), r.get_center() - Vector2(0, 4), 13,
 			Palette.EDGE if on else Color(1, 1, 1, 0.4))
+		if on:
+			var uy := r.position.y + 24.0
+			_glow_line(Vector2(r.position.x, uy), Vector2(r.end.x, uy), Palette.EDGE, 0.75)
 	y += 52.0
 
 	y = _field(font, "NAME", _name_edit, x, y, fw)
@@ -361,16 +432,23 @@ func _draw_form(panel: Rect2, font) -> void:
 	var bw := minf(320.0, fw)
 	var submit := Rect2(Vector2(cx - bw * 0.5, y), Vector2(bw, 44.0))
 	_rects["submit"] = submit
-	draw_rect(submit, Color(1, 1, 1, 0.05), true)
-	draw_rect(submit, Color(Palette.GOAL.r, Palette.GOAL.g, Palette.GOAL.b, 0.65), false, 2.0)
-	_centre(font, "LOG IN" if form_login else "CREATE ACCOUNT", submit.get_center(), 16, Palette.GOAL)
+	_glow_button(submit, Palette.GOAL, "LOG IN" if form_login else "CREATE ACCOUNT", font)
 
 
 # One labelled input row. Positions the LineEdit over the panel and
-# returns the y below it.
+# returns the y below it. The password field grows a SHOW/HIDE toggle
+# in its label row automatically.
 func _field(font, label: String, edit: LineEdit, x: float, y: float, fw: float) -> float:
 	draw_string(font, Vector2(x, y + 10.0), label, HORIZONTAL_ALIGNMENT_LEFT, -1, 11,
 		Color(Palette.TEXT.r, Palette.TEXT.g, Palette.TEXT.b, 0.6))
+
+	if edit == _pass_edit:
+		edit.secret = not _pass_visible
+		var tr := Rect2(Vector2(x + fw - 42.0, y - 1.0), Vector2(42.0, 14.0))
+		_rects["pass_toggle"] = tr
+		_centre(font, "SHOW" if not _pass_visible else "HIDE", tr.get_center(), 10,
+			Color(Palette.EDGE.r, Palette.EDGE.g, Palette.EDGE.b, 0.65))
+
 	edit.visible = true
 	edit.position = Vector2(x, y + 16.0)
 	edit.size = Vector2(fw, 34.0)
@@ -390,8 +468,8 @@ func _draw_country_row(font, x: float, y: float, fw: float) -> float:
 		_country_edit.size = code_r.size
 	else:
 		_country_edit.visible = false
-		draw_rect(code_r, Color(1, 1, 1, 0.04), true)
-		draw_rect(code_r, Color(Palette.EDGE.r, Palette.EDGE.g, Palette.EDGE.b, 0.35), false, 1.0)
+		draw_rect(code_r, Color(0, 0, 0, 0.4), true)
+		draw_rect(code_r, Color(Palette.EDGE.r, Palette.EDGE.g, Palette.EDGE.b, 0.4), false, 1.0)
 		var code := Consent.country if not Consent.country.is_empty() else "--"
 		_centre(font, code, code_r.get_center(), 15, Palette.EDGE)
 
@@ -402,10 +480,10 @@ func _draw_country_row(font, x: float, y: float, fw: float) -> float:
 	for pair in [[show_r, "SHOWN", Consent.show_country], [hide_r, "HIDDEN", not Consent.show_country]]:
 		var r: Rect2 = pair[0]
 		var on: bool = pair[2]
-		draw_rect(r, Color(1, 1, 1, 0.05 if on else 0.02), true)
-		draw_rect(r, Color(1, 1, 1, 0.35 if on else 0.12), false, 1.0)
+		draw_rect(r, Color(0, 0, 0, 0.35 if on else 0.2), true)
+		draw_rect(r, Color(1, 1, 1, 0.4 if on else 0.14), false, 1.0)
 		_centre(font, String(pair[1]), r.get_center(), 12,
-			Color(1, 1, 1, 0.85 if on else 0.35))
+			Color(1, 1, 1, 0.9 if on else 0.35))
 
 	draw_string(font, Vector2(x + 266.0, y + 36.0), "tap the code to change it",
 		HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(1, 1, 1, 0.3))
@@ -436,15 +514,11 @@ func _draw_signed_in(panel: Rect2, font) -> void:
 	var bw := minf(320.0, fw)
 	var out_r := Rect2(Vector2(cx - bw * 0.5, y), Vector2(bw, 40.0))
 	_rects["signout"] = out_r
-	draw_rect(out_r, Color(1, 1, 1, 0.05), true)
-	draw_rect(out_r, Color(1, 1, 1, 0.35), false, 1.5)
-	_centre(font, "SIGN OUT", out_r.get_center(), 14, Color(1, 1, 1, 0.85))
+	_glow_button(out_r, Color(1, 1, 1, 0.85), "SIGN OUT", font, 0.6)
 
 	var del_r := Rect2(Vector2(cx - bw * 0.5, y + 52.0), Vector2(bw, 40.0))
 	_rects["delete"] = del_r
-	draw_rect(del_r, Color(Palette.HAZ.r, Palette.HAZ.g, Palette.HAZ.b, 0.04), true)
-	draw_rect(del_r, Color(Palette.HAZ.r, Palette.HAZ.g, Palette.HAZ.b, 0.5), false, 1.5)
-	_centre(font, "DELETE ACCOUNT + MY DATA", del_r.get_center(), 14, Palette.HAZ)
+	_glow_button(del_r, Palette.HAZ, "DELETE ACCOUNT + MY DATA", font, 0.8)
 
 
 func _draw_delete(panel: Rect2, font) -> void:
@@ -475,9 +549,7 @@ func _draw_delete(panel: Rect2, font) -> void:
 	var bw := minf(320.0, fw)
 	var del_r := Rect2(Vector2(cx - bw * 0.5, y), Vector2(bw, 44.0))
 	_rects["delete_confirm"] = del_r
-	draw_rect(del_r, Color(Palette.HAZ.r, Palette.HAZ.g, Palette.HAZ.b, 0.05), true)
-	draw_rect(del_r, Color(Palette.HAZ.r, Palette.HAZ.g, Palette.HAZ.b, 0.65), false, 2.0)
-	_centre(font, "YES, DELETE EVERYTHING", del_r.get_center(), 15, Palette.HAZ)
+	_glow_button(del_r, Palette.HAZ, "YES, DELETE EVERYTHING", font, 1.0)
 
 	var back := Rect2(Vector2(cx - 70.0, del_r.end.y + 12.0), Vector2(140.0, 28.0))
 	_rects["delete_back"] = back

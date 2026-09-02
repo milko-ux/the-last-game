@@ -17,6 +17,15 @@ extends Node2D
 # time and quietly fetches the next 50 when you page past what's
 # loaded. `_fetch_id` guards against a slow response landing after
 # the player has already switched tabs.
+#
+# VISUAL PASS (2026-09-02): restyled after a Google Stitch mockup —
+# the row list now sits inside a glass panel, the player's own row
+# gets a glowing left accent bar, the top 3 ranks read bigger, and
+# loading shows three pulsing dots instead of static text. The UI
+# CanvasLayer never blooms (see ui.gd / main.tscn), so glow here is
+# faked by layering translucent outlines, same technique as
+# account_panel.gd's _glow_rect() and ui.gd's draw_glass_disc().
+# All tap-target rects are unchanged from before this pass.
 # ============================================================
 
 signal closed
@@ -36,6 +45,7 @@ var _last_server_page := false
 var loading := false
 var error_text := ""
 var _fetch_id := 0
+var _t := 0.0
 
 var _rects := {}
 
@@ -55,8 +65,9 @@ func close() -> void:
 	closed.emit()
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	if visible:
+		_t += delta
 		queue_redraw()
 
 
@@ -172,6 +183,27 @@ func _tap(what: String) -> void:
 
 
 # ============================================================
+# GLOW HELPERS
+# Same layered-outline fake used by account_panel.gd's _glow_rect —
+# duplicated locally rather than shared, since these two overlay
+# scripts don't otherwise depend on each other.
+# ============================================================
+func _glow_rect(rect: Rect2, color: Color, strength: float = 1.0, width: float = 1.5) -> void:
+	for i in range(3, 0, -1):
+		var grown := rect.grow(float(i) * 2.0)
+		draw_rect(grown, Color(color.r, color.g, color.b, 0.035 * strength / i), false, width)
+	draw_rect(rect, Color(color.r, color.g, color.b, 0.7 * strength), false, width)
+
+
+func _draw_loading_dots(center: Vector2) -> void:
+	for i in range(3):
+		var phase := _t * 3.0 - float(i) * 0.6
+		var a := 0.35 + 0.65 * absf(sin(phase))
+		draw_circle(center + Vector2(float(i - 1) * 14.0, 0.0),
+			3.5, Color(Palette.EDGE.r, Palette.EDGE.g, Palette.EDGE.b, a))
+
+
+# ============================================================
 # DRAWING
 # ============================================================
 func _draw() -> void:
@@ -185,7 +217,7 @@ func _draw() -> void:
 
 	var back := Rect2(Vector2(24.0, 20.0), Vector2(96.0, 36.0))
 	_rects["back"] = back
-	draw_rect(back, Color(1, 1, 1, 0.03), true)
+	draw_rect(back, Color(0, 0, 0, 0.3), true)
 	draw_rect(back, Color(1, 1, 1, 0.3), false, 1.0)
 	_centre(font, "< BACK", back.get_center(), 13, Color(1, 1, 1, 0.8))
 
@@ -199,8 +231,11 @@ func _draw() -> void:
 		_rects["diff_%d" % tiers[i]] = r
 		var on: bool = tiers[i] == diff
 		var accent: Color = accents[i]
-		draw_rect(r, Color(1, 1, 1, 0.05 if on else 0.015), true)
-		draw_rect(r, Color(accent.r, accent.g, accent.b, 0.6 if on else 0.18), false, 1.5)
+		draw_rect(r, Color(0, 0, 0, 0.3 if on else 0.15), true)
+		if on:
+			_glow_rect(r, accent, 0.85, 1.5)
+		else:
+			draw_rect(r, Color(accent.r, accent.g, accent.b, 0.18), false, 1.5)
 		_centre(font, Progress.tier_name(tiers[i]), r.get_center(), 12,
 			Color(accent.r, accent.g, accent.b, 1.0 if on else 0.4))
 		x += tw + 12.0
@@ -214,8 +249,8 @@ func _draw() -> void:
 	for pair in [[bp, "PROGRESS", not board_finishers], [bf, "FINISHERS", board_finishers]]:
 		var r: Rect2 = pair[0]
 		var on: bool = pair[2]
-		draw_rect(r, Color(1, 1, 1, 0.05 if on else 0.015), true)
-		draw_rect(r, Color(1, 1, 1, 0.35 if on else 0.1), false, 1.0)
+		draw_rect(r, Color(0, 0, 0, 0.3 if on else 0.15), true)
+		draw_rect(r, Color(1, 1, 1, 0.4 if on else 0.1), false, 1.0)
 		_centre(font, String(pair[1]), r.get_center(), 12, Color(1, 1, 1, 0.9 if on else 0.35))
 
 	if not Consent.country.is_empty():
@@ -226,24 +261,28 @@ func _draw() -> void:
 		for pair in [[gr, "GLOBAL", not scope_country], [cr, Consent.country, scope_country]]:
 			var r: Rect2 = pair[0]
 			var on: bool = pair[2]
-			draw_rect(r, Color(1, 1, 1, 0.05 if on else 0.015), true)
+			draw_rect(r, Color(0, 0, 0, 0.3 if on else 0.15), true)
 			draw_rect(r, Color(Palette.EDGE.r, Palette.EDGE.g, Palette.EDGE.b, 0.5 if on else 0.12), false, 1.0)
 			_centre(font, String(pair[1]), r.get_center(), 12,
 				Color(Palette.EDGE.r, Palette.EDGE.g, Palette.EDGE.b, 1.0 if on else 0.35))
 
-	# --- The list ---
+	# --- The list, inside a glass panel ---
 	var top := 152.0
 	var row_h := 36.0
 	var list_w := minf(680.0, screen.x - 80.0)
 	var lx := cx - list_w * 0.5
 
+	var panel := Rect2(Vector2(lx - 10.0, top - 10.0), Vector2(list_w + 20.0, ROWS * row_h + 20.0))
+	draw_rect(panel, Color(1, 1, 1, 0.035), true)
+	_glow_rect(panel, Palette.EDGE, 0.4, 1.0)
+
 	if loading and entries.size() <= view_page * ROWS:
-		_centre(font, "LOADING...", Vector2(cx, top + 120.0), 16, Color(1, 1, 1, 0.5))
+		_draw_loading_dots(Vector2(cx, top + 120.0))
 	elif not error_text.is_empty():
 		_centre(font, error_text, Vector2(cx, top + 100.0), 14, Palette.HAZ)
 		var rr := Rect2(Vector2(cx - 70.0, top + 130.0), Vector2(140.0, 32.0))
 		_rects["retry"] = rr
-		draw_rect(rr, Color(1, 1, 1, 0.04), true)
+		draw_rect(rr, Color(0, 0, 0, 0.3), true)
 		draw_rect(rr, Color(1, 1, 1, 0.3), false, 1.0)
 		_centre(font, "RETRY", rr.get_center(), 13, Color(1, 1, 1, 0.8))
 	elif entries.is_empty():
@@ -257,28 +296,29 @@ func _draw() -> void:
 			_draw_row(font, entries[i], i, Vector2(lx, top + (i - start) * row_h), list_w, row_h)
 
 	# --- Paging ---
-	var py := top + ROWS * row_h + 10.0
+	var py := panel.end.y + 14.0
 	if view_page > 0:
 		var pr := Rect2(Vector2(cx - 110.0, py), Vector2(90.0, 30.0))
 		_rects["prev"] = pr
-		draw_rect(pr, Color(1, 1, 1, 0.03), true)
+		draw_rect(pr, Color(0, 0, 0, 0.25), true)
 		draw_rect(pr, Color(1, 1, 1, 0.25), false, 1.0)
 		_centre(font, "< PREV", pr.get_center(), 12, Color(1, 1, 1, 0.7))
 	if (view_page + 1) * ROWS < entries.size() \
 			or (not _last_server_page and not entries.is_empty()):
 		var nr := Rect2(Vector2(cx + 20.0, py), Vector2(90.0, 30.0))
 		_rects["next"] = nr
-		draw_rect(nr, Color(1, 1, 1, 0.03), true)
+		draw_rect(nr, Color(0, 0, 0, 0.25), true)
 		draw_rect(nr, Color(1, 1, 1, 0.25), false, 1.0)
 		_centre(font, "NEXT >", nr.get_center(), 12, Color(1, 1, 1, 0.7))
 
-	# --- Join nudge for guests ---
+	# --- Join banner for guests: full-width, bottom of screen ---
 	if not Talo.logged_in():
-		var jr := Rect2(Vector2(cx - 150.0, screen.y - 52.0), Vector2(300.0, 36.0))
+		var jw := minf(560.0, screen.x - 48.0)
+		var jr := Rect2(Vector2(cx - jw * 0.5, screen.y - 58.0), Vector2(jw, 40.0))
 		_rects["join"] = jr
-		draw_rect(jr, Color(1, 1, 1, 0.04), true)
-		draw_rect(jr, Color(Palette.GOAL.r, Palette.GOAL.g, Palette.GOAL.b, 0.6), false, 1.5)
-		_centre(font, "JOIN THE LEADERBOARD", jr.get_center(), 14, Palette.GOAL)
+		draw_rect(jr, Color(Palette.GOAL.r, Palette.GOAL.g, Palette.GOAL.b, 0.07), true)
+		_glow_rect(jr, Palette.GOAL, 1.0, 1.5)
+		_centre(font, "JOIN THE LEADERBOARD", jr.get_center(), 15, Palette.GOAL)
 
 
 func _draw_row(font, entry: Dictionary, index: int, pos: Vector2, w: float, h: float) -> void:
@@ -287,16 +327,28 @@ func _draw_row(font, entry: Dictionary, index: int, pos: Vector2, w: float, h: f
 	var row := Rect2(pos, Vector2(w, h - 4.0))
 
 	if mine:
-		draw_rect(row, Color(Palette.EDGE.r, Palette.EDGE.g, Palette.EDGE.b, 0.06), true)
-		draw_rect(row, Color(Palette.EDGE.r, Palette.EDGE.g, Palette.EDGE.b, 0.4), false, 1.0)
+		draw_rect(row, Color(Palette.EDGE.r, Palette.EDGE.g, Palette.EDGE.b, 0.10), true)
+		_glow_rect(row, Palette.EDGE, 0.8, 1.0)
+		draw_rect(Rect2(row.position, Vector2(3.0, row.size.y)), Palette.EDGE, true)
 	elif index % 2 == 0:
-		draw_rect(row, Color(1, 1, 1, 0.015), true)
+		draw_rect(row, Color(1, 1, 1, 0.02), true)
 
 	var name_col := Palette.EDGE if mine else Palette.TEXT
 	var ty := pos.y + h * 0.5 + 5.0
+	var rank := index + 1
 
-	draw_string(font, Vector2(pos.x + 12.0, ty), "#%d" % (index + 1),
-		HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color(1, 1, 1, 0.45))
+	# Top 3 read bigger and brighter — the rest of the list stays quiet.
+	var rank_size := 15
+	var rank_col := Color(1, 1, 1, 0.45)
+	if rank == 1:
+		rank_size = 22
+		rank_col = Palette.GOAL
+	elif rank <= 3:
+		rank_size = 18
+		rank_col = Color(1, 1, 1, 0.75)
+
+	draw_string(font, Vector2(pos.x + 12.0, ty), "#%d" % rank,
+		HORIZONTAL_ALIGNMENT_LEFT, -1, rank_size, rank_col)
 	draw_string(font, Vector2(pos.x + 64.0, ty), str(alias.get("identifier", "?")),
 		HORIZONTAL_ALIGNMENT_LEFT, -1, 15, name_col)
 
