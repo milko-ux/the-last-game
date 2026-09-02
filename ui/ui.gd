@@ -16,6 +16,8 @@ signal restart_requested
 signal copy_requested
 signal difficulty_chosen(d: int)
 signal menu_requested
+signal account_requested
+signal leaderboard_requested
 
 # --- Touch control sizing (tune these for thumb comfort) ---
 const STICK_RADIUS := 76.0
@@ -34,6 +36,13 @@ var player_dead := false
 # --- Difficulty select (the first thing you see; guest-first, no login) ---
 var showing_menu := true
 var _tier_rects: Array = []
+var _lb_rect := Rect2()
+var _account_rect := Rect2()
+
+# Overlay panels (account, leaderboard), assigned by main. While any
+# of them is visible this screen ignores input entirely, so a tap on
+# a panel never falls through to the menu or results underneath.
+var overlays: Array = []
 
 # Name row on the menu. The player already HAS a name by the time they
 # get here (Profile hands one out on first launch), so this is about
@@ -53,6 +62,10 @@ var level_reached := 0
 var resume_level := -1
 var copy_flash_timer := 0.0
 var copy_button_rect := Rect2()
+var lb_action_rect := Rect2()
+# Status line for the leaderboard submission ("SENDING..." / "GLOBAL #4"),
+# pushed in by main once the network answers.
+var submit_text := ""
 
 # --- Multi-touch state (move and jump at the same time) ---
 var stick_touch_id := -1
@@ -153,6 +166,7 @@ func enter_results(won: bool, reached: int, count: int, d: int, resume: int = -1
 	level_count = count
 	deaths = d
 	resume_level = resume
+	submit_text = ""
 	# Drop any held touches so the next tap is read cleanly.
 	stick_touch_id = -1
 	jump_touch_id = -1
@@ -177,6 +191,10 @@ func flash_copied() -> void:
 	copy_flash_timer = 1.4
 
 
+func set_submit_text(t: String) -> void:
+	submit_text = t
+
+
 func portrait() -> bool:
 	var screen := get_viewport_rect().size
 	return screen.y > screen.x
@@ -186,6 +204,10 @@ func portrait() -> bool:
 # INPUT
 # ============================================================
 func _input(event: InputEvent) -> void:
+	for o in overlays:
+		if o != null and o.visible:
+			return
+
 	var screen := get_viewport_rect().size
 
 	if event is InputEventScreenTouch:
@@ -240,6 +262,11 @@ func _input(event: InputEvent) -> void:
 func _tap_results(pos: Vector2) -> void:
 	if copy_button_rect.has_point(pos):
 		copy_requested.emit()
+	elif lb_action_rect.size != Vector2.ZERO and lb_action_rect.has_point(pos):
+		if Talo.logged_in():
+			leaderboard_requested.emit()
+		else:
+			account_requested.emit()
 	elif menu_button_rect.has_point(pos):
 		menu_requested.emit()
 	else:
@@ -247,12 +274,22 @@ func _tap_results(pos: Vector2) -> void:
 
 
 func _tap_menu(pos: Vector2) -> void:
-	if _reroll_rect.has_point(pos):
-		Profile.reroll()
+	if _lb_rect.size != Vector2.ZERO and _lb_rect.has_point(pos):
+		leaderboard_requested.emit()
 		return
-	if _edit_rect.has_point(pos) or _name_rect.has_point(pos):
-		_begin_name_edit()
-		return
+	if Profile.claimed:
+		# The name is a real account now — the name and the ACCOUNT
+		# button both open account management.
+		if _account_rect.has_point(pos) or _name_rect.has_point(pos):
+			account_requested.emit()
+			return
+	else:
+		if _reroll_rect.has_point(pos):
+			Profile.reroll()
+			return
+		if _edit_rect.has_point(pos) or _name_rect.has_point(pos):
+			_begin_name_edit()
+			return
 	if _editing_name:
 		_finish_name_edit()
 		return
@@ -432,6 +469,15 @@ func _draw_menu(screen: Vector2, font) -> void:
 
 	_draw_name_row(cx, y + ch + 84, font)
 
+	# Anyone may LOOK at the leaderboard — reading is anonymous, only
+	# submitting needs an account. Hidden entirely until Talo is set up.
+	_lb_rect = Rect2()
+	if Talo.configured():
+		_lb_rect = Rect2(Vector2(cx - 110.0, y + ch + 162.0), Vector2(220.0, 30.0))
+		draw_rect(_lb_rect, Color(1, 1, 1, 0.03), true)
+		draw_rect(_lb_rect, Color(Palette.EDGE.r, Palette.EDGE.g, Palette.EDGE.b, 0.4), false, 1.0)
+		centre_text(font, "LEADERBOARD", _lb_rect.get_center() + Vector2(0, -5), 13, Palette.EDGE)
+
 
 # "Playing as <name>" with reroll and edit. No account, no login — the
 # name already exists, so this is a nicety, not a gate.
@@ -452,6 +498,19 @@ func _draw_name_row(cx: float, row_y: float, font) -> void:
 
 	var bw := 92.0
 	var by := row_y + 40.0
+	_reroll_rect = Rect2()
+	_edit_rect = Rect2()
+	_account_rect = Rect2()
+
+	if Profile.claimed:
+		# Signed in: the name IS the account, so no reroll/edit.
+		_account_rect = Rect2(Vector2(cx - bw * 0.5 - 8.0, by), Vector2(bw + 16.0, 28))
+		draw_rect(_account_rect, Color(1, 1, 1, 0.03), true)
+		draw_rect(_account_rect, Color(Palette.TEXT.r, Palette.TEXT.g, Palette.TEXT.b, 0.30), false, 1.0)
+		centre_text(font, "ACCOUNT", _account_rect.position + Vector2(bw * 0.5 + 8.0, 14), 12,
+			Color(Palette.TEXT.r, Palette.TEXT.g, Palette.TEXT.b, 0.85))
+		return
+
 	_reroll_rect = Rect2(Vector2(cx - bw - 6.0, by), Vector2(bw, 28))
 	_edit_rect   = Rect2(Vector2(cx + 6.0, by), Vector2(bw, 28))
 
@@ -476,10 +535,14 @@ func _draw_results(screen: Vector2, font) -> void:
 	centre_text(font, "Deaths: %d" % deaths,
 		Vector2(cx, screen.y * 0.5 - 44), 20, Palette.TEXT)
 
+	if not submit_text.is_empty():
+		centre_text(font, submit_text, Vector2(cx, screen.y * 0.5 - 16), 13,
+			Color(Palette.GOAL.r, Palette.GOAL.g, Palette.GOAL.b, 0.9))
+
 	var bw := 320.0
-	var bh := 60.0
+	var bh := 52.0
 	var bx := cx - bw * 0.5
-	var by := screen.y * 0.5
+	var by := screen.y * 0.5 + 2.0
 	copy_button_rect = Rect2(Vector2(bx, by), Vector2(bw, bh))
 
 	draw_rect(copy_button_rect, Color(1, 1, 1, 0.05), true)
@@ -489,12 +552,22 @@ func _draw_results(screen: Vector2, font) -> void:
 	var label := "COPIED!" if copy_flash_timer > 0.0 else "TAP TO COPY BRAG"
 	centre_text(font, label, Vector2(cx, by + bh * 0.5), 18, Palette.EDGE)
 
+	# One leaderboard action: guests get the sign-up pitch, account
+	# holders go straight to the rankings.
+	lb_action_rect = Rect2()
+	if Talo.configured():
+		lb_action_rect = Rect2(Vector2(cx - bw * 0.5, by + 64.0), Vector2(bw, 34.0))
+		var lb_label := "VIEW LEADERBOARD" if Talo.logged_in() else "JOIN THE LEADERBOARD"
+		draw_rect(lb_action_rect, Color(1, 1, 1, 0.04), true)
+		draw_rect(lb_action_rect, Color(Palette.GOAL.r, Palette.GOAL.g, Palette.GOAL.b, 0.55), false, 1.5)
+		centre_text(font, lb_label, lb_action_rect.get_center() + Vector2(0, -5), 14, Palette.GOAL)
+
 	var again := "Tap anywhere else to try again"
 	if not result_won and resume_level >= 0:
 		again = "Tap anywhere else to continue from level %d" % (resume_level + 1)
-	centre_text(font, again, Vector2(cx, by + 100), 14, Color(1, 1, 1, 0.4))
+	centre_text(font, again, Vector2(cx, by + 122), 14, Color(1, 1, 1, 0.4))
 
-	menu_button_rect = Rect2(Vector2(cx - 110.0, by + 118.0), Vector2(220.0, 34.0))
+	menu_button_rect = Rect2(Vector2(cx - 110.0, by + 138.0), Vector2(220.0, 34.0))
 	draw_rect(menu_button_rect, Color(1, 1, 1, 0.03), true)
 	draw_rect(menu_button_rect, Color(Palette.TEXT.r, Palette.TEXT.g, Palette.TEXT.b, 0.35), false, 1.0)
 	centre_text(font, "CHANGE DIFFICULTY",

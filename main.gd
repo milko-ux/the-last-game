@@ -43,6 +43,8 @@ const HAZARD_SCENES := {
 @onready var board: Node2D = $Board
 @onready var entities: Node2D = $Entities
 @onready var ui: Node2D = $UI/Screen
+@onready var account_panel: Node2D = $UI/AccountPanel
+@onready var lb_screen: Node2D = $UI/LeaderboardScreen
 
 var levels: Array = []
 
@@ -78,6 +80,11 @@ func _ready() -> void:
 	ui.copy_requested.connect(copy_brag)
 	ui.difficulty_chosen.connect(_on_difficulty_chosen)
 	ui.menu_requested.connect(_on_menu_requested)
+	ui.account_requested.connect(func(): account_panel.open())
+	ui.leaderboard_requested.connect(_open_leaderboard)
+	ui.overlays = [account_panel, lb_screen]
+	lb_screen.join_requested.connect(_on_join_requested)
+	Talo.auth_changed.connect(_on_auth_changed)
 	# The difficulty screen is the entry point — guest-first, no login,
 	# straight into choosing how badly you want to suffer.
 	ui.level_count = levels.size()
@@ -93,6 +100,32 @@ func _on_difficulty_chosen(d: int) -> void:
 
 func _on_menu_requested() -> void:
 	ui.enter_menu()
+
+
+func _open_leaderboard() -> void:
+	lb_screen.open(Progress.selected, levels.size())
+
+
+func _on_join_requested() -> void:
+	lb_screen.close()
+	account_panel.open()
+
+
+func _overlay_open() -> bool:
+	return account_panel.visible or lb_screen.visible
+
+
+# Keeps the local guest profile in step with the Talo account: signing
+# in claims the name, signing out (or deleting the account) releases
+# it. Signing in mid-results also submits the run that just ended —
+# that's the "register on the results screen, score still counts" flow.
+func _on_auth_changed() -> void:
+	if Talo.logged_in():
+		Profile.claim(Talo.identifier)
+		if showing_results:
+			_submit_scores()
+	elif Profile.claimed:
+		Profile.unclaim()
 
 
 # ============================================================
@@ -321,8 +354,53 @@ func enter_results(won_flag: bool) -> void:
 	# has a checkpoint to fall back to. Only the continue action changes.
 	var resume: int = checkpoint_level if Progress.checkpoints_allowed() else -1
 	ui.enter_results(won_flag, run_highest_level, levels.size(), total_deaths, resume)
+	_submit_scores()
 	if won_flag:
 		Input.vibrate_handheld(HAPTIC_WIN_MS)
+
+
+# ============================================================
+# LEADERBOARD SUBMISSION
+# Fire-and-forget: the run is already over and the results screen is
+# up, so a slow network just means the rank line appears late. Talo
+# keeps ONE entry per player per board and only replaces it when the
+# new score is better, so every finished run is submitted as-is.
+# ============================================================
+func _submit_scores() -> void:
+	if not (Talo.configured() and Talo.logged_in() and Consent.granted):
+		return
+	var d: int = Progress.selected
+	var won := result_won
+	var deaths := total_deaths
+	# Progress score = furthest level (1-based). A full clear counts one
+	# past the last level, so finishing always outranks dying on it.
+	var reached := (levels.size() + 1) if won else (run_highest_level + 1)
+	var props := {"deaths": deaths}
+	if Consent.show_country and not Consent.country.is_empty():
+		props["country"] = Consent.country
+
+	ui.set_submit_text("SENDING SCORE...")
+	var lines: Array[String] = []
+
+	var res: Dictionary = await Talo.submit_score(
+		Talo.progress_board(d), Talo.encode_progress(reached, deaths), props)
+	if res.ok:
+		var pos := int(res.data.get("entry", {}).get("position", -1))
+		if pos >= 0:
+			lines.append("GLOBAL #%d" % (pos + 1))
+	else:
+		lines.append(str(res.error))
+
+	if won:
+		var res2: Dictionary = await Talo.submit_score(Talo.finishers_board(d), float(deaths), props)
+		if res2.ok:
+			var pos2 := int(res2.data.get("entry", {}).get("position", -1))
+			if pos2 >= 0:
+				lines.append("FINISHERS #%d" % (pos2 + 1))
+
+	# Only touch the UI if the player is still looking at these results.
+	if showing_results:
+		ui.set_submit_text("   ".join(lines))
 
 
 # ============================================================
@@ -356,6 +434,8 @@ func copy_brag() -> void:
 # ============================================================
 func _input(event: InputEvent) -> void:
 	if not (event is InputEventKey and event.pressed and not event.echo):
+		return
+	if _overlay_open():
 		return
 	if event.keycode == KEY_SPACE and not showing_results:
 		_on_jump_pressed()

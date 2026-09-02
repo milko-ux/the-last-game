@@ -1,9 +1,11 @@
-[gd_scene load_steps=6 format=3 uid="uid://bph4s7ud4j0rg"]
+[gd_scene load_steps=8 format=3 uid="uid://bph4s7ud4j0rg"]
 
 [ext_resource type="Script" path="res://main.gd" id="1_main"]
 [ext_resource type="Script" path="res://entities/board.gd" id="2_board"]
 [ext_resource type="Script" path="res://ui/ui.gd" id="3_ui"]
 [ext_resource type="Script" path="res://entities/background.gd" id="4_bg"]
+[ext_resource type="Script" path="res://ui/account_panel.gd" id="5_account"]
+[ext_resource type="Script" path="res://ui/leaderboard_screen.gd" id="6_lb"]
 
 [sub_resource type="Environment" id="Environment_glow"]
 background_mode = 3
@@ -50,3 +52,11 @@ max_length = 16
 
 [node name="Screen" type="Node2D" parent="UI"]
 script = ExtResource("3_ui")
+
+[node name="AccountPanel" type="Node2D" parent="UI"]
+visible = false
+script = ExtResource("5_account")
+
+[node name="LeaderboardScreen" type="Node2D" parent="UI"]
+visible = false
+script = ExtResource("6_lb")

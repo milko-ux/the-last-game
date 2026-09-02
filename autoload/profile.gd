@@ -71,6 +71,22 @@ func set_username(raw: String) -> bool:
 	return true
 
 
+# Phase 3: signing in to a Talo account claims the name — while
+# claimed, the name IS the account identity, so reroll/edit give way
+# to account management in the menu.
+func claim(account_name: String) -> void:
+	username = account_name
+	claimed = true
+	save_profile()
+	username_changed.emit(username)
+
+
+func unclaim() -> void:
+	claimed = false
+	save_profile()
+	username_changed.emit(username)
+
+
 # Keeps it to something a leaderboard can display: letters, digits,
 # and single spaces, trimmed and length-capped. Deliberately does NOT
 # filter profanity — Talo does that server-side at registration, and

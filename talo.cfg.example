@@ -1,0 +1,12 @@
+; Talo backend config. Copy this file to "talo.cfg" (same folder) and
+; paste in the real access key from the Talo dashboard - see
+; docs/TALO_SETUP.md for the step-by-step.
+;
+; talo.cfg is gitignored ON PURPOSE: the repo is public, the key is not.
+; The exported web build DOES include it (players' games need it to
+; talk to the leaderboard) - that's normal for Talo's model, the key
+; is scoped to only the things the game is allowed to do.
+
+[talo]
+access_key=""
+base_url="https://api.trytalo.com"

@@ -2,3 +2,6 @@
 game test 1/
 .DS_Store
 tools/.certs/
+
+# Talo backend config - holds the real access key, never committed
+talo.cfg

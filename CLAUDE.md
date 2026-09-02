@@ -30,7 +30,7 @@ Work happens in this order unless Milko says otherwise — don't jump ahead to a
   - ✅ Real glow/bloom on the world via HDR 2D + a `WorldEnvironment`. Scoped to the world only — the glass touch controls are excluded by sitting on their own CanvasLayer.
   - ✅ Motion trails on hazards and the player (`entities/trail.gd`). The goal marker already had an animated pulse from Phase 0.
 - **Phase 2 — Core Loop & Progression** 🔄 in progress. Difficulty tiers, checkpoints, unlock persistence, the difficulty select screen and **all 30 levels** are built. **Remaining: onboarding** (account sign-up + username) — see the note below, it overlaps Phase 3.
-- **Phase 3 — Backend & Persistence.** Talo leaderboard integration (global + country-selected), registration deferred to results screen, GDPR/EU consent handling.
+- **Phase 3 — Backend & Persistence.** 🔄 in progress, backend verified live. **Built (2026-08-26)** and **tested end-to-end against the real Talo API (2026-09-02)**: Talo REST client (`autoload/talo.gd`), GDPR consent + self-declared country (`autoload/consent.gd`), account panel (consent → register/login → manage/delete), leaderboard screen (2 boards × 3 difficulties, global/country), score submission from the results screen. Talo account/game/key/six-boards are live; register→play→submit→rank→delete all confirmed working against the real backend. **Remaining:** an on-device (real phone) pass — everything so far has only been tested in a desktop browser. Forgot-password UI deliberately deferred.
 - **Phase 4 — Monetization.** Rewarded video ads only, never on death.
 - **Phase 5 — Native Build & Store Prep.** iOS export (Xcode/provisioning/App Store Connect), Android export (Play Console/signing), store listing assets, TestFlight/internal testing.
 - **Phase 6 — Launch.** Store submission, review, release, post-launch monitoring.
@@ -81,7 +81,7 @@ Clearing Standard unlocks **both** Hard and Extreme (Milko's wording was "unlock
 **Note on Phase 1.5:** moving from hand-drawn rendering to scenes/shaders is a pre-approved architecture change, not a violation of the visual non-negotiables above — the goal is the identical look on a better-built foundation. Still flag it if the actual visual result (glow intensity, exact colors, control feel) ends up noticeably different from what's live now.
 
 ## Current status
-**Phase 1.5 complete.** Starting **Phase 2 — Core Loop & Progression**.
+**Phase 3 in progress, backend live and verified.** The accounts/leaderboard/consent feature is coded and tested end-to-end against the real Talo API (register, play, submit a score, see it ranked, delete the account — all confirmed 2026-09-02). It still ships "dark" (invisible in-game) on any machine without a real key in `talo.cfg` — that file is gitignored on purpose, so it must be set up locally per `docs/TALO_SETUP.md` on each machine that needs it. Next: an on-device (real phone) pass.
 
 - GitHub repo is live and up to date.
 - ⚠️ The itch.io page (`mivasthecreator.itch.io/the-last-game`) returned "we couldn't find your page" on 2026-08-21, so the listing is currently private/unlisted/draft rather than publicly playable. Local testing does not depend on it — export and serve the build locally instead.
@@ -103,6 +103,8 @@ Godot and its export templates are already installed locally — use them direct
 As of Phase 1.5, the game is split into small single-purpose files instead of one big script. A "scene" in Godot is a reusable building block (a `.tscn` file); an "autoload" is a script Godot loads once at startup that any other script can call.
 
 **Autoloads (global helpers):**
+- **`autoload/talo.gd`** (`Talo`) — the ONLY file that talks to the internet. Thin client for Talo's REST API (accounts, leaderboards); no addon. Reads `res://talo.cfg` (gitignored; copy `talo.cfg.example`, see `docs/TALO_SETUP.md`); with no key `configured()` is false and every leaderboard/account affordance in the UI hides itself. **On web it does HTTP through `JavaScriptBridge` (browser `fetch`), NOT `HTTPRequest`** — see the gotcha below. Also owns the board names (`progress-*` / `finishers-*` per tier) and the packed progress score (`level*1000 + (999-deaths)`; a clear stores as level 31).
+- **`autoload/consent.gd`** (`Consent`) — GDPR consent state (granted/date/version — bump `VERSION` if the consent text materially changes and players re-consent) plus the self-declared country code (guessed once from locale, editable, hideable; no geolocation).
 - **`autoload/iso.gd`** (`Iso`) — the isometric projection. The world underneath is a plain flat grid; isometric is only how it's DRAWN, which is what keeps level files readable as text. Everything that draws calls `Iso.to_screen()` so they all agree on where things are. Also owns `TILE`, `WALL_H`, and `set_board_size()` — the view now centres itself from the actual level dimensions, so a bigger maze in `levels.json` just works.
 - **`autoload/profile.gd`** (`Profile`) — the player's name before they have an account. Guest-first: a generated name (`GlitchSignal`, `CinderDodger`) is handed out on first launch and saved to `user://profile.save`, so nobody ever faces an empty text field. `claimed` stays false until Phase 3 registration. Local nickname only — no personal data, so still no consent needed.
 - **`autoload/progress.gd`** (`Progress`) — which difficulties are unlocked and the rules of each (lives, checkpoints). Saves to `user://progress.save`. Progression only, no personal data, so no GDPR consent needed — that starts at Phase 3.
@@ -120,6 +122,8 @@ As of Phase 1.5, the game is split into small single-purpose files instead of on
 - **`entities/hazard_chaser.gd`** — homes in on the player. Low.
 
 **UI:**
+- **`ui/account_panel.gd`** — overlay: GDPR consent screen (always first; declining just closes it), create-account/log-in form (guest name prefilled, email optional, country row), signed-in management (country, sign out, delete account + all data). Nothing talks to the network until consent is granted.
+- **`ui/leaderboard_screen.gd`** — the rankings, viewable by guests (reading is anonymous). Difficulty tabs × PROGRESS/FINISHERS boards, GLOBAL vs country filter, paging, own row highlighted, JOIN nudge for guests.
 - **`ui/ui.gd`** — HUD, the frosted-glass touch controls, the results/share screen and the portrait "rotate your phone" prompt. Sits on a `CanvasLayer` so it always draws on top of the world. Owns all touch/mouse input and reports up via signals (`jump_pressed`, `restart_requested`, `copy_requested`). **The glass control drawing here is carried over unchanged from what Milko confirmed on-device — treat edits to it as touching a non-negotiable.** The CanvasLayer is also what will let world glow/bloom be added later without blooming the controls.
 
 **Root:**
@@ -151,6 +155,12 @@ Three things that are easy to get wrong here:
 4. **The island underside is SPLIT IN TWO and sheared onto the board's V.** The board's belly runs left corner → lowest corner → right corner, so a single straight-topped image hung along one arm leaves the other half of the platform with nothing under it — the rock then reads as a separate object floating below (this took three attempts to get right). `_draw_underside()` splits the art down the middle and shears each half onto its own arm. The art tapers to a point at its centre, so both halves meet at the board's lowest corner and the island's deepest point lands under the platform's deepest point. It's drawn FIRST so the board's own rock sides cover the join.
 
 The rock is deliberately dark — the `TINT_*` constants multiply the mid-grey source art down so neon stays the brightest thing on screen. Raise them to lighten the rock. Pits stay flat black (no texture) so they still read as holes.
+
+### Talo / networking gotchas (learned the hard way, 2026-08-26)
+1. **`HTTPRequest` is broken in this Godot version's web export** — every request stalls without ever reaching the browser and dies as `RESULT_TIMEOUT` with status 0. Verified: the browser-side fetch never fires, while native builds run the identical code fine. That's why `talo.gd` routes web requests through `JavaScriptBridge.eval` + the browser's own `fetch` (the `JS_HELPER` snippet). Don't "simplify" it back to `HTTPRequest` without testing a web export.
+2. **`talo.cfg` must be named in the export preset's `include_filter`** (`export_presets.cfg`). `.cfg` files aren't Godot resources, so the exporter silently drops them — the build then ships dark with no error anywhere.
+3. `accept_gzip` must stay off for web-facing HTTP paths; the browser already decompresses.
+4. Reading leaderboards needs no login; submitting needs the session headers (`X-Talo-Alias/Player/Session`). Talo keeps one entry per player per board and only replaces it when the new score is beats the old one, so submitting every run is safe.
 
 ### How the glow works (read before touching it)
 The game renders in HDR (`rendering/viewport/hdr_2d` in `project.godot`), which lets a colour be *brighter than pure white*. The bloom pass in `main.tscn` only picks up things brighter than white (`glow_hdr_threshold = 1.0`). So:
