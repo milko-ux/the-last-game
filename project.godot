@@ -12,6 +12,9 @@ config_version=5
 
 config/name="THE LAST GAME"
 run/main_scene="res://main.tscn"
+; Phase R: the "Web (Phase R)" export preset sets the custom feature
+; "phase_r", which switches the main scene to the prototype for that build only.
+run/main_scene.phase_r="res://prototype/track_test.tscn"
 config/features=PackedStringArray("4.7", "Mobile")
 config/icon="res://icon.svg"
 
@@ -23,6 +26,7 @@ Progress="*res://autoload/progress.gd"
 Profile="*res://autoload/profile.gd"
 Consent="*res://autoload/consent.gd"
 Talo="*res://autoload/talo.gd"
+BeatClock="*res://prototype/beat_clock.gd"
 
 [display]
 
@@ -39,4 +43,5 @@ window/stretch/aspect="expand"
 
 rendering_device/driver.windows="d3d12"
 renderer/rendering_method="mobile"
+renderer/rendering_method.mobile="mobile"
 viewport/hdr_2d=true

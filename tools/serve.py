@@ -3,6 +3,8 @@
 
     tools/serve.py            -> http://localhost:8099   (this Mac only)
     tools/serve.py tls        -> https://<LAN-IP>:8443   (phones / colleagues)
+    tools/serve.py tls build/phase-r   -> serve a different build folder
+                                          (default: "game test 1")
 
 Lives in the repo on purpose. It used to live in a scratch directory
 that got wiped whenever the session restarted, which meant the test
@@ -14,7 +16,8 @@ correct — that has cost hours twice.
 """
 import http.server, ssl, os, sys, socket, subprocess
 
-BUILD = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "game test 1")
+ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
+BUILD = os.path.join(ROOT, "game test 1")
 CERT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".certs")
 
 
@@ -66,11 +69,16 @@ def ensure_cert(ip: str):
 
 
 def main() -> None:
+    global BUILD
+    args = sys.argv[1:]
+    tls = "tls" in args
+    dirs = [a for a in args if a != "tls"]
+    if dirs:
+        BUILD = os.path.join(ROOT, dirs[0])
     if not os.path.isdir(BUILD):
         sys.exit(f"No build at {BUILD} — run tools/package_web.sh first.")
     os.chdir(BUILD)
 
-    tls = len(sys.argv) > 1 and sys.argv[1] == "tls"
     port = 8443 if tls else 8099
     host = "0.0.0.0" if tls else "127.0.0.1"
 
