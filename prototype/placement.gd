@@ -1,31 +1,29 @@
 extends RefCounted
 # ============================================================
-# PLACEMENT — turns the beatmap's per-bar numbers into hazards.
+# PLACEMENT — turns the beatmap's per-bar numbers into a layout.
 #
-# Nothing here is hand-authored. A different song's beatmap gives
-# a different level with zero code changes. Everything is
-# deterministic (seeded by bar number) so the level is identical
-# on every run and every device.
+# Nothing here is hand-authored: a different song's beatmap gives
+# a different level with zero code changes. Everything is seeded
+# by bar number, so the level is identical on every run and device.
 #
-# Density by bar energy:
-#   >= 0.85       GAUNTLET  hazard on every beat
-#   0.55 .. 0.85  PRESSURE  beats 1 and 3
-#   0.35 .. 0.55  BREATHER  beat 1 only (+ checkpoint if section start)
-#   <  0.35       REST      nothing
+# Density by bar energy (addendum):
+#   >= 0.85       GAUNTLET  pulse-plate pattern + one sweeper or gate, 2-3 notes
+#   0.55 .. 0.85  PRESSURE  one hazard type (orbiter pair / sweeper / gate), 1-2 notes
+#   0.35 .. 0.55  BREATHER  open floor, maybe one pit, checkpoint if section start, 1 note
+#   <  0.35       REST      open floor, nothing
 #
-# Type by the bar's dominant band:
-#   low  -> slammer   (drops onto a lane on the beat, jumpable when down)
-#   high -> pulser    (pillar up for half a beat, lane-dodge only)
-#   mid  -> sweeper   (moving gap across one whole bar)
+# Band -> type BIAS (weighted, not a hard mapping): low favours
+# slammer/gate, mid favours sweeper/orbiter, high favours pulse
+# patterns. This track's bass dominates almost every bar, so a hard
+# mapping would have produced one hazard type for the whole song.
+#
+# Notes go on the RISKIER route: the tile lethal most often, inside
+# the sweeper's gap at mid-bar, between the orbiters, hugging the
+# edge beside a gate.
 # ============================================================
 
-const LANES := 3
-const LANE_X := [-2.0, 0.0, 2.0]
-
-# If true, each band is compared relative to its own peak over the song
-# instead of raw level. Off by default (the brief's literal rule); left in
-# because raw bass dominates nearly every bar of this track.
-const NORMALISE_BANDS := false
+const Rules := preload("res://prototype/rules.gd")
+const HazardMath := preload("res://prototype/hazard_math.gd")
 
 
 static func density(energy: float) -> String:
@@ -38,138 +36,171 @@ static func density(energy: float) -> String:
 	return "rest"
 
 
-static func beats_for(dens: String) -> Array:
-	match dens:
-		"gauntlet":
-			return [0, 1, 2, 3]
-		"pressure":
-			return [0, 2]
-		"breather":
-			return [0]
-	return []
-
-
-static func kind_for(clock, bar: int, peaks: Dictionary) -> String:
+static func dominant_band(clock, bar: int) -> String:
 	var best := "low"
 	var best_v := -1.0
 	for band in ["low", "mid", "high"]:
 		var v: float = clock.bar_band(bar, band)
-		if NORMALISE_BANDS and peaks[band] > 0.0:
-			v /= peaks[band]
 		if v > best_v:
 			best_v = v
 			best = band
-	match best:
-		"high":
-			return "pulser"
-		"mid":
-			return "sweeper"
-	return "slammer"
+	return best
 
 
-# Lanes a player can stand in during a beat slot, given what occupies it.
-static func _safe_lanes(slot: Dictionary) -> Array:
-	var safe := []
-	for l in LANES:
-		if not slot.get("blocked", []).has(l):
-			safe.append(l)
-	return safe
+static func _weighted(rng: RandomNumberGenerator, options: Dictionary) -> String:
+	var total := 0.0
+	for k in options:
+		total += float(options[k])
+	var r := rng.randf() * total
+	for k in options:
+		r -= float(options[k])
+		if r <= 0.0:
+			return String(k)
+	return String(options.keys()[0])
 
 
-static func _reachable(prev_safe: Array, cur_safe: Array) -> bool:
-	for p in prev_safe:
-		for c in cur_safe:
-			if absi(int(p) - int(c)) <= 1:
-				return true
-	return false
-
-
-# Returns {"hazards": [...], "checkpoints": [...]}.
-# hazard: bar, beat (0..3), t, kind, lane, dir
-# checkpoint: bar, t (marker position), resume_t, lane (spawn lane)
+# Returns {"bars": {bar: {...}}, "hazards": [...], "notes": [...], "checkpoints": [...]}
+# bar entry: density, pattern, pits [[col,row]], checkpoint
+# hazard: kind, bar, x, z, dir, phase, seed, beat, col, row
+# note: x, z, bar
+# checkpoint: bar, t, resume_t, x, z
 static func build(clock) -> Dictionary:
+	var bars := {}
 	var hazards := []
+	var notes := []
 	var checkpoints := []
-
-	var peaks := {"low": 0.0, "mid": 0.0, "high": 0.0}
-	for bar in range(1, clock.bar_count() + 1):
-		for band in peaks.keys():
-			peaks[band] = maxf(peaks[band], clock.bar_band(bar, band))
-
-	# One slot per beat of the whole song so lane safety can be checked
-	# across bar boundaries. slot = {"blocked": [lanes]}
-	var slots := []
-	var prev_slot := {"blocked": []}
+	var sweeper_phase := 0.0
 
 	for bar in range(1, clock.bar_count() + 1):
-		var dens := density(clock.bar_energy(bar))
-		var kind := kind_for(clock, bar, peaks)
-		var beat_ts: PackedFloat64Array = clock.bar_beats(bar)
 		var rng := RandomNumberGenerator.new()
 		rng.seed = 1000003 * bar + 7
+		var dens := density(clock.bar_energy(bar))
+		var band := dominant_band(clock, bar)
+		var z0: float = clock.z_at(clock.bar_start(bar))
+		var z1: float = clock.z_at(clock.bar_end(bar))
+		var zc := (z0 + z1) * 0.5
+		var depth := z1 - z0
+		var entry := {"density": dens, "pattern": "none", "pits": [], "checkpoint": false}
+		var is_cp: bool = dens == "breather" and clock.is_section_start(bar)
 
-		var bar_slots := []
-		for k in 4:
-			bar_slots.append({"blocked": []})
+		match dens:
+			"gauntlet":
+				entry["pattern"] = Rules.PATTERNS[rng.randi() % Rules.PATTERNS.size()]
+				var second := _weighted(rng, {"gate": 0.6, "sweeper": 0.4} if band == "low"
+					else ({"sweeper": 0.6, "gate": 0.4} if band == "mid" else {"gate": 0.5, "sweeper": 0.5}))
+				if second == "sweeper":
+					sweeper_phase = _next_sweeper_phase(rng, sweeper_phase)
+					hazards.append(_sweeper(bar, zc, rng, sweeper_phase))
+					notes.append(_sweeper_note(hazards[-1], clock, bar))
+				else:
+					hazards.append(_gate(bar, z1 - 0.5, rng))
+					notes.append(_gate_note(z1, rng, bar))
+				if band == "low" and rng.randf() < 0.5:
+					var col := rng.randi() % Rules.COLS
+					var row := 1 + rng.randi() % 2
+					hazards.append({"kind": "slammer", "bar": bar, "x": Rules.col_x(col),
+						"z": _row_z(z0, depth, row), "beat": rng.randi() % 4, "col": col, "row": row,
+						"dir": 1, "phase": 0.0, "seed": bar})
+				var n := 1 + rng.randi() % 2   # 1-2 pattern notes + 1 secondary = 2-3
+				for tile in _riskiest_tiles(String(entry["pattern"]), rng, n):
+					notes.append({"x": Rules.col_x(int(tile.x)), "z": _row_z(z0, depth, int(tile.y)), "bar": bar})
+			"pressure":
+				var kind := _weighted(rng, {"gate": 0.6, "orbiter": 0.2, "sweeper": 0.2} if band == "low"
+					else ({"sweeper": 0.5, "orbiter": 0.5} if band == "mid" else {"orbiter": 0.6, "sweeper": 0.4}))
+				match kind:
+					"sweeper":
+						sweeper_phase = _next_sweeper_phase(rng, sweeper_phase)
+						hazards.append(_sweeper(bar, zc, rng, sweeper_phase))
+						notes.append(_sweeper_note(hazards[-1], clock, bar))
+					"gate":
+						hazards.append(_gate(bar, z1 - 0.5, rng))
+						notes.append(_gate_note(z1, rng, bar))
+					"orbiter":
+						# The classic pair: side by side, opposite spin, orbs opposed.
+						hazards.append({"kind": "orbiter", "bar": bar, "x": -3.5, "z": zc, "dir": 1,
+							"phase": 0.0, "seed": bar, "beat": 0, "col": 0, "row": 0})
+						hazards.append({"kind": "orbiter", "bar": bar, "x": 3.5, "z": zc, "dir": -1,
+							"phase": PI, "seed": bar, "beat": 0, "col": 0, "row": 0})
+						notes.append({"x": 0.0, "z": zc, "bar": bar})
+				if rng.randf() < 0.5:
+					var col := rng.randi() % Rules.COLS
+					var row := rng.randi() % Rules.ROWS
+					notes.append({"x": Rules.col_x(col), "z": _row_z(z0, depth, row), "bar": bar})
+			"breather":
+				entry["checkpoint"] = is_cp
+				var pit_col := -1
+				var pit_row := -1
+				if not is_cp and rng.randf() < 0.5:
+					pit_col = rng.randi() % Rules.COLS
+					pit_row = 1 + rng.randi() % 2
+					entry["pits"].append([pit_col, pit_row])
+				var col := rng.randi() % Rules.COLS
+				var row := (1 + rng.randi() % 3) if is_cp else (rng.randi() % Rules.ROWS)
+				if col == pit_col and row == pit_row:
+					col = (col + 1) % Rules.COLS
+				notes.append({"x": Rules.col_x(col), "z": _row_z(z0, depth, row), "bar": bar})
+				if is_cp:
+					var t0: float = clock.bar_start(bar)
+					# Resume with the marker a third of the window ahead of the
+					# back edge, standing on the open checkpoint bar.
+					var lead: float = Rules.WINDOW_DEPTH * 0.35 / clock.track_speed
+					checkpoints.append({"bar": bar, "t": t0, "resume_t": maxf(0.0, t0 - lead),
+						"x": 0.0, "z": z0 + 1.0})
+			_:
+				pass
+		bars[bar] = entry
 
-		if dens != "rest" and kind == "sweeper":
-			# One hazard spanning the bar. The gap starts on one edge lane
-			# and travels to the other; dir picks which.
-			var dir := 1 if rng.randi() % 2 == 0 else -1
-			# Pick the direction whose starting gap is reachable from the
-			# previous beat, if only one is.
-			for attempt in 2:
-				var start_lane := 0 if dir == 1 else 2
-				if _reachable(_safe_lanes(prev_slot), [start_lane]):
-					break
-				dir = -dir
-			hazards.append({"bar": bar, "beat": 0, "t": beat_ts[0], "kind": "sweeper",
-				"lane": 1, "dir": dir})
+	return {"bars": bars, "hazards": hazards, "notes": notes, "checkpoints": checkpoints}
+
+
+static func _row_z(z0: float, depth: float, row: int) -> float:
+	return z0 + (row + 0.5) * depth / Rules.ROWS
+
+
+static func _sweeper(bar: int, zc: float, rng: RandomNumberGenerator, phase: float) -> Dictionary:
+	return {"kind": "sweeper", "bar": bar, "x": 0.0, "z": zc, "dir": 1 if rng.randi() % 2 == 0 else -1,
+		"phase": phase, "seed": bar, "beat": 0, "col": 0, "row": 0}
+
+
+# Consecutive sweepers: gap offset by 4-6 units at the same bar phase.
+# The gap travels (FIELD_WIDTH - GAP) units per bar, over a 2-bar cycle.
+static func _next_sweeper_phase(rng: RandomNumberGenerator, prev: float) -> float:
+	var travel := Rules.FIELD_WIDTH - HazardMath.SWEEP_GAP
+	var dx := rng.randf_range(4.0, 6.0)
+	return fposmod(prev + dx / (2.0 * travel), 1.0)
+
+
+static func _gate(bar: int, z: float, rng: RandomNumberGenerator) -> Dictionary:
+	return {"kind": "gate", "bar": bar, "x": 0.0, "z": z, "dir": 1, "phase": 0.0,
+		"seed": int(rng.randi() % 100000), "beat": 0, "col": 0, "row": 0}
+
+
+# The note sits in the wall line where the gap is at mid-bar: you only
+# get it by threading the gap at that moment.
+static func _sweeper_note(spec: Dictionary, clock, bar: int) -> Dictionary:
+	var t_mid: float = (clock.bar_start(bar) + clock.bar_end(bar)) * 0.5
+	var gx := HazardMath.sweeper_gap_x(spec, t_mid)
+	return {"x": gx, "z": float(spec["z"]), "bar": bar}
+
+
+# Just before the gate, hugging an edge: the risky way to line up.
+static func _gate_note(z1: float, rng: RandomNumberGenerator, bar: int) -> Dictionary:
+	var side := -1.0 if rng.randi() % 2 == 0 else 1.0
+	return {"x": side * (Rules.half_width() - 1.0), "z": z1 - 1.6, "bar": bar}
+
+
+# Tiles lethal on the most beats of the pattern (seeded among ties).
+static func _riskiest_tiles(pattern: String, rng: RandomNumberGenerator, n: int) -> Array:
+	var scored := []
+	for col in Rules.COLS:
+		for row in Rules.ROWS:
+			var c := 0
 			for k in 4:
-				var gap_x: float = lerpf(-2.0 * dir, 2.0 * dir, k / 4.0)
-				var blocked := []
-				for l in LANES:
-					if absf(LANE_X[l] - gap_x) > 1.0:
-						blocked.append(l)
-				bar_slots[k]["blocked"] = blocked
-		else:
-			for k in beats_for(dens):
-				var lane := rng.randi() % LANES
-				# Guarantee: a safe lane within one lane-width of the
-				# previous beat's safe lanes. Re-pick deterministically.
-				var prev: Dictionary = prev_slot if k == 0 else bar_slots[k - 1]
-				for attempt in LANES:
-					var cur := {"blocked": [lane]}
-					if _reachable(_safe_lanes(prev), _safe_lanes(cur)):
-						break
-					lane = (lane + 1) % LANES
-				bar_slots[k]["blocked"] = [lane]
-				hazards.append({"bar": bar, "beat": k, "t": beat_ts[k], "kind": kind,
-					"lane": lane, "dir": 1})
-
-		if dens == "breather" and clock.is_section_start(bar):
-			# Resume one beat BEFORE the bar so the player is never dropped
-			# onto the bar's own beat-1 hazard. Spawn in a lane that is safe
-			# on that first beat.
-			var spawn_lane := 1
-			var safe := _safe_lanes(bar_slots[0])
-			if not safe.has(1):
-				spawn_lane = int(safe[0])
-			checkpoints.append({"bar": bar, "t": beat_ts[0],
-				"resume_t": beat_ts[0] - clock.beat_interval, "lane": spawn_lane})
-
-		for k in 4:
-			slots.append(bar_slots[k])
-		prev_slot = bar_slots[3]
-
-	# Fair spawns (the 2D game's hard lesson): nothing may be waiting on
-	# the beat a checkpoint resumes on. Drop any hazard within half a beat
-	# of a resume point.
-	for cp in checkpoints:
-		var i := hazards.size() - 1
-		while i >= 0:
-			if absf(float(hazards[i]["t"]) - float(cp["resume_t"])) < clock.beat_interval * 0.5:
-				hazards.remove_at(i)
-			i -= 1
-
-	return {"hazards": hazards, "checkpoints": checkpoints}
+				if Rules.pattern_lethal(pattern, col, row, k):
+					c += 1
+			scored.append({"t": Vector2i(col, row), "c": c, "r": rng.randf()})
+	scored.sort_custom(func(a, b): return a["c"] > b["c"] if a["c"] != b["c"] else a["r"] < b["r"])
+	var out := []
+	for i in mini(n, scored.size()):
+		out.append(scored[i]["t"])
+	return out

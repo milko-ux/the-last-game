@@ -29,8 +29,8 @@ const BEATMAP_PATH := "res://assets/audio/fuffens_beatmap.json"
 # The single knob Milko tunes if things feel late: try 0.030 -> 0.060.
 const SYNC_OFFSET_S := 0.030
 
-# One bar of music is this many world units of track. Everything spatial
-# (lane spacing, hazard depth, camera distance) was chosen around it.
+# One bar of music is this many world units of field. Everything spatial
+# (tile size, window depth, camera distance) was chosen around it.
 const BAR_UNITS := 8.0
 
 var loaded := false
@@ -42,7 +42,10 @@ var downbeats := PackedFloat64Array()
 var bars: Array = []        # one Dictionary per bar: bar, t, energy, low, mid, high
 var sections: Array = []    # id, start_bar, end_bar, start_s, energy
 var mean_bar_s := 2.0
-var track_speed := 4.0      # world units per second, = BAR_UNITS / mean_bar_s
+# SCROLL_SPEED (addendum): world units per second the window advances.
+# = BAR_UNITS / (4 * beat_interval), derived from bpm, never hand-set.
+var track_speed := 4.0
+var first_bar_beat := 0     # index into beats of bar 1's downbeat
 
 var _player: AudioStreamPlayer
 var _time_begin := 0
@@ -81,7 +84,9 @@ func _load() -> void:
 		mean_bar_s = (float(bars[-1]["t"]) - float(bars[0]["t"])) / float(bars.size() - 1)
 	else:
 		mean_bar_s = beat_interval * 4.0
-	track_speed = BAR_UNITS / mean_bar_s
+	track_speed = BAR_UNITS / (4.0 * beat_interval)
+	if not downbeats.is_empty():
+		first_bar_beat = maxi(0, beat_at(downbeats[0]))
 	loaded = true
 
 
@@ -174,7 +179,10 @@ func current_bar() -> int:
 # 0..1 progress through the current beat. During the intro the grid is
 # extrapolated backwards from the first beat so the camera can still pulse.
 func beat_phase() -> float:
-	var t := song_time()
+	return beat_phase_at(song_time())
+
+
+func beat_phase_at(t: float) -> float:
 	var i := beat_at(t)
 	if beats.is_empty():
 		return 0.0
@@ -183,6 +191,19 @@ func beat_phase() -> float:
 	if i >= beats.size() - 1:
 		return clampf((t - beats[i]) / beat_interval, 0.0, 1.0)
 	return clampf((t - beats[i]) / (beats[i + 1] - beats[i]), 0.0, 1.0)
+
+
+# Which beat of the bar (0..3) time t falls in. -1 before the first downbeat.
+func beat_in_bar_at(t: float) -> int:
+	var i := beat_at(t)
+	if i < first_bar_beat:
+		return -1
+	return (i - first_bar_beat) % 4
+
+
+# Hazards are inert during the run-up and arm on the first downbeat.
+func hazards_armed_at(t: float) -> bool:
+	return loaded and not bars.is_empty() and t >= bar_start(1)
 
 
 func bar_count() -> int:

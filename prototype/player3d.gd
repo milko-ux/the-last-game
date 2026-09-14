@@ -1,33 +1,32 @@
 extends CharacterBody3D
 # ============================================================
-# PLAYER (3D) — a flat white capsule. No character art yet.
+# PLAYER (3D) — a white capsule with one black eye. Moves freely
+# on the field in x and z at PLAYER_SPEED, plus jump. The only
+# constraints are the window: it cannot pass the front edge, and
+# dropping out of the back edge is a death (handled by the scene).
 #
-# Forward position is NOT velocity: z is set every frame from the
-# song clock (position = time). The only inputs are left/right
-# and jump. The jump numbers are the 2D game's, which Milko has
-# confirmed feel right on-device; they are scaled from screen
-# pixels into world units but keep the same air time.
+# No side walls: off the edge you fall. Over a pit you fall.
+#
+# Jump numbers are the 2D game's (entities/player.gd), scaled from
+# pixels to world units with the same air time.
 # ============================================================
 
 const Mats := preload("res://prototype/flat_mats.gd")
+const Rules := preload("res://prototype/rules.gd")
 
-# Cross one full lane (2 units) in ~0.25 s.
-const LATERAL_SPEED := 8.0
 # The camera looks down +z from behind, so world +x is screen LEFT.
 const SCREEN_X := -1.0
 const HALF_W := 0.4
 const HEIGHT := 1.6
 const HALF_D := 0.4
-const X_LIMIT := 3.0 - HALF_W
 
 # entities/player.gd numbers, unchanged: apex 53.9 px, 0.67 s in the air.
 const JUMP_VELOCITY_PX := 320.0
 const GRAVITY_PX := 950.0
-# Pixels -> world units, chosen so the apex is 2.0 units: clears a
-# slammer (0.6) with room, never a pulser (3.0).
+# Pixels -> world units, chosen so the apex is 2.0 units.
 const WORLD_PER_PX := 2.0 / 53.9
 
-var move_axis := 0.0
+var move_dir := Vector2.ZERO    # x: screen-right positive, y: forward positive
 var y := 0.0
 var vy := 0.0
 var on_ground := true
@@ -37,10 +36,13 @@ var dead := false:
 		_mesh.material_override = Mats.magenta() if v else Mats.white()
 
 @onready var _mesh: MeshInstance3D = $Mesh
+@onready var _eye_pivot: Node3D = $EyePivot
+@onready var _eye: MeshInstance3D = $EyePivot/Eye
 
 
 func _ready() -> void:
 	_mesh.material_override = Mats.white()
+	_eye.material_override = Mats.flat(Color(0.02, 0.02, 0.03))
 
 
 func reset_to(x: float, z: float) -> void:
@@ -48,20 +50,28 @@ func reset_to(x: float, z: float) -> void:
 	y = 0.0
 	vy = 0.0
 	on_ground = true
-	move_axis = 0.0
+	move_dir = Vector2.ZERO
+	_eye_pivot.rotation.y = 0.0
 
 
-func tick(delta: float, z: float) -> void:
-	position.x = clampf(position.x + move_axis * SCREEN_X * LATERAL_SPEED * delta, -X_LIMIT, X_LIMIT)
+func tick(delta: float, z_front: float, field: Node3D) -> void:
+	var v := move_dir
+	if v.length() > 1.0:
+		v = v.normalized()
+	position.x += v.x * SCREEN_X * Rules.player_speed() * delta
+	position.z = minf(position.z + v.y * Rules.player_speed() * delta, z_front - HALF_D)
+
+	var floor_here: bool = field.floor_at(position.x, position.z)
+	if on_ground and not floor_here:
+		on_ground = false
 	if not on_ground:
 		vy -= GRAVITY_PX * WORLD_PER_PX * delta
 		y += vy * delta
-		if y <= 0.0:
+		if y <= 0.0 and floor_here:
 			y = 0.0
 			vy = 0.0
 			on_ground = true
 	position.y = y
-	position.z = z
 
 
 func jump() -> bool:
@@ -70,6 +80,21 @@ func jump() -> bool:
 	vy = JUMP_VELOCITY_PX * WORLD_PER_PX
 	on_ground = false
 	return true
+
+
+func fell() -> bool:
+	return y < Rules.FALL_DEATH_Y
+
+
+# The eye turns toward the nearest thing that will be lethal within the
+# next beat; forward when nothing is. (Milko's one-eyed creature: the eye
+# telegraphing danger is gameplay, so it lives in the gray-box.)
+func look_at_danger(target: Variant) -> void:
+	var yaw := 0.0
+	if target != null:
+		var d: Vector3 = target - position
+		yaw = atan2(d.x, d.z)
+	_eye_pivot.rotation.y = lerp_angle(_eye_pivot.rotation.y, yaw, 0.35)
 
 
 # World-space box used for hazard hit tests.
