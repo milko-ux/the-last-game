@@ -16,9 +16,9 @@ const Rules := preload("res://prototype/rules.gd")
 
 # The camera looks down +z from behind, so world +x is screen LEFT.
 const SCREEN_X := -1.0
-const HALF_W := 0.4
-const HEIGHT := 1.6
-const HALF_D := 0.4
+const HALF_W := Rules.PLAYER_HALF_W
+const HEIGHT := Rules.PLAYER_HEIGHT
+const HALF_D := Rules.PLAYER_HALF_D
 
 # entities/player.gd numbers, unchanged: apex 53.9 px, 0.67 s in the air.
 const JUMP_VELOCITY_PX := 320.0
@@ -27,13 +27,14 @@ const GRAVITY_PX := 950.0
 const WORLD_PER_PX := 2.0 / 53.9
 
 var move_dir := Vector2.ZERO    # x: screen-right positive, y: forward positive
+var prev_position := Vector3.ZERO   # feet position last frame, for swept checks
 var y := 0.0
 var vy := 0.0
 var on_ground := true
 var dead := false:
 	set(v):
 		dead = v
-		_mesh.material_override = Mats.magenta() if v else Mats.white()
+		_mesh.material_override = Mats.player(Palette.HAZ) if v else Mats.player(Color.WHITE)
 
 @onready var _mesh: MeshInstance3D = $Mesh
 @onready var _eye_pivot: Node3D = $EyePivot
@@ -41,12 +42,14 @@ var dead := false:
 
 
 func _ready() -> void:
-	_mesh.material_override = Mats.white()
-	_eye.material_override = Mats.flat(Color(0.02, 0.02, 0.03))
+	_mesh.material_override = Mats.player(Color.WHITE)
+	_eye.material_override = Mats.player(Color(0.02, 0.02, 0.03))
+	_eye.material_override.render_priority = 11
 
 
 func reset_to(x: float, z: float) -> void:
 	position = Vector3(x, 0.0, z)
+	prev_position = position
 	y = 0.0
 	vy = 0.0
 	on_ground = true
@@ -55,6 +58,7 @@ func reset_to(x: float, z: float) -> void:
 
 
 func tick(delta: float, z_front: float, field: Node3D) -> void:
+	prev_position = position
 	var v := move_dir
 	if v.length() > 1.0:
 		v = v.normalized()
@@ -99,4 +103,4 @@ func look_at_danger(target: Variant) -> void:
 
 # World-space box used for hazard hit tests.
 func bounds() -> AABB:
-	return AABB(position + Vector3(-HALF_W, 0.0, -HALF_D), Vector3(HALF_W * 2.0, HEIGHT, HALF_D * 2.0))
+	return Rules.player_box(position)

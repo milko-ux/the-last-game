@@ -19,7 +19,7 @@ fog_light_color = Color(0.027451, 0.027451, 0.047059, 1)
 fog_light_energy = 1.0
 fog_density = 1.0
 fog_depth_curve = 1.0
-fog_depth_begin = 18.0
+fog_depth_begin = 26.0
 fog_depth_end = 45.0
 
 [node name="TrackTest" type="Node3D"]

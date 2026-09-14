@@ -3,111 +3,282 @@ extends RefCounted
 # FAIRNESS VALIDATOR — mandatory (addendum).
 #
 # For every beat of the song there must be at least one safe tile
-# inside the window that is reachable, at PLAYER_SPEED, from at
-# least one safe tile of the previous beat. Runs on the generated
-# layout before play starts and fails loudly if it does not hold.
+# inside the window that a player can actually get to from a safe
+# tile of the previous beat. Runs on the generated layout before
+# play starts and fails loudly if it does not hold.
 #
-# "Safe" at a beat = a real tile (no pit), inside the window with a
-# margin for the scroll, not a lethal pulse plate on that beat, and
-# not overlapped by any hazard box at the beat start or mid-beat
-# (the same hazard math the hazards themselves use).
+# The movement model is the runtime's, sampled in time:
+#  - at the start of beat i the player stands on tile A (safe on
+#    beat i); at some moment (`leave`, a fraction of the beat) they
+#    walk in a straight line at PLAYER_SPEED to tile B and wait
+#    there until beat i+1 starts;
+#  - every sample of that plan (standing, walking, waiting) is
+#    checked against the pulse plates and the hazard boxes AT THAT
+#    TIME, with the same rules the game uses to kill you;
+#  - B may be up to two tile-steps away (Manhattan), the window's
+#    back edge is respected with a margin.
+#
+# validate() also returns the plan it found (one tile + leave moment
+# per beat), which tools/autoplay.gd follows exactly. If the
+# autoplayer dies, the runtime and these rules disagree somewhere.
 # ============================================================
 
 const Rules := preload("res://prototype/rules.gd")
 const HazardMath := preload("res://prototype/hazard_math.gd")
 
-const PLAYER_HALF := 0.45
+# Bump when the movement model or the rules change: it invalidates the
+# per-device cache of validation verdicts (see Field.build).
+const VERSION := 3
+
+# Wider than the runtime's 0.4 so a plan never relies on centimetres.
+const PLAYER_HALF := 0.6
+const STEP := 0.25          # walk sample spacing (units)
+const WAIT_DT := 0.08       # standing / waiting sample spacing (s)
+const LEAVE_OPTIONS := [0.0, 0.5]
+
+# Working state for one validation run (static funcs, passed around).
+class Ctx:
+	var plan: Dictionary
+	var clock
+	var bar_z0 := {}
+	var bar_depth := {}
+	var specs: Array = []
 
 
 static func validate(plan: Dictionary, clock) -> Dictionary:
+	var ctx := Ctx.new()
+	ctx.plan = plan
+	ctx.clock = clock
+	for bar in range(1, clock.bar_count() + 1):
+		ctx.bar_z0[bar] = clock.z_at(clock.bar_start(bar))
+		ctx.bar_depth[bar] = clock.z_at(clock.bar_end(bar)) - ctx.bar_z0[bar]
+
 	var problems := []
 	var beats: PackedFloat64Array = clock.beats
-	var bar_z0 := {}
-	var bar_depth := {}
-	for bar in range(1, clock.bar_count() + 1):
-		bar_z0[bar] = clock.z_at(clock.bar_start(bar))
-		bar_depth[bar] = clock.z_at(clock.bar_end(bar)) - bar_z0[bar]
-
-	var reach: float = Rules.player_speed() * clock.beat_interval + 0.5
-	var prev_safe := {}      # Vector3i(bar,col,row) -> true; empty = "anywhere"
-	var first := true
+	var speed: float = Rules.player_speed()
 	var last_bar_end: float = clock.z_at(clock.bar_end(clock.bar_count()))
+	var outro_bar: int = clock.bar_count() + 1
+
+	var layers := []          # [{safe:{key:Vector2}, reach:{key:[parent_key, leave]}}]
+	var prev_reach := {}
+	var prev_safe := {}
+	var first := true
 
 	for i in range(clock.first_bar_beat, beats.size()):
 		var t0: float = beats[i]
 		var t1: float = beats[i + 1] if i + 1 < beats.size() else t0 + clock.beat_interval
-		var t_mid := (t0 + t1) * 0.5
-		var z_back: float = clock.z_at(t_mid)          # the edge keeps moving during the beat
-		var z_front: float = clock.z_at(t0) + Rules.WINDOW_DEPTH
+		var tp: float = beats[i - 1] if i > 0 else t0 - clock.beat_interval
+		var z_back0: float = clock.z_at(t0)
+		var z_back1: float = clock.z_at(t1)
+		var z_front: float = z_back0 + Rules.WINDOW_DEPTH
 		var k: int = clock.beat_in_bar_at(t0)
-		if z_back > last_bar_end:
+		if z_back0 > last_bar_end + Rules.WINDOW_DEPTH:
 			break
 
-		# Hazard boxes near the window, sampled twice.
-		var boxes := []
+		ctx.specs = []
 		for spec in plan["hazards"]:
-			if absf(float(spec["z"]) - (z_back + z_front) * 0.5) > Rules.WINDOW_DEPTH:
+			if absf(float(spec["z"]) - (z_back0 + z_front) * 0.5) > Rules.WINDOW_DEPTH:
 				continue
-			boxes.append_array(HazardMath.boxes_at(spec, t0))
-			boxes.append_array(HazardMath.boxes_at(spec, t_mid))
+			ctx.specs.append(spec)
 
+		# Safe = where the player may BE at t0 (and, if they stay, through
+		# the beat: the back edge must not pass the tile before t1).
 		var safe := {}
 		for bar in range(1, clock.bar_count() + 1):
-			var z0: float = bar_z0[bar]
-			var depth: float = bar_depth[bar]
-			if z0 + depth < z_back or z0 > z_front:
+			var z0: float = ctx.bar_z0[bar]
+			var depth: float = ctx.bar_depth[bar]
+			if z0 + depth < z_back0 or z0 > z_front:
 				continue
 			var entry: Dictionary = plan["bars"][bar]
-			var pattern := String(entry["pattern"])
 			for col in Rules.COLS:
 				for row in Rules.ROWS:
 					if entry["pits"].has([col, row]):
 						continue
 					var cz := z0 + (row + 0.5) * depth / Rules.ROWS
-					if cz < z_back + 1.0 or cz > z_front - 1.0:
-						continue
-					if Rules.pattern_lethal(pattern, col, row, k):
+					if cz < z_back1 + 0.6 or cz > z_front - 1.0:
 						continue
 					var cx := Rules.col_x(col)
-					if _blocked(cx, cz, boxes):
+					if _lethal_at(ctx, Vector2(cx, cz), t0):
 						continue
 					safe[Vector3i(bar, col, row)] = Vector2(cx, cz)
-
-		# The plain outro slab after the last bar is always safe floor.
 		if z_front - 1.0 > last_bar_end:
 			for col in Rules.COLS:
-				safe[Vector3i(clock.bar_count() + 1, col, 0)] = Vector2(Rules.col_x(col), maxf(last_bar_end + 1.0, z_back + 1.0))
+				safe[Vector3i(outro_bar, col, 0)] = Vector2(Rules.col_x(col), maxf(last_bar_end + 1.0, z_back1 + 0.6))
+
+		var reachable := {}
+		if first:
+			for key in safe:
+				reachable[key] = [null, 0.0]
+		else:
+			for key in safe:
+				var b: Vector2 = safe[key]
+				var found := false
+				# Own tile first (standing still is the cheapest plan).
+				var cands := [key]
+				cands.append_array(_neighbours(key, clock.bar_count()))
+				for nkey in cands:
+					if not prev_reach.has(nkey):
+						continue
+					var a: Vector2 = prev_safe[nkey]
+					for leave in LEAVE_OPTIONS:
+						var t_leave: float = tp + (t0 - tp) * float(leave)
+						var dist := a.distance_to(b)
+						if dist > speed * (t0 - t_leave) - 0.15:
+							continue
+						if _plan_ok(ctx, a, b, tp, t_leave, t0, speed):
+							reachable[key] = [nkey, leave]
+							found = true
+							break
+					if found:
+						break
 
 		if safe.is_empty():
 			problems.append("beat %d (bar %d, beat %d): no safe tile in the window" % [i, clock.bar_at(t0), k + 1])
-			prev_safe = {}
-			first = true
-			continue
-
-		if not first:
-			var ok := false
+		elif reachable.is_empty():
+			problems.append("beat %d (bar %d, beat %d): no safe tile reachable from the previous beat" % [i, clock.bar_at(t0), k + 1])
 			for key in safe:
-				var p: Vector2 = safe[key]
-				for pkey in prev_safe:
-					if p.distance_to(prev_safe[pkey]) <= reach:
-						ok = true
-						break
-				if ok:
-					break
-			if not ok:
-				problems.append("beat %d (bar %d, beat %d): no safe tile reachable from the previous beat" % [i, clock.bar_at(t0), k + 1])
+				reachable[key] = [null, 0.0]
+
+		layers.append({"safe": safe, "reach": reachable, "z_back": z_back0})
+		prev_reach = reachable
 		prev_safe = safe
-		first = false
+		first = safe.is_empty()
 
-	return {"ok": problems.is_empty(), "problems": problems}
-
-
-static func _blocked(cx: float, cz: float, boxes: Array) -> bool:
-	for b in boxes:
-		var bb: AABB = b
-		if bb.position.y > 1.6:
+	# Read the plan off the back-pointers, last beat to first. Each entry:
+	# {"pos": Vector2, "leave": phase of THIS beat at which to set off for
+	# the next entry}.
+	var path := []
+	path.resize(layers.size())
+	var want: Variant = null
+	var next_leave := 0.0
+	for li in range(layers.size() - 1, -1, -1):
+		var layer: Dictionary = layers[li]
+		var reach_map: Dictionary = layer["reach"]
+		if want == null or not reach_map.has(want):
+			want = _pick_central(reach_map, layer["safe"], layer["z_back"])
+			next_leave = 0.5
+		if want == null:
+			path[li] = null
 			continue
-		if cx + PLAYER_HALF > bb.position.x and cx - PLAYER_HALF < bb.end.x \
-			and cz + PLAYER_HALF > bb.position.z and cz - PLAYER_HALF < bb.end.z:
-			return true
+		path[li] = {"pos": layer["safe"][want], "leave": next_leave}
+		var link: Array = reach_map[want]
+		want = link[0]
+		next_leave = float(link[1])
+
+	return {"ok": problems.is_empty(), "problems": problems, "path": path,
+		"first_beat": clock.first_bar_beat}
+
+
+# Stand on a from t_stand to t_leave, walk a->b at full speed, wait on b
+# until t_end. Every sample must be non-lethal at its time.
+static func _plan_ok(ctx: Ctx, a: Vector2, b: Vector2, t_stand: float, t_leave: float, t_end: float, speed: float) -> bool:
+	var t := t_stand
+	while t < t_leave:
+		if _lethal_at(ctx, a, t):
+			return false
+		t += WAIT_DT
+	var dist := a.distance_to(b)
+	var steps := maxi(1, int(ceil(dist / STEP)))
+	for s in steps + 1:
+		var u := float(s) / steps
+		if _lethal_at(ctx, a.lerp(b, u), t_leave + dist * u / speed):
+			return false
+	t = t_leave + dist / speed
+	while t < t_end:
+		if _lethal_at(ctx, b, t):
+			return false
+		t += WAIT_DT
+	return true
+
+
+# The rules, at a point and a time: a pulse plate under any corner of the
+# (widened) player box — the game tests the centre, this is stricter on
+# purpose so a plan never depends on which side of a tile corner the
+# player lands — or any hazard box overlapping that box.
+static func _lethal_at(ctx: Ctx, p: Vector2, t: float) -> bool:
+	if ctx.clock.hazards_armed_at(t) and ctx.clock.beat_phase_at(t) < Rules.LETHAL_BEAT_FRACTION:
+		var k: int = ctx.clock.beat_in_bar_at(t)
+		for corner in [Vector2(-PLAYER_HALF, -PLAYER_HALF), Vector2(PLAYER_HALF, -PLAYER_HALF),
+				Vector2(-PLAYER_HALF, PLAYER_HALF), Vector2(PLAYER_HALF, PLAYER_HALF)]:
+			var c: Vector2 = p + corner
+			var bar := _bar_at(ctx, c.y)
+			if bar == 0:
+				continue
+			var entry: Dictionary = ctx.plan["bars"][bar]
+			var pattern := String(entry["pattern"])
+			if pattern == "none":
+				continue
+			var depth: float = ctx.bar_depth[bar]
+			var row := clampi(int(floor((c.y - ctx.bar_z0[bar]) / (depth / Rules.ROWS))), 0, Rules.ROWS - 1)
+			var col := clampi(Rules.col_at(c.x), 0, Rules.COLS - 1)
+			if entry["plain_rows"].has(row):
+				continue
+			if Rules.pattern_lethal(pattern, col, row, k):
+				return true
+	for spec in ctx.specs:
+		var band := 4.5 if String(spec["kind"]) == "orbiter" else 1.8
+		if absf(float(spec["z"]) - p.y) > band:
+			continue
+		for box in HazardMath.boxes_at(spec, t):
+			var bb: AABB = box
+			if bb.position.y > 1.6:
+				continue
+			if p.x + PLAYER_HALF > bb.position.x and p.x - PLAYER_HALF < bb.end.x \
+				and p.y + PLAYER_HALF > bb.position.z and p.y - PLAYER_HALF < bb.end.z:
+				return true
 	return false
+
+
+static func _bar_at(ctx: Ctx, z: float) -> int:
+	var n: int = ctx.clock.bar_count()
+	if n == 0 or z < ctx.bar_z0[1] or z >= ctx.bar_z0[n] + ctx.bar_depth[n]:
+		return 0
+	var lo := 1
+	var hi := n
+	while lo < hi:
+		var mid := (lo + hi + 1) >> 1
+		if ctx.bar_z0[mid] <= z:
+			lo = mid
+		else:
+			hi = mid - 1
+	return lo
+
+
+# Tiles within two steps (Manhattan), across bar boundaries.
+static func _neighbours(key: Vector3i, bar_count: int) -> Array:
+	var out := []
+	for dc in range(-2, 3):
+		for dr in range(-2, 3):
+			if dc == 0 and dr == 0:
+				continue
+			if absi(dc) + absi(dr) > 2:
+				continue
+			var col := key.y + dc
+			if col < 0 or col >= Rules.COLS:
+				continue
+			var bar := key.x
+			var row := key.z + dr
+			while row < 0 and bar > 1:
+				bar -= 1
+				row += Rules.ROWS
+			while row >= Rules.ROWS and bar <= bar_count:
+				bar += 1
+				row -= Rules.ROWS
+			if row < 0 or row >= Rules.ROWS:
+				continue
+			if bar > bar_count and row != 0:
+				continue
+			out.append(Vector3i(bar, col, row))
+	return out
+
+
+static func _pick_central(reach_map: Dictionary, safe: Dictionary, z_back: float) -> Variant:
+	var best: Variant = null
+	var best_d := 1e18
+	for key in reach_map:
+		var p: Vector2 = safe[key]
+		var d := absf(p.x) + absf(p.y - (z_back + 5.0)) * 0.5
+		if d < best_d:
+			best_d = d
+			best = key
+	return best

@@ -12,8 +12,8 @@ var _right: MeshInstance3D
 
 
 func _build() -> void:
-	_left = _box_mesh(Vector3(1.0, HazardMath.WALL_H, HazardMath.WALL_D), Mats.magenta())
-	_right = _box_mesh(Vector3(1.0, HazardMath.WALL_H, HazardMath.WALL_D), Mats.magenta())
+	_left = _box_mesh(Vector3(1.0, HazardMath.WALL_H, HazardMath.WALL_D), Mats.magenta_wall())
+	_right = _box_mesh(Vector3(1.0, HazardMath.WALL_H, HazardMath.WALL_D), Mats.magenta_wall())
 
 
 func _pose(t: float) -> void:

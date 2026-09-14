@@ -24,7 +24,6 @@ const START_DELAY_S := 0.20
 const HAPTIC_DEATH_MS := 35
 const HAPTIC_WIN_MS := 80
 const HAPTIC_COIN_MS := 25
-const HIT_RANGE_Z := 12.0
 const NOTE_RADIUS := 1.0
 const COMBO_CAP := 4
 const START_Z := 8.0
@@ -51,6 +50,10 @@ var _freeze := 0.0
 var _start_delay := 0.0
 var _run_started_ms := 0
 var _fair_warning := ""
+var _prev_ht := 0.0
+# Optional autoplayer (tools/autoplay.gd). When set, its move_dir(scene)
+# replaces the joystick. Never set in normal play.
+var bot: Object = null
 
 
 func _ready() -> void:
@@ -107,7 +110,7 @@ func _tick_run(delta: float) -> void:
 	var z_back := BeatClock.z_at(t)
 	var z_front := z_back + Rules.WINDOW_DEPTH
 
-	player.move_dir = _move_input()
+	player.move_dir = bot.move_dir(self) if bot != null else _move_input()
 	player.tick(delta, z_front, field)
 	rig.set_window(z_back)
 	_update_world(ht, z_back)
@@ -129,26 +132,14 @@ func _tick_run(delta: float) -> void:
 			score += mini(streak, COMBO_CAP)
 			Input.vibrate_handheld(HAPTIC_COIN_MS)
 
-	# --- death checks: the beat caught you / fell / the floor / a hazard
-	if player.position.z < z_back:
+	# --- death: ONE rules query (rules.gd decides; meshes are visual only)
+	var cause := Rules.death_cause(field, player.prev_position, player.position,
+		player.on_ground, z_back, _prev_ht, ht)
+	_prev_ht = ht
+	if not cause.is_empty():
+		_log_death(cause, t, ht, z_back)
 		_die()
 		return
-	if player.fell():
-		_die()
-		return
-	if player.on_ground and field.tile_state_at(player.position.x, player.position.z, ht) == field.TileState.LETHAL:
-		_die()
-		return
-	var pb: AABB = player.bounds()
-	for h in field.hazards:
-		if not h.is_lethal():
-			continue
-		if absf(h.position.z - player.position.z) > HIT_RANGE_Z:
-			continue
-		for b in h.boxes():
-			if b.intersects(pb):
-				_die()
-				return
 
 	player.look_at_danger(_nearest_danger(ht))
 
@@ -195,6 +186,32 @@ func _on_jump() -> void:
 		return
 	if player.jump():
 		ui.confirm_jump()
+
+
+# Permanent death log: one line per death, kept in every build.
+func _log_death(cause: Dictionary, t: float, ht: float, z_back: float) -> void:
+	var p := player.position
+	var kp: Vector3 = cause["pos"]
+	var rules_here := Rules.point_lethal(field, p, player.on_ground, ht)
+	var between := []
+	var cam_pos: Vector3 = rig.cam.global_position
+	var eye := p + Vector3(0.0, 0.8, 0.0)
+	for h in field.hazards:
+		for b in h.boxes():
+			var bb: AABB = b
+			if bb.intersects_segment(cam_pos, eye) != null:
+				between.append("%s@z%.1f" % [h.kind, h.position.z])
+	print("DEATH t=%.3f bar=%d beat=%d phase=%.2f player=(%.2f, %.2f, %.2f) on_ground=%s killer=%s at=(%.2f, %.2f, %.2f) rules_lethal_here=%s z_back=%.2f between_camera_and_player=%s" % [
+		t, BeatClock.bar_at(t), BeatClock.beat_in_bar_at(ht) + 1, BeatClock.beat_phase_at(ht),
+		p.x, p.y, p.z, player.on_ground, cause["kind"], kp.x, kp.y, kp.z, rules_here, z_back,
+		"none" if between.is_empty() else ",".join(between)])
+
+
+func start_now() -> void:
+	if state == State.WAIT:
+		state = State.STARTING
+		_start_delay = 0.0
+		status.text = ""
 
 
 func _die() -> void:

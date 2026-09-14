@@ -64,23 +64,30 @@ static func _weighted(rng: RandomNumberGenerator, options: Dictionary) -> String
 # hazard: kind, bar, x, z, dir, phase, seed, beat, col, row
 # note: x, z, bar
 # checkpoint: bar, t, resume_t, x, z
-static func build(clock) -> Dictionary:
+# rerolls: {bar: n} — bars the fairness validator rejected get a fresh
+# seed per attempt (see Field.build). Still fully deterministic.
+static func build(clock, rerolls: Dictionary = {}) -> Dictionary:
 	var bars := {}
 	var hazards := []
 	var notes := []
 	var checkpoints := []
-	var sweeper_phase := 0.0
+	var prev_had_gate := false
 
 	for bar in range(1, clock.bar_count() + 1):
 		var rng := RandomNumberGenerator.new()
-		rng.seed = 1000003 * bar + 7
+		rng.seed = 1000003 * bar + 7 + 7919 * int(rerolls.get(bar, 0))
 		var dens := density(clock.bar_energy(bar))
 		var band := dominant_band(clock, bar)
 		var z0: float = clock.z_at(clock.bar_start(bar))
 		var z1: float = clock.z_at(clock.bar_end(bar))
 		var zc := (z0 + z1) * 0.5
 		var depth := z1 - z0
-		var entry := {"density": dens, "pattern": "none", "pits": [], "checkpoint": false}
+		# plain_rows: tile rows the floor pattern leaves alone. A gate bar
+		# keeps its front row plain (a strip to line up the opening); a
+		# sweeper bar keeps the two rows either side of the wall plain (the
+		# crossing zone). Otherwise the floor and the wall fight and no
+		# legal move exists.
+		var entry := {"density": dens, "pattern": "none", "pits": [], "checkpoint": false, "plain_rows": []}
 		var is_cp: bool = dens == "breather" and clock.is_section_start(bar)
 
 		match dens:
@@ -88,13 +95,16 @@ static func build(clock) -> Dictionary:
 				entry["pattern"] = Rules.PATTERNS[rng.randi() % Rules.PATTERNS.size()]
 				var second := _weighted(rng, {"gate": 0.6, "sweeper": 0.4} if band == "low"
 					else ({"sweeper": 0.6, "gate": 0.4} if band == "mid" else {"gate": 0.5, "sweeper": 0.5}))
+				if prev_had_gate:
+					second = "gate"
 				if second == "sweeper":
-					sweeper_phase = _next_sweeper_phase(rng, sweeper_phase)
-					hazards.append(_sweeper(bar, zc, rng, sweeper_phase))
+					hazards.append(_sweeper(bar, zc, rng, _sweeper_phase(bar)))
 					notes.append(_sweeper_note(hazards[-1], clock, bar))
+					entry["plain_rows"] = [1, 2]
 				else:
 					hazards.append(_gate(bar, z1 - 0.5, rng))
 					notes.append(_gate_note(z1, rng, bar))
+					entry["plain_rows"] = [Rules.ROWS - 1]
 				if band == "low" and rng.randf() < 0.5:
 					var col := rng.randi() % Rules.COLS
 					var row := 1 + rng.randi() % 2
@@ -107,10 +117,11 @@ static func build(clock) -> Dictionary:
 			"pressure":
 				var kind := _weighted(rng, {"gate": 0.6, "orbiter": 0.2, "sweeper": 0.2} if band == "low"
 					else ({"sweeper": 0.5, "orbiter": 0.5} if band == "mid" else {"orbiter": 0.6, "sweeper": 0.4}))
+				if prev_had_gate and kind == "sweeper":
+					kind = "gate"
 				match kind:
 					"sweeper":
-						sweeper_phase = _next_sweeper_phase(rng, sweeper_phase)
-						hazards.append(_sweeper(bar, zc, rng, sweeper_phase))
+						hazards.append(_sweeper(bar, zc, rng, _sweeper_phase(bar)))
 						notes.append(_sweeper_note(hazards[-1], clock, bar))
 					"gate":
 						hazards.append(_gate(bar, z1 - 0.5, rng))
@@ -148,6 +159,10 @@ static func build(clock) -> Dictionary:
 						"x": 0.0, "z": z0 + 1.0})
 			_:
 				pass
+		prev_had_gate = false
+		for h in hazards:
+			if h["bar"] == bar and h["kind"] == "gate":
+				prev_had_gate = true
 		bars[bar] = entry
 
 	return {"bars": bars, "hazards": hazards, "notes": notes, "checkpoints": checkpoints}
@@ -162,12 +177,11 @@ static func _sweeper(bar: int, zc: float, rng: RandomNumberGenerator, phase: flo
 		"phase": phase, "seed": bar, "beat": 0, "col": 0, "row": 0}
 
 
-# Consecutive sweepers: gap offset by 4-6 units at the same bar phase.
-# The gap travels (FIELD_WIDTH - GAP) units per bar, over a 2-bar cycle.
-static func _next_sweeper_phase(rng: RandomNumberGenerator, prev: float) -> float:
-	var travel := Rules.FIELD_WIDTH - HazardMath.SWEEP_GAP
-	var dx := rng.randf_range(4.0, 6.0)
-	return fposmod(prev + dx / (2.0 * travel), 1.0)
+# Sweeper phase from the bar number alone (so re-rolling one bar never
+# shifts another). Consecutive bars differ by ~4.7 units of gap travel:
+# the gap travels 2 * (FIELD_WIDTH - GAP) units per 2-bar cycle.
+static func _sweeper_phase(bar: int) -> float:
+	return fposmod(bar * 0.2137 + 0.05, 1.0)
 
 
 static func _gate(bar: int, z: float, rng: RandomNumberGenerator) -> Dictionary:

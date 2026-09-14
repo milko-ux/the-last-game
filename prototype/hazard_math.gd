@@ -62,6 +62,28 @@ static func gate_opening_x(spec: Dictionary, t: float) -> float:
 	return -span * 0.5 + span * float(h % 10007) / 10006.0
 
 
+# True if the segment prev->pos crossed the gate's plane outside its
+# opening (player half-width included). Swept, so frame rate does not
+# matter and the wall's visual thickness is irrelevant.
+# If the opening jumped between the two frame times, the crossing counts
+# as safe when it fits EITHER opening: the jump can never catch a player
+# who was already in the old opening.
+static func gate_crossed(spec: Dictionary, prev: Vector3, pos: Vector3, half_w: float, t_prev: float, t: float) -> bool:
+	if not BeatClock.hazards_armed_at(t):
+		return false
+	var z := float(spec["z"])
+	var a := prev.z - z
+	var b := pos.z - z
+	if a == b or (a < 0.0) == (b < 0.0):
+		return false
+	var u := a / (a - b)
+	var x := lerpf(prev.x, pos.x, u)
+	for ot in [t, t_prev]:
+		if absf(x - gate_opening_x(spec, ot)) + half_w <= GATE_GAP * 0.5:
+			return false
+	return true
+
+
 # --- Orbiter: one revolution per bar, phase locked to the downbeat.
 static func orbiter_orb_pos(spec: Dictionary, t: float) -> Vector3:
 	var a := TAU * bar_float(t) * float(spec.get("dir", 1)) + float(spec.get("phase", 0.0))

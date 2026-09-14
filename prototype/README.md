@@ -55,13 +55,36 @@ Density per bar comes from the beatmap's energy (gauntlet / pressure /
 breather / rest); type choice is a seeded weighted pick biased by the bar's
 dominant band. Checkpoints sit on the first breather bar of a section.
 
-## Fairness validator
+## Death rules, death log, validator, autoplayer
 
-`prototype/fairness.gd` runs on the generated layout in `Field.build()`,
-before play starts: for every beat there must be a safe tile in the window
-reachable at player speed from a safe tile of the previous beat. Failures
-are pushed to the error log AND shown on screen in the bottom line, so a
-silent unfair beat cannot ship.
+- **One place decides death:** `Rules.death_cause()` in `rules.gd`. Plates,
+  hazard boxes, gate crossings (a gate is a zero-thickness plane in the
+  rules: you die by crossing it outside the opening, never by "being inside"
+  the wall, so the opening jumping can never catch you), the back edge and
+  falling. Meshes are visual only.
+- **Death log:** every death prints one `DEATH ...` line (song time, bar,
+  beat, phase, player position, killer type and position, whether the rules
+  call that spot lethal, the window's back edge, and any hazard between the
+  camera and the player). Kept in every build; on the web build it lands in
+  the browser console.
+- **Fairness validator:** `fairness.gd` runs on the generated layout in
+  `Field.build()`. For every beat there must be a safe tile in the window
+  that a player can actually reach from a safe tile of the previous beat:
+  stand, walk at player speed, wait — every sample checked against the plates
+  and hazards at that exact time, with a wider-than-real player box. A bar
+  that fails is re-rolled (with the bar before it). Failures go to the error
+  log AND the on-screen bottom line. The verdict is cached per device
+  (`user://fairness_v*.json`); bump `Fairness.VERSION` when rules change.
+- **Headless autoplayer:** follows the validator's plan tile by tile.
+
+  ```
+  godot --headless --path . -s tools/autoplay.gd -- bars=78 mode=validator
+  godot --headless --path . -s tools/autoplay.gd -- bars=5 mode=naive
+  ```
+
+  `validator` must finish with `deaths=0`; any death is a place where the
+  runtime and the rules disagree. `naive` replays the first phone report
+  (through the first gate, then stand still). Runs in real time.
 
 ## Files
 
