@@ -176,6 +176,10 @@ func _save_verdict(rerolls: Dictionary) -> void:
 		f.store_string(JSON.stringify({"ok": true, "rerolls": out}))
 
 
+func plan_first_z() -> float:
+	return _bar_z0[0] if not _bar_z0.is_empty() else 0.0
+
+
 func _slab(z_start: float, length: float) -> void:
 	var mi := MeshInstance3D.new()
 	var bm := BoxMesh.new()
@@ -280,20 +284,24 @@ func tile_state_at(x: float, z: float, t: float) -> int:
 
 
 # LETHAL for the first LETHAL_BEAT_FRACTION of its beat; ARMED (dark
-# magenta) for the whole beat before that, including the last intro beat
-# before the first downbeat, so the very first pulse is telegraphed too.
+# magenta) for the whole beat before that.
+#
+# Before the first downbeat the whole grid REHEARSES: every plate plays
+# its pattern in warning colour on the extrapolated beat grid, never
+# lethal. A demo bar's plates do the same for good (they show, they
+# never kill). The player can walk over both freely.
 func _state_for(bar: int, col: int, row: int, t: float) -> int:
 	var entry: Dictionary = plan["bars"][bar]
 	var pattern := String(entry["pattern"])
 	if pattern == "none" or entry["plain_rows"].has(row):
 		return TileState.SAFE
-	var armed := BeatClock.hazards_armed_at(t)
+	var lethal_allowed := BeatClock.hazards_armed_at(t) and not bool(entry["demo"])
 	var k := BeatClock.beat_in_bar_at(t)
-	if armed and Rules.pattern_lethal(pattern, col, row, k) \
-		and BeatClock.beat_phase_at(t) < Rules.LETHAL_BEAT_FRACTION:
-		return TileState.LETHAL
-	var next_k := (k + 1) % 4 if armed else (0 if t >= BeatClock.bar_start(1) - BeatClock.beat_interval else -1)
-	if Rules.pattern_lethal(pattern, col, row, next_k):
+	var firing := Rules.pattern_lethal(pattern, col, row, k) \
+		and BeatClock.beat_phase_at(t) < Rules.LETHAL_BEAT_FRACTION
+	if firing:
+		return TileState.LETHAL if lethal_allowed else TileState.ARMED
+	if Rules.pattern_lethal(pattern, col, row, (k + 1) % 4):
 		return TileState.ARMED
 	return TileState.SAFE
 

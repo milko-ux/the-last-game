@@ -4,8 +4,8 @@ extends RefCounted
 # place. Anything spatial reads from here.
 # ============================================================
 
-const FIELD_WIDTH := 14.0            # x, seven 2-unit columns; movement is continuous
-const COLS := 7
+const FIELD_WIDTH := 18.0            # x, nine 2-unit columns; movement is continuous
+const COLS := 9
 const ROWS := 4                      # tile-rows per bar, one per beat
 const TILE := 2.0
 const BAR_LENGTH := 8.0              # z per bar (BeatClock.BAR_UNITS)
@@ -14,9 +14,20 @@ const PLAYER_SPEED_FACTOR := 2.2     # the player can outrun the scroll
 # A pulse plate is lethal for this fraction of its beat (bright magenta),
 # and "armed" (dark magenta) for the same fraction before it. The gap is
 # what makes stepping on the beat physically possible.
-const LETHAL_BEAT_FRACTION := 0.5
+# Addendum 2 tuning step (1): 0.5 -> 0.4 after the human-bot test.
+const LETHAL_BEAT_FRACTION := 0.4
 const PIT_MAX_Z := 3.0               # a pit deeper than this in z is not jumpable
 const FALL_DEATH_Y := -3.0
+
+# The window's death line sits this far in front of the scrolled back
+# edge, so it is drawn on screen (one tile-row above the frame bottom
+# with the addendum-2 camera) and never a surprise.
+const BACK_EDGE_MARGIN := 3.6
+
+# Which level this build plays. Level 1 is the taught curriculum: no
+# lives, no death screen. Lives and the share screen begin at level 2
+# (not built in this phase).
+const LEVEL := 1
 
 const PATTERNS := ["checker", "row", "column_wave", "spiral"]
 
@@ -42,6 +53,15 @@ static func half_width() -> float:
 	return FIELD_WIDTH * 0.5
 
 
+# z below which the player is dead ("the beat caught you").
+static func death_line(z_back: float) -> float:
+	return z_back + BACK_EDGE_MARGIN
+
+
+static func lives_enabled() -> bool:
+	return LEVEL >= 2
+
+
 static func col_x(col: int) -> float:
 	return (col - (COLS - 1) * 0.5) * TILE
 
@@ -64,11 +84,12 @@ static func pattern_lethal(pattern: String, col: int, row: int, k: int) -> bool:
 			return posmod(col - k, 4) == 0
 		"spiral":
 			# a quadrant block that rotates one step per beat
+			var half := (COLS - 1) / 2
 			var q := 0
 			if row < 2:
-				q = 0 if col <= 3 else 1
+				q = 0 if col <= half else 1
 			else:
-				q = 2 if col > 3 else 3
+				q = 2 if col > half else 3
 			return q == k
 	return false
 
@@ -113,8 +134,8 @@ static func point_lethal(field, pos: Vector3, on_ground: bool, t: float) -> bool
 # prev/pos: feet positions last frame and now. Returns
 #   {"kind": String, "pos": Vector3 (of the killer)}
 static func death_cause(field, prev: Vector3, pos: Vector3, on_ground: bool, z_back: float, t_prev: float, t: float) -> Dictionary:
-	if pos.z < z_back:
-		return {"kind": "back_edge", "pos": Vector3(pos.x, 0.0, z_back)}
+	if pos.z < death_line(z_back):
+		return {"kind": "back_edge", "pos": Vector3(pos.x, 0.0, death_line(z_back))}
 	if pos.y < FALL_DEATH_Y:
 		return {"kind": "fall", "pos": pos}
 	if on_ground and field.tile_state_at(pos.x, pos.z, t) == field.TileState.LETHAL:

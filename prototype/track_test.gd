@@ -14,9 +14,13 @@ extends Node3D
 # ============================================================
 
 const Rules := preload("res://prototype/rules.gd")
+const Mats := preload("res://prototype/flat_mats.gd")
+const HazardMath := preload("res://prototype/hazard_math.gd")
 
 const LIVES := 3
-const DEATH_FREEZE_S := 0.35
+# Level 1 (addendum 2): no lives, a short freeze, rewind, continue.
+const DEATH_FREEZE_S := 0.25
+const DEATH_FREEZE_LIVES_S := 0.35
 # The first tap unlocks browser audio; give the AudioContext a beat to
 # resume before the clock and the music start together.
 const START_DELAY_S := 0.20
@@ -26,7 +30,7 @@ const HAPTIC_WIN_MS := 80
 const HAPTIC_COIN_MS := 25
 const NOTE_RADIUS := 1.0
 const COMBO_CAP := 4
-const START_Z := 8.0
+const START_Z := 10.0
 
 enum State { WAIT, STARTING, RUN, DEAD, WON }
 
@@ -38,6 +42,7 @@ enum State { WAIT, STARTING, RUN, DEAD, WON }
 @onready var status: Label = $UI/Status
 @onready var score_label: Label = $UI/Score
 @onready var debug: Label = $UI/Debug
+@onready var hud: Node2D = $UI/Hud
 
 var state := State.WAIT
 var lives := LIVES
@@ -54,6 +59,9 @@ var _prev_ht := 0.0
 # Optional autoplayer (tools/autoplay.gd). When set, its move_dir(scene)
 # replaces the joystick. Never set in normal play.
 var bot: Object = null
+var _edge_line: MeshInstance3D
+var _demo_bar_shown := 0
+var _best_saved := 0.0
 
 
 func _ready() -> void:
@@ -62,7 +70,18 @@ func _ready() -> void:
 		_fair_warning = "FAIRNESS CHECK FAILED (%d) — see log" % field.fairness["problems"].size()
 	player.reset_to(0.0, START_Z)
 	ui.level_count = 1
+	ui.show_hud = false
 	ui.leave_menu()
+	_edge_line = MeshInstance3D.new()
+	var bm := BoxMesh.new()
+	bm.size = Vector3(Rules.FIELD_WIDTH + 0.6, 0.06, 0.5)
+	_edge_line.mesh = bm
+	_edge_line.material_override = Mats.player(Palette.EDGE)
+	add_child(_edge_line)
+	hud.ticks = []
+	for cp in field.checkpoints:
+		hud.ticks.append(float(cp["t"]) / BeatClock.duration)
+	hud.best = Progress.best_for(Rules.LEVEL) / BeatClock.duration
 	ui.jump_pressed.connect(_on_jump)
 	status.text = "TAP TO START"
 	debug.text = _fair_warning
@@ -100,7 +119,7 @@ func _process(delta: float) -> void:
 			_freeze -= delta
 			if _freeze <= 0.0:
 				_rewind()
-	ui.set_status(0, 1, lives, deaths, state == State.DEAD)
+	ui.set_status(0, 1, lives, deaths, state == State.DEAD and Rules.lives_enabled())
 	_update_hud()
 
 
@@ -114,6 +133,8 @@ func _tick_run(delta: float) -> void:
 	player.tick(delta, z_front, field)
 	rig.set_window(z_back)
 	_update_world(ht, z_back)
+	_update_progress(t)
+	_update_demo(ht)
 
 	for i in field.checkpoints.size():
 		if i > checkpoint and t >= float(field.checkpoints[i]["t"]):
@@ -141,13 +162,61 @@ func _tick_run(delta: float) -> void:
 		_die()
 		return
 
-	player.look_at_danger(_nearest_danger(ht))
+	player.look_at_danger(_demo_target(ht) if _in_demo_bar(ht) else _nearest_danger(ht))
 
 	if player.position.z >= field.goal_z:
 		_win()
 
 
+func _update_progress(t: float) -> void:
+	hud.fill = t / BeatClock.duration
+	if t > Progress.best_for(Rules.LEVEL):
+		hud.best = t / BeatClock.duration
+		if t - _best_saved > 2.0:
+			Progress.record_best(Rules.LEVEL, t)
+			_best_saved = t
+
+
+func _in_demo_bar(ht: float) -> bool:
+	return field.plan["demo_bars"].has(BeatClock.bar_at(ht))
+
+
+# The one word above the field while a demo bar plays; fades on the
+# next downbeat.
+func _update_demo(ht: float) -> void:
+	var bar := BeatClock.bar_at(ht)
+	if field.plan["demo_bars"].has(bar):
+		if _demo_bar_shown != bar:
+			_demo_bar_shown = bar
+			hud.show_word(String(field.plan["bars"][bar]["word"]))
+	elif _demo_bar_shown != 0:
+		_demo_bar_shown = 0
+		hud.hide_word()
+
+
+# During a demo bar the eye locks onto the thing being demonstrated.
+func _demo_target(ht: float) -> Variant:
+	var bar := BeatClock.bar_at(ht)
+	var kind := String(field.plan["demo_bars"].get(bar, ""))
+	if kind == "plates":
+		return field.nearest_danger_tile(player.position.x, player.position.z, ht)
+	var best: Variant = null
+	var best_d := 1e9
+	for h in field.hazards:
+		if int(h.spec["bar"]) != bar:
+			continue
+		for b in HazardMath.shape_boxes_at(h.spec, ht):
+			var bb: AABB = b
+			var c := bb.get_center()
+			var d := Vector2(c.x - player.position.x, c.z - player.position.z).length()
+			if d < best_d:
+				best_d = d
+				best = c
+	return best
+
+
 func _update_world(ht: float, z_back: float) -> void:
+	_edge_line.position = Vector3(0.0, 0.03, Rules.death_line(z_back))
 	field.update_tiles(ht, z_back)
 	for h in field.hazards:
 		h.update_state(ht)
@@ -216,7 +285,8 @@ func start_now() -> void:
 
 func _die() -> void:
 	state = State.DEAD
-	lives -= 1
+	if Rules.lives_enabled():
+		lives -= 1
 	deaths += 1
 	streak = 0
 	player.dead = true
@@ -224,14 +294,15 @@ func _die() -> void:
 	Input.vibrate_handheld(HAPTIC_DEATH_MS)
 	BeatClock.pause()
 	rig.shake()
-	_freeze = DEATH_FREEZE_S
+	_freeze = DEATH_FREEZE_LIVES_S if Rules.lives_enabled() else DEATH_FREEZE_S
+	Progress.record_best(Rules.LEVEL, BeatClock.song_time())
 
 
 func _rewind() -> void:
 	var t := 0.0
 	var x := 0.0
 	var z := START_Z
-	if lives <= 0:
+	if Rules.lives_enabled() and lives <= 0:
 		# Out of lives: the loop resets to the very start, notes and all.
 		lives = LIVES
 		checkpoint = -1
@@ -257,6 +328,9 @@ func _win() -> void:
 	player.move_dir = Vector2.ZERO
 	Input.vibrate_handheld(HAPTIC_WIN_MS)
 	var secs := (Time.get_ticks_msec() - _run_started_ms) / 1000.0
+	hud.fill = 1.0
+	Progress.record_best(Rules.LEVEL, BeatClock.duration)
+	hud.best = 1.0
 	var time_bonus := maxi(0, 300 - int(maxf(0.0, secs - BeatClock.duration)))
 	status.text = "GOAL\nnotes %d   ·   combo x%d   ·   deaths %d\nscore %d  (+%d time bonus)   ·   %.1f s" % [
 		notes, mini(maxi(streak, 1), COMBO_CAP), deaths, score + time_bonus, time_bonus, secs]

@@ -69,7 +69,7 @@ static func gate_opening_x(spec: Dictionary, t: float) -> float:
 # as safe when it fits EITHER opening: the jump can never catch a player
 # who was already in the old opening.
 static func gate_crossed(spec: Dictionary, prev: Vector3, pos: Vector3, half_w: float, t_prev: float, t: float) -> bool:
-	if not BeatClock.hazards_armed_at(t):
+	if not BeatClock.hazards_armed_at(t) or bool(spec.get("demo", false)):
 		return false
 	var z := float(spec["z"])
 	var a := prev.z - z
@@ -120,10 +120,17 @@ static func _slam_curve(dt: float) -> float:
 	return SLAM_HOVER
 
 
-# World-space boxes that kill at time t. Empty while hazards are inert.
+# World-space boxes that kill at time t. Empty while hazards are inert,
+# and always empty for a demo hazard (it shows, it never kills).
 static func boxes_at(spec: Dictionary, t: float) -> Array:
-	if not BeatClock.hazards_armed_at(t):
+	if not BeatClock.hazards_armed_at(t) or bool(spec.get("demo", false)):
 		return []
+	return shape_boxes_at(spec, t)
+
+
+# The hazard's boxes regardless of arming / demo state (for visuals and
+# the eye).
+static func shape_boxes_at(spec: Dictionary, t: float) -> Array:
 	var x := float(spec["x"])
 	var z := float(spec["z"])
 	var hw := Rules.half_width()

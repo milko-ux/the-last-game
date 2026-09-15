@@ -44,6 +44,10 @@ var standard_cleared := false
 # Which tier the player is currently playing.
 var selected: Diff = Diff.STANDARD
 
+# Phase R: furthest song time reached per level ("best" marker on the
+# progress bar). Progression only, no personal data.
+var best_song_time := {}
+
 
 func _ready() -> void:
 	load_progress()
@@ -79,12 +83,23 @@ func mark_cleared(d: Diff) -> void:
 		save_progress()
 
 
+func best_for(level: int) -> float:
+	return float(best_song_time.get(str(level), 0.0))
+
+
+# Records a new furthest point for a level and saves if it improved.
+func record_best(level: int, song_time: float) -> void:
+	if song_time > best_for(level):
+		best_song_time[str(level)] = song_time
+		save_progress()
+
+
 func save_progress() -> void:
 	var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if f == null:
 		push_warning("Could not write %s" % SAVE_PATH)
 		return
-	f.store_string(JSON.stringify({"standard_cleared": standard_cleared}))
+	f.store_string(JSON.stringify({"standard_cleared": standard_cleared, "best_song_time": best_song_time}))
 	f.close()
 
 
@@ -98,3 +113,6 @@ func load_progress() -> void:
 	f.close()
 	if parsed is Dictionary:
 		standard_cleared = bool(parsed.get("standard_cleared", false))
+		var b = parsed.get("best_song_time", {})
+		if b is Dictionary:
+			best_song_time = b

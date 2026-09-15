@@ -26,6 +26,10 @@ const STICK_DEADZONE := 10.0
 const JUMP_BTN_RADIUS := 62.0
 const CTRL_MARGIN := Vector2(125.0, 118.0)
 
+# The Phase R prototype reuses this layer for its touch controls only
+# and draws its own HUD; it turns the text HUD off here. Default on.
+var show_hud := true
+
 # --- Status shown in the HUD, pushed in by main.gd ---
 var level_index := 0
 var level_count := 1
@@ -363,7 +367,8 @@ func _draw() -> void:
 		_draw_results(screen, font)
 		return
 
-	_draw_hud(screen, font)
+	if show_hud:
+		_draw_hud(screen, font)
 	_draw_touch_controls(screen, font)
 
 

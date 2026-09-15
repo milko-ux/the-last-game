@@ -36,13 +36,21 @@ static func cyan() -> StandardMaterial3D:
 # Walls (sweepers, gates): see-through so a wall between the camera and
 # the player can never hide the player or the floor behind it.
 static func magenta_wall() -> StandardMaterial3D:
-	var key := "wall"
+	return _wall("wall", Palette.HAZ, 0.55)
+
+
+# Demo (non-lethal) wall: the warning colour.
+static func magenta_wall_dim() -> StandardMaterial3D:
+	return _wall("wall_dim", Palette.HAZ.darkened(0.62), 0.5)
+
+
+static func _wall(key: String, c: Color, a: float) -> StandardMaterial3D:
 	if not _cache.has(key):
 		var m := StandardMaterial3D.new()
 		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		m.cull_mode = BaseMaterial3D.CULL_DISABLED
-		m.albedo_color = Color(Palette.HAZ.r, Palette.HAZ.g, Palette.HAZ.b, 0.55)
+		m.albedo_color = Color(c.r, c.g, c.b, a)
 		_cache[key] = m
 	return _cache[key]
 

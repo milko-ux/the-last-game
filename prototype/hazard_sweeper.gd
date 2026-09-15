@@ -12,8 +12,9 @@ var _right: MeshInstance3D
 
 
 func _build() -> void:
-	_left = _box_mesh(Vector3(1.0, HazardMath.WALL_H, HazardMath.WALL_D), Mats.magenta_wall())
-	_right = _box_mesh(Vector3(1.0, HazardMath.WALL_H, HazardMath.WALL_D), Mats.magenta_wall())
+	var mat := Mats.magenta_wall_dim() if bool(spec.get("demo", false)) else Mats.magenta_wall()
+	_left = _box_mesh(Vector3(1.0, HazardMath.WALL_H, HazardMath.WALL_D), mat)
+	_right = _box_mesh(Vector3(1.0, HazardMath.WALL_H, HazardMath.WALL_D), mat)
 
 
 func _pose(t: float) -> void:

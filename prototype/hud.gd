@@ -1,0 +1,89 @@
+extends Node2D
+# ============================================================
+# PHASE R HUD — the progress bar and the one-word demo label, in the
+# same frosted-glass language as the touch controls (ui/ui.gd's
+# draw_glass_disc), drawn here so ui.gd stays untouched.
+#
+# Progress bar (addendum 2): fill = song_time / duration, ticks at
+# checkpoint bars, a "best" marker at the furthest point reached
+# (persisted per level in Progress). On death the fill jumps back to
+# the checkpoint; the best marker stays — that gap is the retry hook.
+# ============================================================
+
+const BAR_H := 6.0
+const BAR_Y := 10.0
+const MARGIN := 18.0
+
+var fill := 0.0             # 0..1
+var best := 0.0             # 0..1
+var ticks: Array = []       # 0..1 positions
+var word := ""
+var word_alpha := 0.0
+
+
+func _process(delta: float) -> void:
+	if word_alpha > 0.0 and word == "":
+		word_alpha = maxf(0.0, word_alpha - delta * 2.5)
+	queue_redraw()
+
+
+func show_word(w: String) -> void:
+	word = w
+	word_alpha = 1.0
+
+
+func hide_word() -> void:
+	word = ""
+
+
+func _draw() -> void:
+	var screen := get_viewport_rect().size
+	var font := ThemeDB.fallback_font
+	var x0 := MARGIN
+	var w := screen.x - MARGIN * 2.0
+	var rect := Rect2(Vector2(x0, BAR_Y), Vector2(w, BAR_H))
+
+	# glass trough
+	draw_rect(Rect2(rect.position - Vector2(2, 2), rect.size + Vector2(4, 4)), Color(1, 1, 1, 0.05), true)
+	draw_rect(rect, Color(1, 1, 1, 0.07), true)
+	draw_rect(rect, Color(1, 1, 1, 0.22), false, 1.0)
+	draw_line(rect.position + Vector2(1, 0), rect.position + Vector2(w - 1, 0), Color(1, 1, 1, 0.35), 1.0)
+
+	# fill (cyan = where you are)
+	var fw := w * clampf(fill, 0.0, 1.0)
+	if fw > 0.0:
+		draw_rect(Rect2(rect.position, Vector2(fw, BAR_H)), Color(Palette.EDGE.r, Palette.EDGE.g, Palette.EDGE.b, 0.55), true)
+		draw_line(rect.position + Vector2(fw, -1), rect.position + Vector2(fw, BAR_H + 1), Palette.EDGE, 1.5)
+
+	# checkpoint ticks (amber)
+	for tpos in ticks:
+		var tx := x0 + w * float(tpos)
+		draw_line(Vector2(tx, BAR_Y - 3), Vector2(tx, BAR_Y + BAR_H + 3),
+			Color(Palette.GOAL.r, Palette.GOAL.g, Palette.GOAL.b, 0.85), 1.5)
+
+	# best marker (white)
+	if best > 0.001:
+		var bx := x0 + w * clampf(best, 0.0, 1.0)
+		draw_line(Vector2(bx, BAR_Y - 4), Vector2(bx, BAR_Y + BAR_H + 4), Color(1, 1, 1, 0.9), 2.0)
+
+	# demo word: a glass pill below the bar
+	if word_alpha > 0.0 and (word != "" or word_alpha > 0.0):
+		var label := word if word != "" else _last_word
+		if label != "":
+			var size := 26
+			var tw: float = font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
+			var pw := tw + 56.0
+			var ph := 44.0
+			var c := Vector2(screen.x * 0.5, BAR_Y + BAR_H + 46.0)
+			var prect := Rect2(c - Vector2(pw * 0.5, ph * 0.5), Vector2(pw, ph))
+			var a := word_alpha
+			draw_rect(Rect2(prect.position - Vector2(3, 3), prect.size + Vector2(6, 6)), Color(Palette.HAZ.r, Palette.HAZ.g, Palette.HAZ.b, 0.06 * a), true)
+			draw_rect(prect, Color(1, 1, 1, 0.06 * a), true)
+			draw_rect(prect, Color(1, 1, 1, 0.28 * a), false, 1.5)
+			draw_line(prect.position + Vector2(6, 1), prect.position + Vector2(pw - 6, 1), Color(1, 1, 1, 0.42 * a), 1.5)
+			draw_string(font, c + Vector2(-tw * 0.5, size * 0.36), label, HORIZONTAL_ALIGNMENT_LEFT, -1, size,
+				Color(1, 1, 1, 0.92 * a))
+	if word != "":
+		_last_word = word
+
+var _last_word := ""

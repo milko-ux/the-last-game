@@ -11,8 +11,10 @@ extends Node3D
 
 const Rules := preload("res://prototype/rules.gd")
 
-const OFFSET := Vector3(0.0, 12.0, -11.0)
-const FOV := 60.0
+# Addendum 2: high and back, ~59 degrees down, narrow FOV so it reads
+# like the concept art (docs/concept/field_monolith.png) not a fisheye.
+const OFFSET := Vector3(0.0, 17.0, -10.0)
+const FOV := 50.0
 const PUNCH := 0.02
 const SHAKE_S := 0.35
 const SHAKE_AMOUNT := 0.15

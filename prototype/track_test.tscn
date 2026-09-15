@@ -1,4 +1,4 @@
-[gd_scene load_steps=8 format=3]
+[gd_scene load_steps=9 format=3]
 
 [ext_resource type="Script" path="res://prototype/track_test.gd" id="1_test"]
 [ext_resource type="Script" path="res://prototype/field.gd" id="2_field"]
@@ -6,6 +6,7 @@
 [ext_resource type="Script" path="res://prototype/camera_rig.gd" id="4_rig"]
 [ext_resource type="Script" path="res://ui/ui.gd" id="5_ui"]
 [ext_resource type="AudioStream" path="res://assets/audio/fuffens_instrumental_vers.mp3" id="6_music"]
+[ext_resource type="Script" path="res://prototype/hud.gd" id="7_hud"]
 
 [sub_resource type="Environment" id="Environment_fog"]
 background_mode = 1
@@ -40,8 +41,8 @@ script = ExtResource("2_field")
 script = ExtResource("4_rig")
 
 [node name="Camera3D" type="Camera3D" parent="CameraRig"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 12, -11)
-fov = 60.0
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 17, -10)
+fov = 50.0
 
 [node name="UI" type="CanvasLayer" parent="."]
 
@@ -52,6 +53,9 @@ max_length = 16
 
 [node name="Screen" type="Node2D" parent="UI"]
 script = ExtResource("5_ui")
+
+[node name="Hud" type="Node2D" parent="UI"]
+script = ExtResource("7_hud")
 
 [node name="Status" type="Label" parent="UI"]
 anchors_preset = 5
@@ -73,9 +77,9 @@ anchors_preset = 5
 anchor_left = 0.5
 anchor_right = 0.5
 offset_left = -200.0
-offset_top = 14.0
+offset_top = 20.0
 offset_right = 200.0
-offset_bottom = 40.0
+offset_bottom = 46.0
 grow_horizontal = 2
 theme_override_colors/font_color = Color(1, 0.823529, 0.239216, 0.9)
 theme_override_font_sizes/font_size = 18

@@ -186,18 +186,23 @@ func beat_phase_at(t: float) -> float:
 	var i := beat_at(t)
 	if beats.is_empty():
 		return 0.0
-	if i < 0:
-		return fposmod((t - beats[0]) / beat_interval, 1.0)
+	if i < first_bar_beat:
+		var anchor: float = downbeats[0] if not downbeats.is_empty() else beats[0]
+		return fposmod((t - anchor) / beat_interval, 1.0)
 	if i >= beats.size() - 1:
 		return clampf((t - beats[i]) / beat_interval, 0.0, 1.0)
 	return clampf((t - beats[i]) / (beats[i + 1] - beats[i]), 0.0, 1.0)
 
 
-# Which beat of the bar (0..3) time t falls in. -1 before the first downbeat.
+# Which beat of the bar (0..3) time t falls in. Before the first downbeat
+# the grid is extrapolated backwards at the beat interval, so the intro
+# rehearsal runs on the same grid the song will use.
 func beat_in_bar_at(t: float) -> int:
 	var i := beat_at(t)
 	if i < first_bar_beat:
-		return -1
+		if downbeats.is_empty():
+			return 0
+		return posmod(int(floor((t - downbeats[0]) / beat_interval)), 4)
 	return (i - first_bar_beat) % 4
 
 
