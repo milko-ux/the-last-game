@@ -167,3 +167,18 @@ dominant band. Checkpoints sit on the first breather bar of a section.
 `assets/audio/fuffens_beatmap.json` + `assets/audio/fuffens_instrumental_vers.mp3`.
 Placement is generated from the JSON, never hand-authored. A different song's
 beatmap gives a different level with no code changes.
+
+## Known bug — fix in the next change (found 2026-09-16, not fixed yet)
+
+**The back edge kills during the 16-second intro.** Level 1's song has ~16.6 s
+before bar 1, and hazards are unarmed until then — but the death line behind
+the window is live from t=0. A player who has not touched the controls yet
+stands still, the window rolls past them, and they die about 1.5 s in, over and
+over, before the first downbeat ever plays. (Seen while driving the scene from
+the editor: the run rewound to t≈0 every 1–1.5 s with no input.)
+
+Intended fix: during the intro (before `BeatClock.bar_start(1)`) the back edge
+must not kill. Instead nudge the player forward with the window so an idle
+first-time player survives until the first downbeat. Keep `Rules.death_line()`
+as the single decider; add the intro exemption there so the validator and the
+bots see the same rule.
