@@ -1,9 +1,11 @@
 extends Node3D
 # ============================================================
-# CAMERA RIG — follows the WINDOW, not the player. Sits high and
-# back from the window centre looking at it, so the whole field
-# width and about two bars ahead are in frame, and the player is
-# seen committing to a route inside it.
+# CAMERA RIG — follows the WINDOW, not the player. High, back and
+# to one side of the window centre, looking at it, so the whole
+# field width and about two bars ahead are in frame and the field
+# is seen OBLIQUELY, as in docs/concept/field_monolith.png (addendum
+# 4 section 1): the near edge runs diagonally across the lower part
+# of the screen, not horizontally.
 #
 # z is time, so the rig never lags. The only "juice" is a 2 % FOV
 # punch on each downbeat, there so Milko can feel the beat clock.
@@ -11,10 +13,20 @@ extends Node3D
 
 const Rules := preload("res://prototype/rules.gd")
 
-# Addendum 2: high and back, ~59 degrees down, narrow FOV so it reads
-# like the concept art (docs/concept/field_monolith.png) not a fisheye.
-const OFFSET := Vector3(0.0, 17.0, -10.0)
-const FOV := 50.0
+# The reference angle (addendum 4 section 1). Yaw is measured from the
+# field axis, positive = the camera sits to the viewer's RIGHT of the
+# axis (world -x). Both constants are meant to be flipped for the
+# morning playtest: CAMERA_YAW_DEG = 0.0 gives the old straight view.
+const CAMERA_YAW_DEG := 24.0
+const CAMERA_PITCH_DEG := 54.0
+# Distance from the look-at point: at 2400x1080 the full 18-unit width
+# and two bars ahead stay on screen with margin (checked by projection).
+const CAMERA_DISTANCE := 26.0
+const FOV := 48.0
+# false: joystick up = down the field regardless of the yaw (world-
+# relative). true: joystick up = away from the camera.
+const INPUT_CAMERA_RELATIVE := false
+
 const PUNCH := 0.02
 const SHAKE_S := 0.35
 const SHAKE_AMOUNT := 0.15
@@ -45,6 +57,26 @@ func set_window(z_back: float) -> void:
 	position = Vector3(0.0, 0.0, z_back + Rules.WINDOW_DEPTH * 0.5)
 
 
+# The camera's offset from the look-at point for the reference angle.
+static func camera_offset() -> Vector3:
+	var yaw := deg_to_rad(CAMERA_YAW_DEG)
+	var pitch := deg_to_rad(CAMERA_PITCH_DEG)
+	var flat := CAMERA_DISTANCE * cos(pitch)
+	return Vector3(-flat * sin(yaw), CAMERA_DISTANCE * sin(pitch), -flat * cos(yaw))
+
+
+# (screen-right, forward) as the joystick gives it -> the same pair in
+# the world frame the player uses (screen-right = world -x when the
+# camera looks straight down +z). Only used when INPUT_CAMERA_RELATIVE.
+static func screen_to_world_dir(v: Vector2) -> Vector2:
+	var yaw := deg_to_rad(CAMERA_YAW_DEG)
+	# Camera forward on the ground plane, and its right-hand vector.
+	var f := Vector2(sin(yaw), cos(yaw))          # (x, z)
+	var r := Vector2(-f.y, f.x)                   # screen-right in world (x, z)
+	var w := r * v.x + f * v.y                    # world (x, z)
+	return Vector2(-w.x, w.y)                     # player: x = screen-right * -1, y = +z
+
+
 func _process(delta: float) -> void:
 	if _punch > 0.0:
 		_punch = maxf(0.0, _punch - delta / BeatClock.beat_interval)
@@ -55,5 +87,5 @@ func _process(delta: float) -> void:
 		_shake_t -= delta
 		var s := SHAKE_AMOUNT * (_shake_t / SHAKE_S)
 		off = Vector3(randf_range(-s, s), randf_range(-s, s), 0.0)
-	cam.position = OFFSET + off
+	cam.position = camera_offset() + off
 	cam.look_at(global_position, Vector3.UP)

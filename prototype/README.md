@@ -9,7 +9,7 @@ in the commits on `phase-r-prototype`.
   sweepers, orbiters, plates, per-level knobs) plus the intro-carry fix
   were committed first so every section below builds on a clean commit.
 - **0. Intro carry:** DONE — validator 0 deaths; human bot 20 seeds: see the table below.
-- **1. Camera:** pending
+- **1. Camera:** DONE — `camera_rig.gd`: yaw 24° right of the field axis, pitch 54°, distance 26, FOV 48 (`CAMERA_YAW_DEG`, `CAMERA_PITCH_DEG`, `CAMERA_DISTANCE`, `FOV`); input stays world-relative (`INPUT_CAMERA_RELATIVE := false`, flip to test). Fog moved out to 34-58 for the longer camera distance. Screenshot `docs/screenshots/a4-camera-bar1.png` (taken with the new `tools/shot.gd`, since the editor MCP was not connected). Validator bot: see below.
 - **2. Pacing:** pending
 - **3. In-level ramp:** pending
 - **4. Orbiters:** pending

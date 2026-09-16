@@ -247,12 +247,17 @@ func _nearest_danger(ht: float) -> Variant:
 
 # Joystick / keys -> (screen-right, forward). Past the deadzone the
 # normalised direction is used at full speed, the 2D game's rule.
+# Input is WORLD-relative by default (joystick up = down the field
+# whatever the camera's yaw); CameraRig.INPUT_CAMERA_RELATIVE flips it.
 func _move_input() -> Vector2:
 	var v := Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")
 	if ui.stick_touch_id != -1:
 		var drag: Vector2 = ui.stick_current - ui.stick_origin
 		v = drag.normalized() if drag.length() > ui.STICK_DEADZONE else Vector2.ZERO
-	return Vector2(v.x, -v.y)
+	var dir := Vector2(v.x, -v.y)
+	if rig.INPUT_CAMERA_RELATIVE:
+		dir = rig.screen_to_world_dir(dir)
+	return dir
 
 
 func _on_jump() -> void:

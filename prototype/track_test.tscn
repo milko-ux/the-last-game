@@ -20,8 +20,8 @@ fog_light_color = Color(0.027451, 0.027451, 0.047059, 1)
 fog_light_energy = 1.0
 fog_density = 1.0
 fog_depth_curve = 1.0
-fog_depth_begin = 26.0
-fog_depth_end = 45.0
+fog_depth_begin = 34.0
+fog_depth_end = 58.0
 
 [node name="TrackTest" type="Node3D"]
 script = ExtResource("1_test")
@@ -41,8 +41,8 @@ script = ExtResource("2_field")
 script = ExtResource("4_rig")
 
 [node name="Camera3D" type="Camera3D" parent="CameraRig"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 17, -10)
-fov = 50.0
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.2, 21, -14)
+fov = 48.0
 
 [node name="UI" type="CanvasLayer" parent="."]
 
