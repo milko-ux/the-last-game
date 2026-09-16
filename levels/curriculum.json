@@ -171,7 +171,7 @@
   {
    "level": 6,
    "hazard_rate": "beat",
-   "plate_coverage": 0.5,
+   "plate_coverage": 0.4,
    "plate_patterns": [
     "row",
     "block",
@@ -194,7 +194,8 @@
    ],
    "song_offset_s": 10.0,
    "demo_bars": true,
-   "structure": "mixed"
+   "structure": "mixed",
+   "_note": "addendum 4 section 7: plate_coverage reduced 0.5 -> 0.4 after the first human-bot batch (all 20 seeds hit the cap); sweepers (gap 3) caused 193 of 313 deaths, plates 4 \u2014 see prototype/README.md"
   },
   {
    "level": 7,

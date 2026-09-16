@@ -106,7 +106,15 @@ static func sweep_gap() -> float:
 	return float(level()["sweeper_gap"])
 
 
+# Bots set this to 0: they measure the level, not the lives system, so a
+# bot run rewinds to the checkpoint like level 1 does instead of ending
+# at the third death. -1 = use the level's own value.
+static var LIVES_OVERRIDE := -1
+
+
 static func lives() -> int:
+	if LIVES_OVERRIDE >= 0:
+		return LIVES_OVERRIDE
 	return int(level().get("lives", 0))
 
 

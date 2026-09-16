@@ -15,7 +15,7 @@ in the commits on `phase-r-prototype`.
 - **4. Orbiters:** DONE — wave 4 carries an orbiter on 7 of its 8 bars (the skipped bars are chosen up front, never the demo); pairs from wave 5 on level 1, free from level 2 (`orbiter_pairs`); `orbiter_period` half_bar for levels 4+ (`speed` 2 in the spec). Orbiters now revolve once per BAR at every hazard rate (they used to follow the level's period, i.e. 4x too fast at beat rate).
 - **5. Score:** DONE — `track_test.gd`: distance_points = floor(progress × 1000), death_penalty = deaths × 40, note_bonus = notes × 15 × combo_max, score = max(0, …); live in the HUD, on the goal label (distance %, deaths, notes, score) and on the death screen; best score per level persisted in `Progress.best_score` (`progress.gd`). Not wired to Talo.
 - **6. Levels 2-6 + level select:** DONE — `levels/curriculum.json` (30 levels; 1-6 hand-set from the addendum table, 7-30 interpolated), read by `Rules` (`Rules.LEVEL` is now a variable). Levels 2+ use the mixed generator (five waves, 2-bar breathers, incompatible pairs enforced, a demo bar for each pattern new to the level while `demo_bars` is on). Lives from level 2 (3), out of lives = minimal death screen (score, died at N %, retry from level 1). `prototype/level_select.tscn` is the Phase R main scene: 1-6 playable once the previous goal is reached, 7-30 shown locked. Screenshot `docs/screenshots/a4-level-select.png`. Walls at fast rates: sweepers cross once per bar at every rate and gates jump at most once per half bar — the validator proved the faster versions unwinnable.
-- **7. Bots:** pending
+- **7. Bots:** IN PROGRESS — validator bot: levels 1, 2, 3, 6 = 0 deaths, goal reached (4 and 5 running). Human bot, level 1, first batch on the addendum-4 build: every seed hit the 9-death cap, all back-edge, mostly while staged behind the gates of bars 27-31 and 11-16 — the bot's "arrived" test (0.1 units) was smaller than one frame of movement (0.29), so it jittered at a staging tile for seconds without re-planning while the line closed in, and a held target was never dropped when the line pushed. One fix pass (`tools/autoplay.gd`), batches re-run: tables below.
 - **8. Handoff:** pending
 
 
@@ -31,6 +31,30 @@ Web build for the phone:
 tools/package_web.sh "Web (Phase R)"     # exports to build/phase-r/ and zips it
 tools/serve.py tls build/phase-r         # https://<LAN-IP>:8443, accept the cert once
 ```
+
+### Bot tables (addendum 4 section 7, night of 2026-09-16)
+
+Validator bot (must be 0 deaths): levels 1, 2, 3, 4, 5, 6 — **0 deaths, goal reached on all six.**
+
+Human bot, 20 seeds each, bots play without lives (rewind to checkpoint on every death):
+
+| Level | median deaths | mean | reach goal | goal within 8 | deaths by kind | verdict |
+|---|---|---|---|---|---|---|
+| 1 (target: median ≤ 5, 90 % goal within 8) | **2** | 1.9 | 20/20 | **20/20 (100 %)** | sweeper 27, back edge 9, orbiter 1 | PASS |
+| 3 (target: median ≤ 10) | **4** | 5.4 | 17/20 | 16/20 | gate 44, sweeper 37, back edge 14, volley 10, orbiter 3 | PASS |
+| 6, first run (target: median ≤ 16, ≥ 70 % goal), cap 20 | **20 (cap)** | 20 | 0/20 | 0/20 | sweeper 193, back edge 96, gate 17, plate 4, orbiter 3 | FAIL |
+| 6, plate_coverage 0.5 → 0.4 (the addendum's first remedy) | see below | | | | | |
+
+Per-seed deaths, level 1: 3 3 0 2 3 2 1 2 2 0 2 3 0 2 4 0 0 1 6 1. Level 3: 3 4 2 2 3 2 11 8 4 3 13 13 6 13 0 7 6 4 3 1.
+
+**Reading level 6:** the failure is the sweeper, not the plates — 193 of 313
+deaths are sweeper walls, 4 are plates. Level 6 has `sweeper_gap` 3 (level 1:
+5, levels 2-4: 4) and the bot plans walls with a 0.55 half-width, so a
+3-unit gap leaves 1.9 units of slack at 7.3 units/s. The addendum's remedy
+order (plate_coverage first, then types_per_bar) does not touch the killer;
+the coverage step was applied once as prescribed and re-run (row above).
+The decision that would actually move the number — `sweeper_gap` 4 on
+levels 5-6 — is Milko's to make; it is one number in `levels/curriculum.json`.
 
 ## What this is
 
@@ -165,8 +189,13 @@ dominant band. Checkpoints sit on the first breather bar of a section.
   ```
   godot --headless --path . -s tools/autoplay.gd -- bars=99 mode=validator
   godot --headless --path . -s tools/autoplay.gd -- bars=99 mode=human seed=3
+  godot --headless --path . -s tools/autoplay.gd -- bars=99 mode=human level=6 seed=3 maxdeaths=20
   godot --headless --path . -s tools/autoplay.gd -- bars=5 mode=naive
   ```
+
+  `level=N` picks the level (levels/curriculum.json). Bots always play
+  WITHOUT lives (`Rules.LIVES_OVERRIDE = 0`): they measure the level, so
+  a run rewinds to the checkpoint on every death like level 1 does.
 
   `validator` follows the validator's plan and must finish with `deaths=0`;
   any death is a place where the runtime and the rules disagree.
@@ -197,6 +226,10 @@ dominant band. Checkpoints sit on the first breather bar of a section.
 | `player3d.gd/.tscn` | white capsule with a black eye that looks at the nearest coming danger; free movement + jump |
 | `camera_rig.gd` | follows the window centre from (0, 17, -10), FOV 50, punch on downbeats |
 | `track_test.gd/.tscn` | the run scene: lives, deaths, notes/score, checkpoints, death/goal |
+| `level_select.gd/.tscn` | the Phase R main scene: glass grid of the 30 levels, 1-6 playable, unlock = previous goal reached |
+| `../levels/curriculum.json` | one entry per level 1-30: the knobs (`Rules.level()`), see its `_readme` |
+| `../tools/plan_stats.gd` | generate + validate levels headlessly in seconds: `godot --headless --path . -s tools/plan_stats.gd -- levels=1,2,3` (`PLAN_BARS=1` prints every bar, `FAIR_DEBUG=1` explains a fairness failure) |
+| `../tools/shot.gd` | framing screenshot: `godot --path . --resolution 2400x1080 -s tools/shot.gd -- out=docs/screenshots/x.png bar=1 level=1` (or `scene=select`) |
 | `flat_mats.gd` | the handful of unlit materials |
 
 ## Tuning knobs

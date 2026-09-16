@@ -76,7 +76,7 @@ func _process(_delta: float) -> bool:
 	if test.deaths != last_deaths:
 		last_deaths = test.deaths
 		death_bars.append(clock.current_bar())
-	if test.state == test.State.RUN and clock.song_time() > 3.0:
+	if test.state == test.State.RUN and clock.song_time() > clock.start_offset + 3.0:
 		min_fps = mini(min_fps, int(Engine.get_frames_per_second()))
 	var done: bool = clock.current_bar() > max_bar or test.state == test.State.WON or test.state == test.State.GAMEOVER \
 		or test.deaths >= max_deaths or (Time.get_ticks_msec() - t_wall0) > 900000
@@ -107,6 +107,7 @@ func _setup() -> void:
 	Engine.max_fps = 30
 	Rules = load("res://prototype/rules.gd")
 	Rules.LEVEL = level
+	Rules.LIVES_OVERRIDE = 0   # bots measure the level, never the lives
 	HazardMath = load("res://prototype/hazard_math.gd")
 	clock = root.get_node_or_null("BeatClock")
 	if clock == null:
@@ -249,11 +250,16 @@ func _human_target_for(scene: Node) -> Variant:
 		_human_target = null
 		return Vector2(here.x, z_front)
 
-	# 1. A walk under way: keep it while it still works.
+	# 1. A walk under way: keep it while it still works. "Arrived" is a
+	#    third of a unit: one frame at full speed moves 0.29, so a tighter
+	#    test made the bot jitter around a tile for seconds without ever
+	#    re-planning while the death line closed in (addendum-4 batch).
+	#    A target that is not ahead is dropped the moment the line pushes.
 	if _human_target != null:
 		var tgt: Vector2 = _human_target
 		var d := here.distance_to(tgt)
-		if d < 0.1 or tgt.y < line or tgt.y > z_front:
+		var line_pushing: bool = here.y < line + HUMAN_COMFORT - 1.0
+		if d < 0.35 or tgt.y < line or tgt.y > z_front or (line_pushing and tgt.y <= here.y + 0.5):
 			_human_target = null
 		elif not _human_walk_ok(field, here, tgt, t, HUMAN_MARGIN_GO) \
 				or not _human_landing_ok(field, tgt, t + d / speed, HUMAN_MARGIN_GO):
