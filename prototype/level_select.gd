@@ -1,0 +1,114 @@
+extends Node2D
+# ============================================================
+# LEVEL SELECT (addendum 4 section 6) — a plain glass list of the
+# 30 levels. Levels 1-6 are playable, 7-30 are shown locked (their
+# data exists in levels/curriculum.json but is rough). A level unlocks
+# when the goal of the previous one is reached (Progress).
+#
+# Same frosted-glass language as the touch controls (ui/ui.gd), drawn
+# here so ui.gd stays untouched. Tap a level to play it.
+# ============================================================
+
+const Rules := preload("res://prototype/rules.gd")
+const RUN_SCENE := "res://prototype/track_test.tscn"
+const PLAYABLE_MAX := 6
+const COLS := 6
+const ROWS := 5
+
+var _rects: Array = []      # [Rect2] per level, filled in _draw
+var _pressed := -1
+var _flash := 0.0
+
+
+func _ready() -> void:
+	queue_redraw()
+
+
+func _process(delta: float) -> void:
+	if _flash > 0.0:
+		_flash -= delta
+	queue_redraw()
+
+
+func _input(event: InputEvent) -> void:
+	var pos: Variant = null
+	if event is InputEventScreenTouch and event.pressed:
+		pos = event.position
+	elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		pos = event.position
+	if pos == null:
+		return
+	for i in _rects.size():
+		if _rects[i].has_point(pos):
+			_tap(i + 1)
+			return
+
+
+func _tap(level: int) -> void:
+	if not _playable(level):
+		_pressed = level
+		_flash = 0.5
+		return
+	Rules.LEVEL = level
+	get_tree().change_scene_to_file(RUN_SCENE)
+
+
+func _playable(level: int) -> bool:
+	return level <= PLAYABLE_MAX and Progress.is_level_unlocked(level)
+
+
+func _draw() -> void:
+	var screen := get_viewport_rect().size
+	var font := ThemeDB.fallback_font
+	_rects = []
+
+	_centre(font, "THE LAST GAME", Vector2(screen.x * 0.5, 44), 26, Palette.GOAL)
+	_centre(font, "pick a level  ·  the song is the level", Vector2(screen.x * 0.5, 72), 13,
+		Color(Palette.TEXT.r, Palette.TEXT.g, Palette.TEXT.b, 0.8))
+
+	var margin := 26.0
+	var top := 96.0
+	var gap := 10.0
+	var w: float = (screen.x - margin * 2.0 - gap * (COLS - 1)) / COLS
+	var h: float = minf(64.0, (screen.y - top - 24.0 - gap * (ROWS - 1)) / ROWS)
+	for i in Rules.level_count():
+		var level := i + 1
+		var c := i % COLS
+		var r := i / COLS
+		var rect := Rect2(Vector2(margin + c * (w + gap), top + r * (h + gap)), Vector2(w, h))
+		_rects.append(rect)
+		var playable := _playable(level)
+		var unlocked := Progress.is_level_unlocked(level)
+		var tint: Color = Palette.EDGE if playable else Palette.TEXT
+		var strength := 1.0 if playable else 0.45
+		if _pressed == level and _flash > 0.0:
+			tint = Palette.HAZ
+			strength = 1.0
+		_glass_pill(rect, tint, strength)
+		var label := "%d" % level
+		var col := Color(1, 1, 1, 0.92) if playable else Color(1, 1, 1, 0.35)
+		_centre(font, label, rect.position + Vector2(rect.size.x * 0.5, rect.size.y * 0.5 - 6), 22, col)
+		var sub := ""
+		if not unlocked:
+			sub = "locked"
+		elif level > PLAYABLE_MAX:
+			sub = "soon"
+		else:
+			var best := Progress.best_score_for(level)
+			sub = ("best %d" % best) if best > 0 else ("cleared" if Progress.is_level_cleared(level) else "play")
+		_centre(font, sub, rect.position + Vector2(rect.size.x * 0.5, rect.size.y * 0.5 + 16), 11,
+			Color(col.r, col.g, col.b, col.a * 0.75))
+
+
+func _glass_pill(rect: Rect2, tint: Color, strength: float) -> void:
+	draw_rect(Rect2(rect.position - Vector2(3, 3), rect.size + Vector2(6, 6)), Color(tint.r, tint.g, tint.b, 0.05 * strength), true)
+	draw_rect(rect, Color(1, 1, 1, 0.05 * strength), true)
+	draw_rect(rect, Color(tint.r, tint.g, tint.b, 0.05 * strength), true)
+	draw_rect(rect, Color(1, 1, 1, 0.22 * strength), false, 1.5)
+	draw_rect(rect, Color(tint.r, tint.g, tint.b, 0.30 * strength), false, 1.0)
+	draw_line(rect.position + Vector2(6, 1), rect.position + Vector2(rect.size.x - 6, 1), Color(1, 1, 1, 0.42 * strength), 1.5)
+
+
+func _centre(font, text: String, c: Vector2, size: int, col: Color) -> void:
+	var w: float = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
+	draw_string(font, c - Vector2(w * 0.5, -size * 0.35), text, HORIZONTAL_ALIGNMENT_LEFT, -1, size, col)

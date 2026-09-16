@@ -14,7 +14,7 @@ config/name="THE LAST GAME"
 run/main_scene="res://main.tscn"
 config/features=PackedStringArray("4.7", "Mobile")
 config/icon="res://icon.svg"
-run/main_scene.phase_r="res://prototype/track_test.tscn"
+run/main_scene.phase_r="res://prototype/level_select.tscn"
 
 [autoload]
 
