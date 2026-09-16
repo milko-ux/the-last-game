@@ -136,6 +136,8 @@ static func validate(plan: Dictionary, clock) -> Dictionary:
 			problems.append("beat %d (bar %d, beat %d): no safe tile in the window" % [i, clock.bar_at(t0), k + 1])
 		elif reachable.is_empty():
 			problems.append("beat %d (bar %d, beat %d): no safe tile reachable from the previous beat" % [i, clock.bar_at(t0), k + 1])
+			if OS.has_environment("FAIR_DEBUG"):
+				_explain(ctx, safe, prev_safe, prev_reach, tp, t0, speed, z_back0, z_back1)
 			for key in safe:
 				reachable[key] = [null, 0.0]
 
@@ -167,6 +169,51 @@ static func validate(plan: Dictionary, clock) -> Dictionary:
 
 	return {"ok": problems.is_empty(), "problems": problems, "path": path,
 		"first_beat": clock.first_bar_beat}
+
+
+# FAIR_DEBUG=1: why nothing was reachable at this beat.
+static func _explain(ctx: Ctx, safe: Dictionary, prev_safe: Dictionary, prev_reach: Dictionary,
+		tp: float, t0: float, speed: float, z_back0: float, z_back1: float) -> void:
+	print("  FAIR_DEBUG beat t0=%.3f tp=%.3f z_back0=%.2f z_back1=%.2f min_z1=%.2f safe=%d prev_reach=%d specs=%s" % [
+		t0, tp, z_back0, z_back1, Rules.min_z(z_back1), safe.size(), prev_reach.size(),
+		str(ctx.specs.map(func(sp): return "%s@%.1f" % [sp["kind"], sp["z"]]))])
+	var shown := 0
+	for key in safe:
+		var b: Vector2 = safe[key]
+		var cands := [key]
+		cands.append_array(_neighbours(key, ctx.clock.bar_count()))
+		for nkey in cands:
+			if not prev_reach.has(nkey):
+				continue
+			var a: Vector2 = prev_safe[nkey]
+			var why := _plan_why(ctx, a, b, tp, tp, t0, speed)
+			print("    to %s (%.1f,%.1f) from %s (%.1f,%.1f): %s" % [str(key), b.x, b.y, str(nkey), a.x, a.y, why])
+			shown += 1
+			if shown > 12:
+				return
+
+
+static func _plan_why(ctx: Ctx, a: Vector2, b: Vector2, t_stand: float, t_leave: float, t_end: float, speed: float) -> String:
+	var t := t_stand
+	while t < t_leave:
+		if _lethal_at(ctx, a, t):
+			return "standing lethal at t=%.3f" % t
+		t += WAIT_DT
+	var dist := a.distance_to(b)
+	if dist > speed * (t_end - t_leave) - 0.15:
+		return "too far (%.2f > %.2f)" % [dist, speed * (t_end - t_leave) - 0.15]
+	var steps := maxi(1, int(ceil(dist / STEP)))
+	for st in steps + 1:
+		var u := float(st) / steps
+		var tt: float = t_leave + dist * u / speed
+		if _lethal_at(ctx, a.lerp(b, u), tt):
+			return "walk lethal at u=%.2f t=%.3f" % [u, tt]
+	t = t_leave + dist / speed
+	while t < t_end:
+		if _lethal_at(ctx, b, t):
+			return "waiting lethal at t=%.3f" % t
+		t += WAIT_DT
+	return "OK?!"
 
 
 # Stand on a from t_stand to t_leave, walk a->b at full speed, wait on b

@@ -1,0 +1,872 @@
+{
+ "_readme": [
+  "Phase R level data (addendum 4 section 6). One entry per level 1-30; the generator (prototype/placement.gd) reads these knobs.",
+  "Levels 1-6 are hand-set from the addendum table; 7-30 are interpolated and rough on purpose.",
+  "hazard_rate: bar | half_bar | beat - how often hazards act. plate_coverage: fraction of a bar's 36 tiles that may be plates.",
+  "plate_patterns: allowed patterns (row, block are level-1 material; checker/column_wave/spiral are beat-rate patterns).",
+  "gate_opening / sweeper_gap: widths in world units (a tile is 2). types_per_bar: hazard types that may share a bar",
+  "(level 1 starts at 1 and reaches types_per_bar_final in wave 5). orbiter_pairs: opposite-spin pair allowed",
+  "(level 1: only from orbiter_pairs_from_wave). orbiter_period: bar | half_bar (the fast variant, levels 4+).",
+  "lives: 0 = no lives (level 1), 3 from level 2. density_curve: multiplier per wave on hazards per bar.",
+  "song_offset_s: playback starts this far into the track (8 s level 1, 10 s later levels).",
+  "demo_bars: true = every new type/pattern gets a demo bar; false from level 7 (everything mixed).",
+  "structure: curriculum = level 1's fixed wave order (addendum 3 section 3); mixed = types mix from the start."
+ ],
+ "incompatible_pairs": [
+  [
+   "sweeper",
+   "gate"
+  ],
+  [
+   "slammer",
+   "volley"
+  ],
+  [
+   "spiral",
+   "sweeper"
+  ],
+  [
+   "column_wave",
+   "gate"
+  ],
+  [
+   "pit",
+   "plates_same_row"
+  ]
+ ],
+ "levels": [
+  {
+   "level": 1,
+   "hazard_rate": "bar",
+   "plate_coverage": 0.12,
+   "plate_patterns": [
+    "row",
+    "block"
+   ],
+   "gate_opening": 5.0,
+   "sweeper_gap": 5.0,
+   "types_per_bar": 1,
+   "types_per_bar_final": 2,
+   "orbiter_pairs": false,
+   "orbiter_pairs_from_wave": 5,
+   "orbiter_period": "bar",
+   "lives": 0,
+   "density_curve": [
+    1.0,
+    1.15,
+    1.3,
+    1.5,
+    1.7
+   ],
+   "song_offset_s": 8.0,
+   "demo_bars": true,
+   "structure": "curriculum"
+  },
+  {
+   "level": 2,
+   "hazard_rate": "half_bar",
+   "plate_coverage": 0.2,
+   "plate_patterns": [
+    "row",
+    "block"
+   ],
+   "gate_opening": 5.0,
+   "sweeper_gap": 4.0,
+   "types_per_bar": 2,
+   "orbiter_pairs": true,
+   "orbiter_period": "bar",
+   "lives": 3,
+   "density_curve": [
+    1.0,
+    1.15,
+    1.3,
+    1.5,
+    1.7
+   ],
+   "song_offset_s": 10.0,
+   "demo_bars": true,
+   "structure": "mixed"
+  },
+  {
+   "level": 3,
+   "hazard_rate": "half_bar",
+   "plate_coverage": 0.3,
+   "plate_patterns": [
+    "row",
+    "block",
+    "checker"
+   ],
+   "gate_opening": 4.0,
+   "sweeper_gap": 4.0,
+   "types_per_bar": 2,
+   "orbiter_pairs": true,
+   "orbiter_period": "bar",
+   "lives": 3,
+   "density_curve": [
+    1.0,
+    1.15,
+    1.3,
+    1.5,
+    1.7
+   ],
+   "song_offset_s": 10.0,
+   "demo_bars": true,
+   "structure": "mixed"
+  },
+  {
+   "level": 4,
+   "hazard_rate": "half_bar",
+   "plate_coverage": 0.4,
+   "plate_patterns": [
+    "row",
+    "block",
+    "checker",
+    "column_wave"
+   ],
+   "gate_opening": 4.0,
+   "sweeper_gap": 4.0,
+   "types_per_bar": 2,
+   "orbiter_pairs": true,
+   "orbiter_period": "half_bar",
+   "lives": 3,
+   "density_curve": [
+    1.0,
+    1.15,
+    1.3,
+    1.5,
+    1.7
+   ],
+   "song_offset_s": 10.0,
+   "demo_bars": true,
+   "structure": "mixed"
+  },
+  {
+   "level": 5,
+   "hazard_rate": "beat",
+   "plate_coverage": 0.45,
+   "plate_patterns": [
+    "row",
+    "block",
+    "checker",
+    "column_wave",
+    "spiral"
+   ],
+   "gate_opening": 4.0,
+   "sweeper_gap": 3.0,
+   "types_per_bar": 2,
+   "orbiter_pairs": true,
+   "orbiter_period": "half_bar",
+   "lives": 3,
+   "density_curve": [
+    1.0,
+    1.15,
+    1.3,
+    1.5,
+    1.7
+   ],
+   "song_offset_s": 10.0,
+   "demo_bars": true,
+   "structure": "mixed"
+  },
+  {
+   "level": 6,
+   "hazard_rate": "beat",
+   "plate_coverage": 0.5,
+   "plate_patterns": [
+    "row",
+    "block",
+    "checker",
+    "column_wave",
+    "spiral"
+   ],
+   "gate_opening": 3.0,
+   "sweeper_gap": 3.0,
+   "types_per_bar": 2,
+   "orbiter_pairs": true,
+   "orbiter_period": "half_bar",
+   "lives": 3,
+   "density_curve": [
+    1.0,
+    1.15,
+    1.3,
+    1.5,
+    1.7
+   ],
+   "song_offset_s": 10.0,
+   "demo_bars": true,
+   "structure": "mixed"
+  },
+  {
+   "level": 7,
+   "hazard_rate": "beat",
+   "plate_coverage": 0.5,
+   "plate_patterns": [
+    "row",
+    "block",
+    "checker",
+    "column_wave",
+    "spiral"
+   ],
+   "gate_opening": 3.0,
+   "sweeper_gap": 3.0,
+   "types_per_bar": 2,
+   "orbiter_pairs": true,
+   "orbiter_period": "half_bar",
+   "lives": 3,
+   "density_curve": [
+    1.0,
+    1.2,
+    1.4,
+    1.6,
+    1.8
+   ],
+   "song_offset_s": 10.0,
+   "demo_bars": false,
+   "structure": "mixed"
+  },
+  {
+   "level": 8,
+   "hazard_rate": "beat",
+   "plate_coverage": 0.509,
+   "plate_patterns": [
+    "row",
+    "block",
+    "checker",
+    "column_wave",
+    "spiral"
+   ],
+   "gate_opening": 3.0,
+   "sweeper_gap": 3.0,
+   "types_per_bar": 2,
+   "orbiter_pairs": true,
+   "orbiter_period": "half_bar",
+   "lives": 3,
+   "density_curve": [
+    1.03,
+    1.23,
+    1.43,
+    1.63,
+    1.83
+   ],
+   "song_offset_s": 10.0,
+   "demo_bars": false,
+   "structure": "mixed"
+  },
+  {
+   "level": 9,
+   "hazard_rate": "beat",
+   "plate_coverage": 0.517,
+   "plate_patterns": [
+    "row",
+    "block",
+    "checker",
+    "column_wave",
+    "spiral"
+   ],
+   "gate_opening": 3.0,
+   "sweeper_gap": 3.0,
+   "types_per_bar": 2,
+   "orbiter_pairs": true,
+   "orbiter_period": "half_bar",
+   "lives": 3,
+   "density_curve": [
+    1.06,
+    1.26,
+    1.46,
+    1.66,
+    1.86
+   ],
+   "song_offset_s": 10.0,
+   "demo_bars": false,
+   "structure": "mixed"
+  },
+  {
+   "level": 10,
+   "hazard_rate": "beat",
+   "plate_coverage": 0.526,
+   "plate_patterns": [
+    "row",
+    "block",
+    "checker",
+    "column_wave",
+    "spiral"
+   ],
+   "gate_opening": 3.0,
+   "sweeper_gap": 3.0,
+   "types_per_bar": 2,
+   "orbiter_pairs": true,
+   "orbiter_period": "half_bar",
+   "lives": 3,
+   "density_curve": [
+    1.09,
+    1.29,
+    1.49,
+    1.69,
+    1.89
+   ],
+   "song_offset_s": 10.0,
+   "demo_bars": false,
+   "structure": "mixed"
+  },
+  {
+   "level": 11,
+   "hazard_rate": "beat",
+   "plate_coverage": 0.535,
+   "plate_patterns": [
+    "row",
+    "block",
+    "checker",
+    "column_wave",
+    "spiral"
+   ],
+   "gate_opening": 3.0,
+   "sweeper_gap": 3.0,
+   "types_per_bar": 2,
+   "orbiter_pairs": true,
+   "orbiter_period": "half_bar",
+   "lives": 3,
+   "density_curve": [
+    1.12,
+    1.32,
+    1.52,
+    1.72,
+    1.92
+   ],
+   "song_offset_s": 10.0,
+   "demo_bars": false,
+   "structure": "mixed"
+  },
+  {
+   "level": 12,
+   "hazard_rate": "beat",
+   "plate_coverage": 0.543,
+   "plate_patterns": [
+    "row",
+    "block",
+    "checker",
+    "column_wave",
+    "spiral"
+   ],
+   "gate_opening": 3.0,
+   "sweeper_gap": 3.0,
+   "types_per_bar": 2,
+   "orbiter_pairs": true,
+   "orbiter_period": "half_bar",
+   "lives": 3,
+   "density_curve": [
+    1.15,
+    1.35,
+    1.55,
+    1.75,
+    1.95
+   ],
+   "song_offset_s": 10.0,
+   "demo_bars": false,
+   "structure": "mixed"
+  },
+  {
+   "level": 13,
+   "hazard_rate": "beat",
+   "plate_coverage": 0.552,
+   "plate_patterns": [
+    "row",
+    "block",
+    "checker",
+    "column_wave",
+    "spiral"
+   ],
+   "gate_opening": 3.0,
+   "sweeper_gap": 3.0,
+   "types_per_bar": 2,
+   "orbiter_pairs": true,
+   "orbiter_period": "half_bar",
+   "lives": 3,
+   "density_curve": [
+    1.18,
+    1.38,
+    1.58,
+    1.78,
+    1.98
+   ],
+   "song_offset_s": 10.0,
+   "demo_bars": false,
+   "structure": "mixed"
+  },
+  {
+   "level": 14,
+   "hazard_rate": "beat",
+   "plate_coverage": 0.561,
+   "plate_patterns": [
+    "row",
+    "block",
+    "checker",
+    "column_wave",
+    "spiral"
+   ],
+   "gate_opening": 3.0,
+   "sweeper_gap": 3.0,
+   "types_per_bar": 2,
+   "orbiter_pairs": true,
+   "orbiter_period": "half_bar",
+   "lives": 3,
+   "density_curve": [
+    1.21,
+    1.41,
+    1.61,
+    1.81,
+    2.01
+   ],
+   "song_offset_s": 10.0,
+   "demo_bars": false,
+   "structure": "mixed"
+  },
+  {
+   "level": 15,
+   "hazard_rate": "beat",
+   "plate_coverage": 0.57,
+   "plate_patterns": [
+    "row",
+    "block",
+    "checker",
+    "column_wave",
+    "spiral"
+   ],
+   "gate_opening": 3.0,
+   "sweeper_gap": 3.0,
+   "types_per_bar": 2,
+   "orbiter_pairs": true,
+   "orbiter_period": "half_bar",
+   "lives": 3,
+   "density_curve": [
+    1.24,
+    1.44,
+    1.64,
+    1.84,
+    2.04
+   ],
+   "song_offset_s": 10.0,
+   "demo_bars": false,
+   "structure": "mixed"
+  },
+  {
+   "level": 16,
+   "hazard_rate": "beat",
+   "plate_coverage": 0.578,
+   "plate_patterns": [
+    "row",
+    "block",
+    "checker",
+    "column_wave",
+    "spiral"
+   ],
+   "gate_opening": 3.0,
+   "sweeper_gap": 3.0,
+   "types_per_bar": 2,
+   "orbiter_pairs": true,
+   "orbiter_period": "half_bar",
+   "lives": 3,
+   "density_curve": [
+    1.27,
+    1.47,
+    1.67,
+    1.87,
+    2.07
+   ],
+   "song_offset_s": 10.0,
+   "demo_bars": false,
+   "structure": "mixed"
+  },
+  {
+   "level": 17,
+   "hazard_rate": "beat",
+   "plate_coverage": 0.587,
+   "plate_patterns": [
+    "row",
+    "block",
+    "checker",
+    "column_wave",
+    "spiral"
+   ],
+   "gate_opening": 3.0,
+   "sweeper_gap": 3.0,
+   "types_per_bar": 2,
+   "orbiter_pairs": true,
+   "orbiter_period": "half_bar",
+   "lives": 3,
+   "density_curve": [
+    1.3,
+    1.5,
+    1.7,
+    1.9,
+    2.1
+   ],
+   "song_offset_s": 10.0,
+   "demo_bars": false,
+   "structure": "mixed"
+  },
+  {
+   "level": 18,
+   "hazard_rate": "beat",
+   "plate_coverage": 0.596,
+   "plate_patterns": [
+    "row",
+    "block",
+    "checker",
+    "column_wave",
+    "spiral"
+   ],
+   "gate_opening": 3.0,
+   "sweeper_gap": 3.0,
+   "types_per_bar": 2,
+   "orbiter_pairs": true,
+   "orbiter_period": "half_bar",
+   "lives": 3,
+   "density_curve": [
+    1.33,
+    1.53,
+    1.73,
+    1.93,
+    2.13
+   ],
+   "song_offset_s": 10.0,
+   "demo_bars": false,
+   "structure": "mixed"
+  },
+  {
+   "level": 19,
+   "hazard_rate": "beat",
+   "plate_coverage": 0.604,
+   "plate_patterns": [
+    "row",
+    "block",
+    "checker",
+    "column_wave",
+    "spiral"
+   ],
+   "gate_opening": 3.0,
+   "sweeper_gap": 3.0,
+   "types_per_bar": 3,
+   "orbiter_pairs": true,
+   "orbiter_period": "half_bar",
+   "lives": 3,
+   "density_curve": [
+    1.37,
+    1.57,
+    1.77,
+    1.97,
+    2.17
+   ],
+   "song_offset_s": 10.0,
+   "demo_bars": false,
+   "structure": "mixed"
+  },
+  {
+   "level": 20,
+   "hazard_rate": "beat",
+   "plate_coverage": 0.613,
+   "plate_patterns": [
+    "row",
+    "block",
+    "checker",
+    "column_wave",
+    "spiral"
+   ],
+   "gate_opening": 3.0,
+   "sweeper_gap": 3.0,
+   "types_per_bar": 3,
+   "orbiter_pairs": true,
+   "orbiter_period": "half_bar",
+   "lives": 3,
+   "density_curve": [
+    1.4,
+    1.6,
+    1.8,
+    2.0,
+    2.2
+   ],
+   "song_offset_s": 10.0,
+   "demo_bars": false,
+   "structure": "mixed"
+  },
+  {
+   "level": 21,
+   "hazard_rate": "beat",
+   "plate_coverage": 0.622,
+   "plate_patterns": [
+    "row",
+    "block",
+    "checker",
+    "column_wave",
+    "spiral"
+   ],
+   "gate_opening": 3.0,
+   "sweeper_gap": 3.0,
+   "types_per_bar": 3,
+   "orbiter_pairs": true,
+   "orbiter_period": "half_bar",
+   "lives": 3,
+   "density_curve": [
+    1.43,
+    1.63,
+    1.83,
+    2.03,
+    2.23
+   ],
+   "song_offset_s": 10.0,
+   "demo_bars": false,
+   "structure": "mixed"
+  },
+  {
+   "level": 22,
+   "hazard_rate": "beat",
+   "plate_coverage": 0.63,
+   "plate_patterns": [
+    "row",
+    "block",
+    "checker",
+    "column_wave",
+    "spiral"
+   ],
+   "gate_opening": 3.0,
+   "sweeper_gap": 3.0,
+   "types_per_bar": 3,
+   "orbiter_pairs": true,
+   "orbiter_period": "half_bar",
+   "lives": 3,
+   "density_curve": [
+    1.46,
+    1.66,
+    1.86,
+    2.06,
+    2.26
+   ],
+   "song_offset_s": 10.0,
+   "demo_bars": false,
+   "structure": "mixed"
+  },
+  {
+   "level": 23,
+   "hazard_rate": "beat",
+   "plate_coverage": 0.639,
+   "plate_patterns": [
+    "row",
+    "block",
+    "checker",
+    "column_wave",
+    "spiral"
+   ],
+   "gate_opening": 3.0,
+   "sweeper_gap": 3.0,
+   "types_per_bar": 3,
+   "orbiter_pairs": true,
+   "orbiter_period": "half_bar",
+   "lives": 3,
+   "density_curve": [
+    1.49,
+    1.69,
+    1.89,
+    2.09,
+    2.29
+   ],
+   "song_offset_s": 10.0,
+   "demo_bars": false,
+   "structure": "mixed"
+  },
+  {
+   "level": 24,
+   "hazard_rate": "beat",
+   "plate_coverage": 0.648,
+   "plate_patterns": [
+    "row",
+    "block",
+    "checker",
+    "column_wave",
+    "spiral"
+   ],
+   "gate_opening": 3.0,
+   "sweeper_gap": 3.0,
+   "types_per_bar": 3,
+   "orbiter_pairs": true,
+   "orbiter_period": "half_bar",
+   "lives": 3,
+   "density_curve": [
+    1.52,
+    1.72,
+    1.92,
+    2.12,
+    2.32
+   ],
+   "song_offset_s": 10.0,
+   "demo_bars": false,
+   "structure": "mixed"
+  },
+  {
+   "level": 25,
+   "hazard_rate": "beat",
+   "plate_coverage": 0.657,
+   "plate_patterns": [
+    "row",
+    "block",
+    "checker",
+    "column_wave",
+    "spiral"
+   ],
+   "gate_opening": 3.0,
+   "sweeper_gap": 3.0,
+   "types_per_bar": 3,
+   "orbiter_pairs": true,
+   "orbiter_period": "half_bar",
+   "lives": 3,
+   "density_curve": [
+    1.55,
+    1.75,
+    1.95,
+    2.15,
+    2.35
+   ],
+   "song_offset_s": 10.0,
+   "demo_bars": false,
+   "structure": "mixed"
+  },
+  {
+   "level": 26,
+   "hazard_rate": "beat",
+   "plate_coverage": 0.665,
+   "plate_patterns": [
+    "row",
+    "block",
+    "checker",
+    "column_wave",
+    "spiral"
+   ],
+   "gate_opening": 3.0,
+   "sweeper_gap": 3.0,
+   "types_per_bar": 3,
+   "orbiter_pairs": true,
+   "orbiter_period": "half_bar",
+   "lives": 3,
+   "density_curve": [
+    1.58,
+    1.78,
+    1.98,
+    2.18,
+    2.38
+   ],
+   "song_offset_s": 10.0,
+   "demo_bars": false,
+   "structure": "mixed"
+  },
+  {
+   "level": 27,
+   "hazard_rate": "beat",
+   "plate_coverage": 0.674,
+   "plate_patterns": [
+    "row",
+    "block",
+    "checker",
+    "column_wave",
+    "spiral"
+   ],
+   "gate_opening": 3.0,
+   "sweeper_gap": 3.0,
+   "types_per_bar": 3,
+   "orbiter_pairs": true,
+   "orbiter_period": "half_bar",
+   "lives": 3,
+   "density_curve": [
+    1.61,
+    1.81,
+    2.01,
+    2.21,
+    2.41
+   ],
+   "song_offset_s": 10.0,
+   "demo_bars": false,
+   "structure": "mixed"
+  },
+  {
+   "level": 28,
+   "hazard_rate": "beat",
+   "plate_coverage": 0.683,
+   "plate_patterns": [
+    "row",
+    "block",
+    "checker",
+    "column_wave",
+    "spiral"
+   ],
+   "gate_opening": 3.0,
+   "sweeper_gap": 3.0,
+   "types_per_bar": 3,
+   "orbiter_pairs": true,
+   "orbiter_period": "half_bar",
+   "lives": 3,
+   "density_curve": [
+    1.64,
+    1.84,
+    2.04,
+    2.24,
+    2.44
+   ],
+   "song_offset_s": 10.0,
+   "demo_bars": false,
+   "structure": "mixed"
+  },
+  {
+   "level": 29,
+   "hazard_rate": "beat",
+   "plate_coverage": 0.691,
+   "plate_patterns": [
+    "row",
+    "block",
+    "checker",
+    "column_wave",
+    "spiral"
+   ],
+   "gate_opening": 3.0,
+   "sweeper_gap": 3.0,
+   "types_per_bar": 3,
+   "orbiter_pairs": true,
+   "orbiter_period": "half_bar",
+   "lives": 3,
+   "density_curve": [
+    1.67,
+    1.87,
+    2.07,
+    2.27,
+    2.47
+   ],
+   "song_offset_s": 10.0,
+   "demo_bars": false,
+   "structure": "mixed"
+  },
+  {
+   "level": 30,
+   "hazard_rate": "beat",
+   "plate_coverage": 0.7,
+   "plate_patterns": [
+    "row",
+    "block",
+    "checker",
+    "column_wave",
+    "spiral"
+   ],
+   "gate_opening": 3.0,
+   "sweeper_gap": 3.0,
+   "types_per_bar": 3,
+   "orbiter_pairs": true,
+   "orbiter_period": "half_bar",
+   "lives": 3,
+   "density_curve": [
+    1.7,
+    1.9,
+    2.1,
+    2.3,
+    2.5
+   ],
+   "song_offset_s": 10.0,
+   "demo_bars": false,
+   "structure": "mixed"
+  }
+ ]
+}

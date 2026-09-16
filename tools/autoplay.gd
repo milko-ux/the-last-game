@@ -32,6 +32,7 @@ var max_bar := 20
 var seed := 1
 var max_deaths := 999
 var start_bar := 0            # start_bar=N: begin at bar N as if from a checkpoint
+var level := 1                # level=N: which level to play (levels/curriculum.json)
 var _started_at_bar := false
 var rng := RandomNumberGenerator.new()
 # Human bot knobs: see the HUMAN BOT section at the bottom.
@@ -68,7 +69,7 @@ func _process(_delta: float) -> bool:
 		# Jump in at bar N the way a checkpoint rewind would.
 		_started_at_bar = true
 		var lead: float = Rules.WINDOW_DEPTH * 0.45 / clock.track_speed
-		var t0: float = maxf(0.0, clock.bar_start(start_bar) - lead)
+		var t0: float = maxf(clock.start_offset, clock.bar_start(start_bar) - lead)
 		test.player.reset_to(0.0, clock.z_at(clock.bar_start(start_bar)) + 1.0)
 		clock.seek(t0)
 		return false
@@ -77,11 +78,11 @@ func _process(_delta: float) -> bool:
 		death_bars.append(clock.current_bar())
 	if test.state == test.State.RUN and clock.song_time() > 3.0:
 		min_fps = mini(min_fps, int(Engine.get_frames_per_second()))
-	var done: bool = clock.current_bar() > max_bar or test.state == test.State.WON \
+	var done: bool = clock.current_bar() > max_bar or test.state == test.State.WON or test.state == test.State.GAMEOVER \
 		or test.deaths >= max_deaths or (Time.get_ticks_msec() - t_wall0) > 900000
 	if done:
-		print("AUTOPLAY mode=%s seed=%d bars<=%d deaths=%d at_bars=%s notes=%d state=%d goal=%s min_fps=%d" % [
-			mode, seed, max_bar, test.deaths, str(death_bars), test.notes, test.state,
+		print("AUTOPLAY mode=%s level=%d seed=%d bars<=%d deaths=%d at_bars=%s notes=%d state=%d goal=%s min_fps=%d" % [
+			mode, level, seed, max_bar, test.deaths, str(death_bars), test.notes, test.state,
 			"yes" if test.state == test.State.WON else "no", min_fps])
 		return true
 	return false
@@ -100,9 +101,12 @@ func _setup() -> void:
 			max_deaths = int(kv[1])
 		if kv.size() == 2 and kv[0] == "start_bar":
 			start_bar = int(kv[1])
+		if kv.size() == 2 and kv[0] == "level":
+			level = int(kv[1])
 	rng.seed = 424242 + seed * 7919
 	Engine.max_fps = 30
 	Rules = load("res://prototype/rules.gd")
+	Rules.LEVEL = level
 	HazardMath = load("res://prototype/hazard_math.gd")
 	clock = root.get_node_or_null("BeatClock")
 	if clock == null:

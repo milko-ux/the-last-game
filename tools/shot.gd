@@ -15,13 +15,34 @@ var out := "docs/screenshots/shot.png"
 var bar := 1
 var after := 0.4
 var level := 1
+var scene_kind := "run"      # scene=select captures the level-select screen instead
+var _select_frames := -1
 var test: Node = null
 var clock: Node = null
 var bot: Object = null
 var _frames_after := -1
 
 
+var _args_read := false
+
+
 func _process(_delta: float) -> bool:
+	if not _args_read:
+		_args_read = true
+		_setup_args()
+	if scene_kind == "select":
+		if _select_frames < 0:
+			_setup_args()
+			AudioServer.set_bus_volume_db(0, -80.0)
+			root.add_child(load("res://prototype/level_select.tscn").instantiate())
+			_select_frames = 0
+			return false
+		_select_frames += 1
+		if _select_frames >= 20:
+			var img := root.get_viewport().get_texture().get_image()
+			print("SHOT saved=%s err=%d size=%dx%d (level select)" % [out, img.save_png(out), img.get_width(), img.get_height()])
+			return true
+		return false
 	if test == null:
 		_setup()
 		return false
@@ -42,7 +63,7 @@ func _process(_delta: float) -> bool:
 	return false
 
 
-func _setup() -> void:
+func _setup_args() -> void:
 	for a in OS.get_cmdline_user_args():
 		var kv: PackedStringArray = a.split("=")
 		if kv.size() != 2:
@@ -52,6 +73,11 @@ func _setup() -> void:
 			"bar": bar = int(kv[1])
 			"after": after = float(kv[1])
 			"level": level = int(kv[1])
+			"scene": scene_kind = kv[1]
+
+
+func _setup() -> void:
+	_setup_args()
 	AudioServer.set_bus_volume_db(0, -80.0)
 	var Rules: GDScript = load("res://prototype/rules.gd")
 	if level != 1:

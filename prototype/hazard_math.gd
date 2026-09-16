@@ -36,6 +36,20 @@ static func period_float(t: float) -> float:
 	return BeatClock.period_float_at(t)
 
 
+# A sweeper's gap crosses the field once per BAR at every hazard rate
+# (addendum 4 pacing): at half-bar and beat rates the crossing would take
+# a second or less — about 15 units/s against a 3-4 unit gap — and the
+# fairness validator proved no straight walk can time that. Later levels
+# make walls harder with narrower gaps, not faster ones. Gates jump once
+# per period but never faster than once per half bar (wall_period_index);
+# volleys cross in one period but never faster than half a bar; slammers
+# and plates keep the level's period.
+static func motion_float(t: float) -> float:
+	if BeatClock.period_beats >= 4:
+		return BeatClock.period_float_at(t)
+	return BeatClock.beats_float_at(t, 4)
+
+
 # The "thrown" family (volley, slammer) works on a two-period cycle:
 # one period of warning, then it fires at the start of the next. Which
 # periods fire is set per instance by `cycle` (0 or 1).
@@ -48,16 +62,26 @@ static func fires_in_period(spec: Dictionary, idx: int) -> bool:
 # sweepers.
 static func sweeper_gap_x(spec: Dictionary, t: float) -> float:
 	var travel := Rules.FIELD_WIDTH - Rules.sweep_gap()
-	var u := fposmod(period_float(t) * 0.5 + float(spec.get("phase", 0.0)), 1.0)
+	var u := fposmod(motion_float(t) * 0.5 + float(spec.get("phase", 0.0)), 1.0)
 	var tri := 1.0 - absf(2.0 * u - 1.0)
 	var x := -travel * 0.5 + travel * tri
 	return x * float(spec.get("dir", 1))
 
 
+# The period index walls use: the level's period, but never shorter than
+# half a bar (see motion_float).
+static func wall_period_index(t: float) -> int:
+	if BeatClock.period_beats >= 2:
+		return BeatClock.period_index_at(t)
+	return int(floor(BeatClock.beats_float_at(t, 2)))
+
+
 # --- Gate: the opening jumps to a new seeded x at the start of every
-# period (and rehearses that through the intro grid).
+# period (and rehearses that through the intro grid). At "beat" rate it
+# jumps once per half bar: crossing a wall needs the beat before it to
+# line up, which one beat cannot give (the validator proved it).
 static func gate_opening_x(spec: Dictionary, t: float) -> float:
-	var idx := BeatClock.period_index_at(t)
+	var idx := wall_period_index(t)
 	var h := hash(Vector2i(int(spec.get("seed", 0)), idx))
 	var span := Rules.FIELD_WIDTH - Rules.gate_gap()
 	return -span * 0.5 + span * float(h % 10007) / 10006.0
@@ -85,9 +109,11 @@ static func gate_crossed(spec: Dictionary, prev: Vector3, pos: Vector3, half_w: 
 	return true
 
 
-# --- Orbiter: one revolution per period, phase locked to its start.
+# --- Orbiter: one revolution per BAR whatever the level's hazard rate
+# (addendum 4 section 4: "period one bar, unchanged"); `speed` 2 = one
+# per half bar, the variant of levels 4+. Phase locked to the downbeat.
 static func orbiter_orb_pos(spec: Dictionary, t: float) -> Vector3:
-	var a := TAU * period_float(t) * float(spec.get("dir", 1)) + float(spec.get("phase", 0.0))
+	var a := TAU * BeatClock.beats_float_at(t, 4) * float(spec.get("speed", 1)) * float(spec.get("dir", 1)) + float(spec.get("phase", 0.0))
 	return Vector3(float(spec["x"]) + ORBIT_R * cos(a), ORB_Y, float(spec["z"]) + ORBIT_R * sin(a))
 
 
@@ -119,11 +145,21 @@ static func slammer_hot(spec: Dictionary, t: float) -> bool:
 # Returns the orb's x, or null while nothing is in flight.
 static func volley_orb_x(spec: Dictionary, t: float) -> Variant:
 	var idx := BeatClock.period_index_at(t)
-	if not fires_in_period(spec, idx):
-		return null
 	var d := float(spec.get("dir", 1))
 	var reach := Rules.half_width() + VOLLEY_R
-	return lerpf(-d * reach, d * reach, BeatClock.period_progress_at(t))
+	if BeatClock.period_beats >= 2:
+		if not fires_in_period(spec, idx):
+			return null
+		return lerpf(-d * reach, d * reach, BeatClock.period_progress_at(t))
+	# Beat rate: the shot still takes half a bar to cross (two periods),
+	# fired at the start of its firing period.
+	var start := idx if fires_in_period(spec, idx) else idx - 1
+	if not fires_in_period(spec, start) or start < 1:
+		return null
+	var u := (t - BeatClock.period_start(start)) / (BeatClock.period_s() * 2.0)
+	if u < 0.0 or u > 1.0:
+		return null
+	return lerpf(-d * reach, d * reach, u)
 
 
 static func volley_warning(spec: Dictionary, t: float) -> bool:

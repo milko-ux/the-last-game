@@ -47,6 +47,10 @@ var selected: Diff = Diff.STANDARD
 # Phase R: furthest song time reached per level ("best" marker on the
 # progress bar). Progression only, no personal data.
 var best_song_time := {}
+# Phase R (addendum 4): best score per level and which levels have been
+# cleared (reaching a level's goal unlocks the next one).
+var best_score := {}
+var levels_cleared := {}
 
 
 func _ready() -> void:
@@ -94,12 +98,38 @@ func record_best(level: int, song_time: float) -> void:
 		save_progress()
 
 
+func best_score_for(level: int) -> int:
+	return int(best_score.get(str(level), 0))
+
+
+func record_score(level: int, score: int) -> void:
+	if score > best_score_for(level):
+		best_score[str(level)] = score
+		save_progress()
+
+
+func is_level_cleared(level: int) -> bool:
+	return bool(levels_cleared.get(str(level), false))
+
+
+func mark_level_cleared(level: int) -> void:
+	if not is_level_cleared(level):
+		levels_cleared[str(level)] = true
+		save_progress()
+
+
+# Level 1 is always open; level n opens when level n-1 has been cleared.
+func is_level_unlocked(level: int) -> bool:
+	return level <= 1 or is_level_cleared(level - 1)
+
+
 func save_progress() -> void:
 	var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if f == null:
 		push_warning("Could not write %s" % SAVE_PATH)
 		return
-	f.store_string(JSON.stringify({"standard_cleared": standard_cleared, "best_song_time": best_song_time}))
+	f.store_string(JSON.stringify({"standard_cleared": standard_cleared, "best_song_time": best_song_time,
+		"best_score": best_score, "levels_cleared": levels_cleared}))
 	f.close()
 
 
@@ -116,3 +146,9 @@ func load_progress() -> void:
 		var b = parsed.get("best_song_time", {})
 		if b is Dictionary:
 			best_song_time = b
+		var sc = parsed.get("best_score", {})
+		if sc is Dictionary:
+			best_score = sc
+		var lc = parsed.get("levels_cleared", {})
+		if lc is Dictionary:
+			levels_cleared = lc

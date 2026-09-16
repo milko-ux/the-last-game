@@ -10,11 +10,11 @@ in the commits on `phase-r-prototype`.
   were committed first so every section below builds on a clean commit.
 - **0. Intro carry:** DONE — validator 0 deaths; human bot 20 seeds: see the table below.
 - **1. Camera:** DONE — `camera_rig.gd`: yaw 24° right of the field axis, pitch 54°, distance 26, FOV 48 (`CAMERA_YAW_DEG`, `CAMERA_PITCH_DEG`, `CAMERA_DISTANCE`, `FOV`); input stays world-relative (`INPUT_CAMERA_RELATIVE := false`, flip to test). Fog moved out to 34-58 for the longer camera distance. Screenshot `docs/screenshots/a4-camera-bar1.png` (taken with the new `tools/shot.gd`, since the editor MCP was not connected). Validator bot: see below.
-- **2. Pacing:** pending
-- **3. In-level ramp:** pending
-- **4. Orbiters:** pending
-- **5. Score:** pending
-- **6. Levels 2-6 + level select:** pending
+- **2. Pacing:** DONE — `song_offset_s` per level (8 s level 1, 10 s levels 2+) in `BeatClock.start_offset`; run-up to bar 1 is 8.6 s (was 16.6). Breathers are 2 bars (checkpoint, one note, the next wave's word), the rest of each low-energy section is Pressure with the types shown so far; no empty bars after the first checkpoint except those; wave 1 has a gate every bar with a pit on the even bars. Screenshot `docs/screenshots/a4-pacing-bar1.png`.
+- **3. In-level ramp:** DONE — `density_curve` per level ([1.0, 1.15, 1.3, 1.5, 1.7] on level 1) multiplies hazards per bar, spent as a fractional budget (a second volley on another row, a second orbiter, a compatible second type once `types_per_bar` allows); level 1 reaches two types per bar in wave 5 and the outro keeps wave-5 density to the goal. Level 1: 99 hazards, 1.27 per bar, 3 empty bars (the second breather bars).
+- **4. Orbiters:** DONE — wave 4 carries an orbiter on 7 of its 8 bars (the skipped bars are chosen up front, never the demo); pairs from wave 5 on level 1, free from level 2 (`orbiter_pairs`); `orbiter_period` half_bar for levels 4+ (`speed` 2 in the spec). Orbiters now revolve once per BAR at every hazard rate (they used to follow the level's period, i.e. 4x too fast at beat rate).
+- **5. Score:** DONE — `track_test.gd`: distance_points = floor(progress × 1000), death_penalty = deaths × 40, note_bonus = notes × 15 × combo_max, score = max(0, …); live in the HUD, on the goal label (distance %, deaths, notes, score) and on the death screen; best score per level persisted in `Progress.best_score` (`progress.gd`). Not wired to Talo.
+- **6. Levels 2-6 + level select:** DONE — `levels/curriculum.json` (30 levels; 1-6 hand-set from the addendum table, 7-30 interpolated), read by `Rules` (`Rules.LEVEL` is now a variable). Levels 2+ use the mixed generator (five waves, 2-bar breathers, incompatible pairs enforced, a demo bar for each pattern new to the level while `demo_bars` is on). Lives from level 2 (3), out of lives = minimal death screen (score, died at N %, retry from level 1). `prototype/level_select.tscn` is the Phase R main scene: 1-6 playable once the previous goal is reached, 7-30 shown locked. Screenshot `docs/screenshots/a4-level-select.png`. Walls at fast rates: sweepers cross once per bar at every rate and gates jump at most once per half bar — the validator proved the faster versions unwinnable.
 - **7. Bots:** pending
 - **8. Handoff:** pending
 

@@ -17,7 +17,8 @@ const Rules := preload("res://prototype/rules.gd")
 const Mats := preload("res://prototype/flat_mats.gd")
 const HazardMath := preload("res://prototype/hazard_math.gd")
 
-const LIVES := 3
+# Lives come from the level's knobs (Rules.lives(): 0 on level 1, 3 from
+# level 2). Out of lives = the death screen, then back to level 1.
 # Level 1 (addendum 2): no lives, a short freeze, rewind, continue.
 const DEATH_FREEZE_S := 0.25
 const DEATH_FREEZE_LIVES_S := 0.35
@@ -31,8 +32,13 @@ const HAPTIC_COIN_MS := 25
 const NOTE_RADIUS := 1.0
 const COMBO_CAP := 4
 const START_Z := 10.0
+const SELECT_SCENE := "res://prototype/level_select.tscn"
+# Score (addendum 4 section 5): distance and deaths; notes are a bonus.
+const DISTANCE_POINTS := 1000
+const DEATH_PENALTY := 40
+const NOTE_BONUS := 15
 
-enum State { WAIT, STARTING, RUN, DEAD, WON }
+enum State { WAIT, STARTING, RUN, DEAD, WON, GAMEOVER }
 
 @onready var music: AudioStreamPlayer = $Music
 @onready var field: Node3D = $Field
@@ -45,11 +51,13 @@ enum State { WAIT, STARTING, RUN, DEAD, WON }
 @onready var hud: Node2D = $UI/Hud
 
 var state := State.WAIT
-var lives := LIVES
+var lives := 0
 var deaths := 0
 var checkpoint := -1        # index into field.checkpoints; -1 = song start
 var notes := 0
 var streak := 0             # notes since the last death
+var combo_max := 1          # the longest streak this run
+var furthest_t := 0.0       # furthest song time reached this run (distance)
 var score := 0
 var _freeze := 0.0
 var _start_delay := 0.0
@@ -62,11 +70,17 @@ var bot: Object = null
 var _edge_line: MeshInstance3D
 var _demo_bar_shown := 0
 var _best_saved := 0.0
+var _end_shown := 0.0       # seconds the goal / death screen has been up
 
 
 func _ready() -> void:
-	# The level's knobs (addendum 3): hazards act once per period.
+	# The level's knobs (addendum 3 / 4): hazards act once per period, the
+	# song starts at the level's offset. Both before the field is built,
+	# since the layout is a function of them.
 	BeatClock.period_beats = Rules.period_beats()
+	BeatClock.start_offset = Rules.song_offset()
+	lives = Rules.lives()
+	furthest_t = BeatClock.start_offset
 	print(Rules.knobs_line())
 	field.build()
 	if not field.fairness["ok"]:
@@ -83,8 +97,8 @@ func _ready() -> void:
 	add_child(_edge_line)
 	hud.ticks = []
 	for cp in field.checkpoints:
-		hud.ticks.append(float(cp["t"]) / BeatClock.duration)
-	hud.best = Progress.best_for(Rules.LEVEL) / BeatClock.duration
+		hud.ticks.append(BeatClock.progress_of(float(cp["t"])))
+	hud.best = BeatClock.progress_of(Progress.best_for(Rules.LEVEL))
 	ui.jump_pressed.connect(_on_jump)
 	status.text = "TAP TO START"
 	debug.text = _fair_warning
@@ -97,15 +111,32 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_SPACE:
 		if state == State.RUN:
 			_on_jump()
-	if state != State.WAIT:
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE:
+		_to_level_select()
 		return
 	var pressed: bool = (event is InputEventScreenTouch and event.pressed) \
 		or (event is InputEventMouseButton and event.pressed) \
 		or (event is InputEventKey and event.pressed and not event.echo)
-	if pressed:
-		state = State.STARTING
-		_start_delay = START_DELAY_S
-		status.text = ""
+	if not pressed:
+		return
+	match state:
+		State.WAIT:
+			state = State.STARTING
+			_start_delay = START_DELAY_S
+			status.text = ""
+		State.WON:
+			if _end_shown > 0.6:
+				_to_level_select()
+		State.GAMEOVER:
+			# Out of lives: the loop starts over from level 1 (the original rule).
+			if _end_shown > 0.6:
+				Rules.LEVEL = 1
+				get_tree().reload_current_scene()
+
+
+func _to_level_select() -> void:
+	BeatClock.stop()
+	get_tree().change_scene_to_file(SELECT_SCENE)
 
 
 func _process(delta: float) -> void:
@@ -122,6 +153,8 @@ func _process(delta: float) -> void:
 			_freeze -= delta
 			if _freeze <= 0.0:
 				_rewind()
+		State.WON, State.GAMEOVER:
+			_end_shown += delta
 	ui.set_status(0, 1, lives, deaths, state == State.DEAD and Rules.lives_enabled())
 	_update_hud()
 
@@ -153,7 +186,7 @@ func _tick_run(delta: float) -> void:
 			n["node"].visible = false
 			streak += 1
 			notes += 1
-			score += mini(streak, COMBO_CAP)
+			combo_max = maxi(combo_max, mini(streak, COMBO_CAP))
 			Input.vibrate_handheld(HAPTIC_COIN_MS)
 
 	# --- death: ONE rules query (rules.gd decides; meshes are visual only)
@@ -172,26 +205,37 @@ func _tick_run(delta: float) -> void:
 
 
 func _update_progress(t: float) -> void:
-	hud.fill = t / BeatClock.duration
+	furthest_t = maxf(furthest_t, t)
+	hud.fill = BeatClock.progress_of(t)
 	if t > Progress.best_for(Rules.LEVEL):
-		hud.best = t / BeatClock.duration
+		hud.best = BeatClock.progress_of(t)
 		if t - _best_saved > 2.0:
 			Progress.record_best(Rules.LEVEL, t)
 			_best_saved = t
+
+
+# Addendum 4 section 5: distance and deaths; notes are a bonus.
+func distance_points() -> int:
+	return int(floor(BeatClock.progress_of(furthest_t) * DISTANCE_POINTS))
+
+
+func current_score() -> int:
+	return maxi(0, distance_points() - deaths * DEATH_PENALTY + notes * NOTE_BONUS * combo_max)
 
 
 func _in_demo_bar(ht: float) -> bool:
 	return field.plan["demo_bars"].has(BeatClock.bar_at(ht))
 
 
-# The one word above the field while a demo bar plays; fades on the
-# next downbeat.
+# The one word above the field while a demo bar plays (or, in a breather,
+# the word for what the next wave introduces); fades on the next downbeat.
 func _update_demo(ht: float) -> void:
 	var bar := BeatClock.bar_at(ht)
-	if field.plan["demo_bars"].has(bar):
+	var word := String(field.plan["bars"][bar]["word"]) if field.plan["bars"].has(bar) else ""
+	if word != "":
 		if _demo_bar_shown != bar:
 			_demo_bar_shown = bar
-			hud.show_word(String(field.plan["bars"][bar]["word"]))
+			hud.show_word(word)
 	elif _demo_bar_shown != 0:
 		_demo_bar_shown = 0
 		hud.hide_word()
@@ -306,20 +350,27 @@ func _die() -> void:
 	rig.shake()
 	_freeze = DEATH_FREEZE_LIVES_S if Rules.lives_enabled() else DEATH_FREEZE_S
 	Progress.record_best(Rules.LEVEL, BeatClock.song_time())
+	if Rules.lives_enabled() and lives <= 0:
+		_game_over()
+
+
+# Out of lives (level 2+): the minimal death screen — score, how far,
+# retry. No roast text, no share screen yet (addendum 4 section 6).
+func _game_over() -> void:
+	state = State.GAMEOVER
+	_end_shown = 0.0
+	score = current_score()
+	Progress.record_score(Rules.LEVEL, score)
+	hud.hide_word()
+	status.text = "OUT OF LIVES\ndied at %d%%   ·   deaths %d   ·   score %d\nTAP TO RETRY FROM LEVEL 1" % [
+		int(round(BeatClock.progress_of(furthest_t) * 100.0)), deaths, score]
 
 
 func _rewind() -> void:
-	var t := 0.0
+	var t := BeatClock.start_offset
 	var x := 0.0
 	var z := START_Z
-	if Rules.lives_enabled() and lives <= 0:
-		# Out of lives: the loop resets to the very start, notes and all.
-		lives = LIVES
-		checkpoint = -1
-		notes = 0
-		score = 0
-		field.reset_run()
-	elif checkpoint >= 0:
+	if checkpoint >= 0:
 		var cp: Dictionary = field.checkpoints[checkpoint]
 		t = float(cp["resume_t"])
 		x = float(cp["x"])
@@ -335,21 +386,28 @@ func _rewind() -> void:
 
 func _win() -> void:
 	state = State.WON
+	_end_shown = 0.0
 	player.move_dir = Vector2.ZERO
 	Input.vibrate_handheld(HAPTIC_WIN_MS)
-	var secs := (Time.get_ticks_msec() - _run_started_ms) / 1000.0
 	hud.fill = 1.0
+	furthest_t = BeatClock.duration
 	Progress.record_best(Rules.LEVEL, BeatClock.duration)
 	hud.best = 1.0
-	var time_bonus := maxi(0, 300 - int(maxf(0.0, secs - BeatClock.duration)))
-	status.text = "GOAL\nnotes %d   ·   combo x%d   ·   deaths %d\nscore %d  (+%d time bonus)   ·   %.1f s" % [
-		notes, mini(maxi(streak, 1), COMBO_CAP), deaths, score + time_bonus, time_bonus, secs]
+	hud.hide_word()
+	score = current_score()
+	Progress.record_score(Rules.LEVEL, score)
+	Progress.mark_level_cleared(Rules.LEVEL)
+	status.text = "GOAL\ndistance 100%%   ·   deaths %d   ·   notes %d (x%d)\nscore %d   ·   TAP FOR LEVELS" % [
+		deaths, notes, combo_max, score]
 
 
 func _update_hud() -> void:
 	if state == State.WAIT:
 		return
-	score_label.text = "♪ %d   x%d" % [notes, mini(maxi(streak, 1), COMBO_CAP)]
+	if Rules.lives_enabled():
+		score_label.text = "♪ %d   x%d   ·   lives %d   ·   %d" % [notes, mini(maxi(streak, 1), COMBO_CAP), lives, current_score()]
+	else:
+		score_label.text = "♪ %d   x%d   ·   %d" % [notes, mini(maxi(streak, 1), COMBO_CAP), current_score()]
 	var line := "bar %d / %d   ·   %.1f s   ·   sync %+d ms" % [
 		BeatClock.current_bar(), BeatClock.bar_count(), BeatClock.song_time(),
 		int(round(BeatClock.SYNC_OFFSET_S * 1000.0))]

@@ -46,6 +46,12 @@ var mean_bar_s := 2.0
 # = BAR_UNITS / (4 * beat_interval), derived from bpm, never hand-set.
 var track_speed := 4.0
 var first_bar_beat := 0     # index into beats of bar 1's downbeat
+# Addendum 4 section 2: playback starts this far into the track (8 s on
+# level 1, 10 s on later levels), so the run-up to bar 1 is short. The
+# beatmap's times stay absolute; song_time() is absolute too. Only the
+# mapping to the field (z_at / t_at) and the progress fraction subtract
+# it, so z = 0 is where the run starts. Set by the scene before start().
+var start_offset := 0.0
 
 var _player: AudioStreamPlayer
 var _time_begin := 0
@@ -95,11 +101,11 @@ func _load() -> void:
 # ------------------------------------------------------------
 func start(stream_player: AudioStreamPlayer) -> void:
 	_player = stream_player
-	_base_t = 0.0
+	_base_t = start_offset
 	_paused = false
 	_time_begin = Time.get_ticks_usec()
 	_time_delay = AudioServer.get_time_to_next_mix() + AudioServer.get_output_latency()
-	_player.play()
+	_player.play(start_offset)
 	_running = true
 	_resync_indices()
 	set_process(true)
@@ -146,7 +152,7 @@ func running() -> bool:
 # ------------------------------------------------------------
 func song_time() -> float:
 	if not _running:
-		return 0.0
+		return start_offset
 	if _paused:
 		return _paused_t
 	var t := (Time.get_ticks_usec() - _time_begin) / 1_000_000.0
@@ -320,15 +326,35 @@ func period_float_at(t: float) -> float:
 	return float(period_index_at(t)) + period_progress_at(t)
 
 
+# Continuous count in units of `beats_per` beats (4 = bars) from the
+# first downbeat, extrapolated backwards through the intro. Hazards whose
+# speed is fixed in bars (the orbiter) and the slowest a wall or a shot
+# may move read this instead of the level's period.
+func beats_float_at(t: float, beats_per: int) -> float:
+	var i := beat_at(t)
+	if i < first_bar_beat or downbeats.is_empty():
+		return (t - _anchor()) / (beat_interval * beats_per) + 1.0
+	var b := i - first_bar_beat
+	return float(b / beats_per) + 1.0 + float(b % beats_per) / beats_per + beat_phase_at(t) / beats_per
+
+
 # ------------------------------------------------------------
 # Space <-> time
 # ------------------------------------------------------------
 func z_at(t: float) -> float:
-	return t * track_speed
+	return (t - start_offset) * track_speed
 
 
 func t_at(z: float) -> float:
-	return z / track_speed
+	return z / track_speed + start_offset
+
+
+# 0..1: how far through the run (from the start offset to the end of the
+# track) time t is. The progress bar, the best marker and the distance
+# score all read this.
+func progress_of(t: float) -> float:
+	var span := maxf(duration - start_offset, 0.001)
+	return clampf((t - start_offset) / span, 0.0, 1.0)
 
 
 # ------------------------------------------------------------

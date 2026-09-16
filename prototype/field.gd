@@ -78,6 +78,8 @@ func build() -> void:
 				rerolls[bar] = int(rerolls.get(bar, 0)) + 1
 				if bar > 1:
 					rerolls[bar - 1] = int(rerolls.get(bar - 1, 0)) + 1
+				# ...and the bar after: the window at the failing beat is mostly that one.
+				rerolls[bar + 1] = int(rerolls.get(bar + 1, 0)) + 1
 		if fairness["ok"]:
 			_save_verdict(rerolls)
 	fairness["rerolls"] = rerolls
@@ -154,7 +156,15 @@ func build() -> void:
 # The validation verdict (and the re-roll choices it settled on) is
 # cached per beatmap and rules version on the device.
 func _verdict_path() -> String:
-	return "user://fairness_v%d_%s.json" % [Fairness.VERSION, FileAccess.get_md5(BeatClock.BEATMAP_PATH).substr(0, 12)]
+	# Keyed by the rules version, the beatmap, the level AND a hash of the
+	# scripts that shape the layout, so an edit to the generator can never
+	# revive a stale "ok" (that would skip validation on a changed level).
+	var src := ""
+	for f in ["res://prototype/placement.gd", "res://prototype/rules.gd", "res://prototype/hazard_math.gd",
+			"res://prototype/fairness.gd", "res://levels/curriculum.json"]:
+		src += FileAccess.get_md5(f)
+	return "user://fairness_v%d_L%d_%s_%s.json" % [Fairness.VERSION, Rules.LEVEL,
+		FileAccess.get_md5(BeatClock.BEATMAP_PATH).substr(0, 12), src.md5_text().substr(0, 12)]
 
 
 func _load_verdict() -> Dictionary:

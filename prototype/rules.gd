@@ -24,32 +24,69 @@ const FALL_DEATH_Y := -3.0
 # with the addendum-2 camera) and never a surprise.
 const BACK_EDGE_MARGIN := 3.6
 
-# Which level this build plays. Level 1 is the taught curriculum: no
-# lives, no death screen. Lives and the share screen begin at level 2
-# (not built in this phase).
-const LEVEL := 1
+# Which level is being played. Level 1 is the taught curriculum: no
+# lives, no death screen. Lives begin at level 2. Set by the level
+# select (prototype/level_select.gd) or by tools/autoplay.gd (level=N).
+static var LEVEL := 1
 
-# Difficulty knobs per level (addendum 3 section 4). Levels 2-30 are meant
-# to be rows in this table, not code. Printed at level start.
+# Level data (addendum 4 section 6): levels/curriculum.json, one entry
+# per level 1-30, read once. Knobs (addendum 3 section 4 + addendum 4):
 #   hazard_rate        how often hazards act: "bar" (once per bar, ~2 s at
 #                      117 BPM), "half_bar" (beats 1 and 3) or "beat"
 #   plate_coverage     fraction of a bar's 36 tiles that may be plates
 #   plate_patterns     allowed plate patterns
 #   gate_opening       gate opening width in world units (a tile is 2)
 #   sweeper_gap        sweeper gap width in world units
-#   types_per_bar      how many hazard types may share a bar
-#   orbiter_pairs      the opposite-spin orbiter pair allowed?
-const LEVELS := {
-	1: {"hazard_rate": "bar", "plate_coverage": 0.12, "plate_patterns": ["row", "block"],
-		"gate_opening": 5.0, "sweeper_gap": 5.0, "types_per_bar": 1, "orbiter_pairs": false},
-}
+#   types_per_bar      how many hazard types may share a bar (level 1:
+#                      1 until wave 5, then types_per_bar_final)
+#   orbiter_pairs      the opposite-spin orbiter pair allowed? (level 1:
+#                      only from orbiter_pairs_from_wave)
+#   orbiter_period     "bar" or "half_bar" (the fast variant, levels 4+)
+#   lives              0 = no lives, 3 from level 2
+#   density_curve      multiplier per wave on hazards per bar (the ramp)
+#   song_offset_s      playback starts this far into the track
+#   demo_bars          every new type / pattern gets a demo bar (levels 1-6)
+#   structure          "curriculum" (level 1's fixed waves) or "mixed"
+const CURRICULUM_PATH := "res://levels/curriculum.json"
+static var _levels := {}
+static var _incompatible := []
+static var _first_level := {}   # pattern -> first level whose plate_patterns has it
+
 # The beat-rate patterns are level 3+ material (each gets a demo bar there).
-const PATTERNS := ["checker", "row", "column_wave", "spiral"]
+const PATTERNS := ["checker", "row", "column_wave", "spiral", "block"]
 const BEAT_PATTERNS := ["checker", "column_wave", "spiral"]
 
 
-static func level() -> Dictionary:
-	return LEVELS[LEVEL]
+static func _load_levels() -> void:
+	if not _levels.is_empty():
+		return
+	var f := FileAccess.open(CURRICULUM_PATH, FileAccess.READ)
+	var data = JSON.parse_string(f.get_as_text()) if f != null else null
+	if typeof(data) != TYPE_DICTIONARY:
+		push_error("Rules: cannot read %s" % CURRICULUM_PATH)
+		_levels[1] = {"hazard_rate": "bar", "plate_coverage": 0.12, "plate_patterns": ["row", "block"],
+			"gate_opening": 5.0, "sweeper_gap": 5.0, "types_per_bar": 1, "orbiter_pairs": false,
+			"orbiter_period": "bar", "lives": 0, "density_curve": [1.0], "song_offset_s": 0.0,
+			"demo_bars": true, "structure": "curriculum"}
+		return
+	for entry in data.get("levels", []):
+		_levels[int(entry["level"])] = entry
+	_incompatible = data.get("incompatible_pairs", [])
+	for n in _levels:
+		for p in _levels[n]["plate_patterns"]:
+			var pn := String(p)
+			if not _first_level.has(pn) or int(_first_level[pn]) > n:
+				_first_level[pn] = n
+
+
+static func level(n: int = LEVEL) -> Dictionary:
+	_load_levels()
+	return _levels.get(n, _levels[1])
+
+
+static func level_count() -> int:
+	_load_levels()
+	return _levels.size()
 
 
 static func period_beats() -> int:
@@ -69,11 +106,87 @@ static func sweep_gap() -> float:
 	return float(level()["sweeper_gap"])
 
 
+static func lives() -> int:
+	return int(level().get("lives", 0))
+
+
+static func lives_enabled() -> bool:
+	return lives() > 0
+
+
+static func song_offset() -> float:
+	return float(level().get("song_offset_s", 0.0))
+
+
+static func demo_bars_on() -> bool:
+	return bool(level().get("demo_bars", true))
+
+
+static func density_curve() -> Array:
+	return level().get("density_curve", [1.0])
+
+
+# Orbiters: 1 = one revolution per period, 2 = two (the half-bar variant).
+static func orbiter_speed() -> int:
+	return 2 if String(level().get("orbiter_period", "bar")) == "half_bar" else 1
+
+
+# Types that may share a bar in the given wave (0-based). Level 1 climbs
+# from types_per_bar to types_per_bar_final in its last wave.
+static func types_per_bar_at(wave_index: int) -> int:
+	var l := level()
+	var base := int(l["types_per_bar"])
+	if l.has("types_per_bar_final") and wave_index >= 4:
+		return int(l["types_per_bar_final"])
+	return base
+
+
+static func types_per_bar_max() -> int:
+	var l := level()
+	return maxi(int(l["types_per_bar"]), int(l.get("types_per_bar_final", 0)))
+
+
+static func orbiter_pairs_at(wave_index: int) -> bool:
+	var l := level()
+	if bool(l.get("orbiter_pairs", false)):
+		return true
+	if l.has("orbiter_pairs_from_wave"):
+		return wave_index + 1 >= int(l["orbiter_pairs_from_wave"])
+	return false
+
+
+# The first level whose knobs allow a plate pattern (its demo bar lives there).
+static func pattern_first_level(pattern: String) -> int:
+	_load_levels()
+	return int(_first_level.get(pattern, 1))
+
+
+# Addendum 4 section 6: pairs that never share a bar. Kinds are hazard
+# names ("sweeper", "gate", ...) or "plates:<pattern>".
+static func incompatible(a: String, b: String) -> bool:
+	_load_levels()
+	var an := a.get_slice(":", 1) if a.begins_with("plates:") else a
+	var bn := b.get_slice(":", 1) if b.begins_with("plates:") else b
+	for pair in _incompatible:
+		var p0 := String(pair[0])
+		var p1 := String(pair[1])
+		if (an == p0 and bn == p1) or (an == p1 and bn == p0):
+			return true
+		if a.begins_with("plates:") and ((p0 == "plates" and bn == p1) or (p1 == "plates" and bn == p0)):
+			return true
+		if b.begins_with("plates:") and ((p0 == "plates" and an == p1) or (p1 == "plates" and an == p0)):
+			return true
+	return false
+
+
 static func knobs_line() -> String:
 	var l := level()
-	return "LEVEL %d knobs: hazard_rate=%s plate_coverage=%.2f plate_patterns=%s gate_opening=%.1f sweeper_gap=%.1f types_per_bar=%d orbiter_pairs=%s" % [
+	return "LEVEL %d knobs: hazard_rate=%s plate_coverage=%.2f plate_patterns=%s gate_opening=%.1f sweeper_gap=%.1f types_per_bar=%d%s orbiter_pairs=%s orbiter_period=%s lives=%d density_curve=%s song_offset=%.1f demo_bars=%s structure=%s" % [
 		LEVEL, l["hazard_rate"], l["plate_coverage"], str(l["plate_patterns"]), l["gate_opening"],
-		l["sweeper_gap"], l["types_per_bar"], l["orbiter_pairs"]]
+		l["sweeper_gap"], int(l["types_per_bar"]),
+		("->%d" % int(l["types_per_bar_final"])) if l.has("types_per_bar_final") else "",
+		l.get("orbiter_pairs", false), l.get("orbiter_period", "bar"), lives(), str(density_curve()),
+		song_offset(), demo_bars_on(), l.get("structure", "mixed")]
 
 # Player hit box (feet at pos, HEIGHT tall).
 const PLAYER_HALF_W := 0.4
@@ -123,12 +236,15 @@ static func death_line(z_back: float) -> float:
 
 
 # During the intro the window carries the player: they are never left
-# behind this z (one tile ahead of where the death line will be when it
-# arms, so an idle player is in front of it on the first downbeat).
-# -INF once hazards are armed: from then on the back edge kills.
+# behind this z (two tiles ahead of where the death line will be when it
+# arms, so an idle player has about a second after the first downbeat
+# before the beat catches them). -INF once hazards are armed: from then
+# on the back edge kills.
+const CARRY_LEAD := 2.0 * TILE
+
 static func carry_line(z_back: float) -> float:
 	if intro_at(z_back):
-		return back_edge(z_back) + TILE
+		return back_edge(z_back) + CARRY_LEAD
 	return -INF
 
 
@@ -137,10 +253,6 @@ static func carry_line(z_back: float) -> float:
 # death check uses death_line().
 static func min_z(z_back: float) -> float:
 	return maxf(death_line(z_back), carry_line(z_back))
-
-
-static func lives_enabled() -> bool:
-	return LEVEL >= 2
 
 
 static func col_x(col: int) -> float:
@@ -204,6 +316,9 @@ static func plate_state(entry: Dictionary, col: int, row: int, t: float) -> int:
 		return 1
 	var pattern := String(entry.get("pattern", "none"))
 	if pattern == "none":
+		return 0
+	var band: Array = entry.get("cols", [])
+	if band.size() == 2 and (col < int(band[0]) or col > int(band[1])):
 		return 0
 	var idx := BeatClock.period_index_at(t)
 	var k := posmod(idx - 1, 4)
