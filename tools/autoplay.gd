@@ -223,7 +223,7 @@ func _human_target_for(scene: Node) -> Variant:
 	var t: float = clock.hazard_time()
 	var tp: float = t - HUMAN_DELAY
 	var z_back: float = clock.z_at(clock.song_time())
-	var line: float = Rules.death_line(z_back) + 1.5
+	var line: float = Rules.min_z(z_back) + 1.5
 	var comfort: float = line + HUMAN_COMFORT
 	var z_front: float = z_back + Rules.WINDOW_DEPTH - 1.0
 	var field = scene.field
@@ -265,7 +265,8 @@ func _human_target_for(scene: Node) -> Variant:
 	var own := Vector2(own3.x, own3.z)
 	var own_plain: bool = field.floor_at(own.x, own.y) \
 		and field.tile_state_at(own.x, own.y, tp) == field.TileState.SAFE \
-		and not _human_boxed_within(own, t, 0.35, HUMAN_MARGIN)
+		and not _human_boxed_within(own, t, 0.6, HUMAN_MARGIN) \
+		and not _human_volley_warned(own, tp)
 	var pushed: bool = own.y < comfort - 1.0
 	var wall_z: float = _human_wall_ahead(here.y, t)
 	var staged: bool = wall_z > 0.0 and own.y > wall_z - 2.0
@@ -358,7 +359,8 @@ func _human_candidates(field, here: Vector2, own: Vector2, t: float, line: float
 			continue
 		# Forward wins ties, backward loses them; a tile that will be armed
 		# when I land (dark magenta: fires next beat) is a last resort.
-		var armed: bool = field.tile_state_at(c.x, c.y, t + d / speed) == field.TileState.ARMED
+		var armed: bool = field.tile_state_at(c.x, c.y, t + d / speed) == field.TileState.ARMED \
+			or _human_volley_warned(c, t + d / speed)
 		out.append({"c": c, "armed": armed,
 			"d": d + 0.05 * clampf(here.y - c.y, -1.0, 1.0) + (HUMAN_ARMED_PENALTY if armed else 0.0)})
 	return out
@@ -456,6 +458,17 @@ func _human_boxed_at(c: Vector2, tt: float, margin: float) -> bool:
 	return false
 
 
+# A volley's warning line runs along this row: a person does not stand
+# there (noticed HUMAN_DELAY late, like any state change).
+func _human_volley_warned(c: Vector2, tt: float) -> bool:
+	for spec in _near_specs:
+		if String(spec["kind"]) != "volley" or bool(spec.get("demo", false)):
+			continue
+		if absf(float(spec["z"]) - c.y) < 1.0 and HazardMath.volley_warning(spec, tt):
+			return true
+	return false
+
+
 func _human_boxed_within(c: Vector2, t0: float, dur: float, margin: float) -> bool:
 	var tt := t0
 	while tt <= t0 + dur:
@@ -480,6 +493,8 @@ func _human_walk_ok(field, a: Vector2, b: Vector2, t_start: float, margin: float
 		var q := a.lerp(b, u)
 		var tt: float = t_start + dist * u / speed
 		var on_own: bool = bolt and q.distance_to(own) < 1.0
+		if not field.floor_at(q.x, q.y):
+			return false   # nobody walks into a hole
 		for dt in [-0.05, 0.05]:
 			if not on_own and _human_lit(field, q, tt + dt):
 				return false
@@ -499,7 +514,7 @@ func _human_walk_ok(field, a: Vector2, b: Vector2, t_start: float, margin: float
 		if clock.bar_at(t_cross) != clock.bar_at(seen_t):
 			return false
 		var x := lerpf(a.x, b.x, u)
-		if absf(x - HazardMath.gate_opening_x(spec, seen_t)) + margin > HazardMath.GATE_GAP * 0.5:
+		if absf(x - HazardMath.gate_opening_x(spec, seen_t)) + margin > Rules.gate_gap() * 0.5:
 			return false
 	return true
 

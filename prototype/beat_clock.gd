@@ -271,6 +271,56 @@ func is_section_start(bar: int) -> bool:
 
 
 # ------------------------------------------------------------
+# Hazard periods (addendum 3). Hazards act once per PERIOD, which is
+# period_beats beats long: 4 ("bar", level 1), 2 ("half_bar") or 1
+# ("beat"). Period 1 starts on bar 1's downbeat; before that the grid
+# is extrapolated backwards (periods 0, -1, ...) so the intro can
+# rehearse. The scene sets period_beats from the level's knobs.
+# ------------------------------------------------------------
+var period_beats := 4
+
+
+func period_s() -> float:
+	return beat_interval * period_beats
+
+
+func _anchor() -> float:
+	if not downbeats.is_empty():
+		return downbeats[0]
+	return beats[0] if not beats.is_empty() else 0.0
+
+
+func period_index_at(t: float) -> int:
+	var i := beat_at(t)
+	if i < first_bar_beat or downbeats.is_empty():
+		return int(floor((t - _anchor()) / period_s())) + 1
+	return (i - first_bar_beat) / period_beats + 1
+
+
+func period_start(idx: int) -> float:
+	var b := first_bar_beat + (idx - 1) * period_beats
+	if idx >= 1 and b < beats.size():
+		return beats[b]
+	return _anchor() + (idx - 1) * period_s()
+
+
+func period_end(idx: int) -> float:
+	return period_start(idx + 1)
+
+
+func period_progress_at(t: float) -> float:
+	var idx := period_index_at(t)
+	var s := period_start(idx)
+	var e := period_end(idx)
+	return clampf((t - s) / maxf(e - s, 0.001), 0.0, 1.0)
+
+
+# Continuous period count, e.g. 12.37 = 37 % through period 12.
+func period_float_at(t: float) -> float:
+	return float(period_index_at(t)) + period_progress_at(t)
+
+
+# ------------------------------------------------------------
 # Space <-> time
 # ------------------------------------------------------------
 func z_at(t: float) -> float:

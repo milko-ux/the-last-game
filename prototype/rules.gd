@@ -29,7 +29,51 @@ const BACK_EDGE_MARGIN := 3.6
 # (not built in this phase).
 const LEVEL := 1
 
+# Difficulty knobs per level (addendum 3 section 4). Levels 2-30 are meant
+# to be rows in this table, not code. Printed at level start.
+#   hazard_rate        how often hazards act: "bar" (once per bar, ~2 s at
+#                      117 BPM), "half_bar" (beats 1 and 3) or "beat"
+#   plate_coverage     fraction of a bar's 36 tiles that may be plates
+#   plate_patterns     allowed plate patterns
+#   gate_opening       gate opening width in world units (a tile is 2)
+#   sweeper_gap        sweeper gap width in world units
+#   types_per_bar      how many hazard types may share a bar
+#   orbiter_pairs      the opposite-spin orbiter pair allowed?
+const LEVELS := {
+	1: {"hazard_rate": "bar", "plate_coverage": 0.12, "plate_patterns": ["row", "block"],
+		"gate_opening": 5.0, "sweeper_gap": 5.0, "types_per_bar": 1, "orbiter_pairs": false},
+}
+# The beat-rate patterns are level 3+ material (each gets a demo bar there).
 const PATTERNS := ["checker", "row", "column_wave", "spiral"]
+const BEAT_PATTERNS := ["checker", "column_wave", "spiral"]
+
+
+static func level() -> Dictionary:
+	return LEVELS[LEVEL]
+
+
+static func period_beats() -> int:
+	match String(level()["hazard_rate"]):
+		"bar":
+			return 4
+		"half_bar":
+			return 2
+	return 1
+
+
+static func gate_gap() -> float:
+	return float(level()["gate_opening"])
+
+
+static func sweep_gap() -> float:
+	return float(level()["sweeper_gap"])
+
+
+static func knobs_line() -> String:
+	var l := level()
+	return "LEVEL %d knobs: hazard_rate=%s plate_coverage=%.2f plate_patterns=%s gate_opening=%.1f sweeper_gap=%.1f types_per_bar=%d orbiter_pairs=%s" % [
+		LEVEL, l["hazard_rate"], l["plate_coverage"], str(l["plate_patterns"]), l["gate_opening"],
+		l["sweeper_gap"], l["types_per_bar"], l["orbiter_pairs"]]
 
 # Player hit box (feet at pos, HEIGHT tall).
 const PLAYER_HALF_W := 0.4
@@ -53,9 +97,46 @@ static func half_width() -> float:
 	return FIELD_WIDTH * 0.5
 
 
-# z below which the player is dead ("the beat caught you").
-static func death_line(z_back: float) -> float:
+# The window's back edge line, as geometry (drawn on screen).
+static func back_edge(z_back: float) -> float:
 	return z_back + BACK_EDGE_MARGIN
+
+
+# Before the first downbeat: hazards are inert, and so is the back edge.
+# z_back is the window's scrolled back edge, so this is the same clock
+# hazards_armed_at() reads.
+static func intro_at(z_back: float) -> bool:
+	return not BeatClock.hazards_armed_at(BeatClock.t_at(z_back))
+
+
+# z below which the player is dead ("the beat caught you").
+#
+# During the intro the back edge does NOT kill (-INF): a first-time
+# player who has not touched the controls yet must survive until the
+# first downbeat. Instead the window carries them forward, see
+# carry_line(). One rule for the runtime, the death log, the validator
+# and the bots.
+static func death_line(z_back: float) -> float:
+	if intro_at(z_back):
+		return -INF
+	return back_edge(z_back)
+
+
+# During the intro the window carries the player: they are never left
+# behind this z (one tile ahead of where the death line will be when it
+# arms, so an idle player is in front of it on the first downbeat).
+# -INF once hazards are armed: from then on the back edge kills.
+static func carry_line(z_back: float) -> float:
+	if intro_at(z_back):
+		return back_edge(z_back) + TILE
+	return -INF
+
+
+# The lowest z the player can occupy right now: the death line, or during
+# the intro the carry line. Planning (validator, bots) uses this; the
+# death check uses death_line().
+static func min_z(z_back: float) -> float:
+	return maxf(death_line(z_back), carry_line(z_back))
 
 
 static func lives_enabled() -> bool:
@@ -92,6 +173,47 @@ static func pattern_lethal(pattern: String, col: int, row: int, k: int) -> bool:
 				q = 2 if col > half else 3
 			return q == k
 	return false
+
+
+# The plate under (col, row) of a bar at hazard time t: 0 safe, 1 armed
+# (dark magenta, fires next), 2 lethal (bright). The ONE plate rule: the
+# field's colours, the death check, the validator and the bots all use it.
+#
+# Two kinds of plate bar:
+#  - "plates": an explicit tile list (level 1's short `row` segment or
+#    2x2 `block`). Armed for the whole period, lethal for the first
+#    LETHAL_BEAT_FRACTION of a beat after every period start. Warns one
+#    full period, fires on the downbeat.
+#  - "pattern": the beat-rate patterns (checker, column_wave, spiral,
+#    full-row wave), step k = period index, lethal for the first
+#    LETHAL_BEAT_FRACTION of the period, armed the period before.
+# Before the first downbeat, and on a demo bar, plates only ever show
+# the warning colour.
+static func plate_state(entry: Dictionary, col: int, row: int, t: float) -> int:
+	if entry["plain_rows"].has(row):
+		return 0
+	var lethal_allowed: bool = BeatClock.hazards_armed_at(t) and not bool(entry.get("demo", false))
+	var tiles: Array = entry.get("plates", [])
+	if not tiles.is_empty():
+		if not tiles.has([col, row]):
+			return 0
+		var idx := BeatClock.period_index_at(t)
+		var firing: bool = idx >= 1 and (t - BeatClock.period_start(idx)) < LETHAL_BEAT_FRACTION * BeatClock.beat_interval
+		if firing and lethal_allowed:
+			return 2
+		return 1
+	var pattern := String(entry.get("pattern", "none"))
+	if pattern == "none":
+		return 0
+	var idx := BeatClock.period_index_at(t)
+	var k := posmod(idx - 1, 4)
+	var frac: float = LETHAL_BEAT_FRACTION * BeatClock.beat_interval / BeatClock.period_s()
+	var firing := pattern_lethal(pattern, col, row, k) and BeatClock.period_progress_at(t) < frac
+	if firing:
+		return 2 if lethal_allowed else 1
+	if pattern_lethal(pattern, col, row, (k + 1) % 4):
+		return 1
+	return 0
 
 
 # ============================================================

@@ -65,6 +65,9 @@ var _best_saved := 0.0
 
 
 func _ready() -> void:
+	# The level's knobs (addendum 3): hazards act once per period.
+	BeatClock.period_beats = Rules.period_beats()
+	print(Rules.knobs_line())
 	field.build()
 	if not field.fairness["ok"]:
 		_fair_warning = "FAIRNESS CHECK FAILED (%d) — see log" % field.fairness["problems"].size()
@@ -130,7 +133,7 @@ func _tick_run(delta: float) -> void:
 	var z_front := z_back + Rules.WINDOW_DEPTH
 
 	player.move_dir = bot.move_dir(self) if bot != null else _move_input()
-	player.tick(delta, z_front, field)
+	player.tick(delta, z_back, z_front, field)
 	rig.set_window(z_back)
 	_update_world(ht, z_back)
 	_update_progress(t)
@@ -216,7 +219,9 @@ func _demo_target(ht: float) -> Variant:
 
 
 func _update_world(ht: float, z_back: float) -> void:
-	_edge_line.position = Vector3(0.0, 0.03, Rules.death_line(z_back))
+	# Drawn at the geometric back edge; during the intro it carries, after
+	# the first downbeat it kills (Rules.death_line).
+	_edge_line.position = Vector3(0.0, 0.03, Rules.back_edge(z_back))
 	field.update_tiles(ht, z_back)
 	for h in field.hazards:
 		h.update_state(ht)

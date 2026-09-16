@@ -6,3 +6,9 @@ tools/.certs/
 # Talo backend config - holds the real access key, never committed
 talo.cfg
 build/
+
+.mcp.json
+
+# Godot MCP editor addon - per-machine dev tooling, not part of the game
+addons/godot_mcp/
+docs/**/*.import

@@ -28,7 +28,7 @@ const HazardMath := preload("res://prototype/hazard_math.gd")
 
 # Bump when the movement model or the rules change: it invalidates the
 # per-device cache of validation verdicts (see Field.build).
-const VERSION := 6
+const VERSION := 8  # 8: intro back edge no longer kills (Rules.min_z)
 
 # Wider than the runtime's 0.4 so a plan never relies on centimetres.
 const PLAYER_HALF := 0.6
@@ -95,7 +95,7 @@ static func validate(plan: Dictionary, clock) -> Dictionary:
 					if entry["pits"].has([col, row]):
 						continue
 					var cz := z0 + (row + 0.5) * depth / Rules.ROWS
-					if cz < Rules.death_line(z_back1) + 0.6 or cz > z_front - 1.0:
+					if cz < Rules.min_z(z_back1) + 0.6 or cz > z_front - 1.0:
 						continue
 					var cx := Rules.col_x(col)
 					if _lethal_at(ctx, Vector2(cx, cz), t0):
@@ -103,7 +103,7 @@ static func validate(plan: Dictionary, clock) -> Dictionary:
 					safe[Vector3i(bar, col, row)] = Vector2(cx, cz)
 		if z_front - 1.0 > last_bar_end:
 			for col in Rules.COLS:
-				safe[Vector3i(outro_bar, col, 0)] = Vector2(Rules.col_x(col), maxf(last_bar_end + 1.0, Rules.death_line(z_back1) + 0.6))
+				safe[Vector3i(outro_bar, col, 0)] = Vector2(Rules.col_x(col), maxf(last_bar_end + 1.0, Rules.min_z(z_back1) + 0.6))
 
 		var reachable := {}
 		if first:
@@ -196,8 +196,7 @@ static func _plan_ok(ctx: Ctx, a: Vector2, b: Vector2, t_stand: float, t_leave: 
 # purpose so a plan never depends on which side of a tile corner the
 # player lands — or any hazard box overlapping that box.
 static func _lethal_at(ctx: Ctx, p: Vector2, t: float) -> bool:
-	if ctx.clock.hazards_armed_at(t) and ctx.clock.beat_phase_at(t) < Rules.LETHAL_BEAT_FRACTION:
-		var k: int = ctx.clock.beat_in_bar_at(t)
+	if ctx.clock.hazards_armed_at(t):
 		for corner in [Vector2(-PLAYER_HALF, -PLAYER_HALF), Vector2(PLAYER_HALF, -PLAYER_HALF),
 				Vector2(-PLAYER_HALF, PLAYER_HALF), Vector2(PLAYER_HALF, PLAYER_HALF)]:
 			var c: Vector2 = p + corner
@@ -205,15 +204,12 @@ static func _lethal_at(ctx: Ctx, p: Vector2, t: float) -> bool:
 			if bar == 0:
 				continue
 			var entry: Dictionary = ctx.plan["bars"][bar]
-			var pattern := String(entry["pattern"])
-			if pattern == "none" or bool(entry["demo"]):
+			if entry["pattern"] == "none" and entry["plates"].is_empty():
 				continue
 			var depth: float = ctx.bar_depth[bar]
 			var row := clampi(int(floor((c.y - ctx.bar_z0[bar]) / (depth / Rules.ROWS))), 0, Rules.ROWS - 1)
 			var col := clampi(Rules.col_at(c.x), 0, Rules.COLS - 1)
-			if entry["plain_rows"].has(row):
-				continue
-			if Rules.pattern_lethal(pattern, col, row, k):
+			if Rules.plate_state(entry, col, row, t) == 2:
 				return true
 	for spec in ctx.specs:
 		var band := 4.5 if String(spec["kind"]) == "orbiter" else 1.8

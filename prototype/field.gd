@@ -19,6 +19,7 @@ const Slammer := preload("res://prototype/hazard_slammer.gd")
 const Sweeper := preload("res://prototype/hazard_sweeper.gd")
 const Orbiter := preload("res://prototype/hazard_orbiter.gd")
 const Gate := preload("res://prototype/hazard_gate.gd")
+const Volley := preload("res://prototype/hazard_volley.gd")
 
 enum TileState { SAFE, ARMED, LETHAL }
 
@@ -116,6 +117,8 @@ func build() -> void:
 				h = Orbiter.new()
 			"gate":
 				h = Gate.new()
+			"volley":
+				h = Volley.new()
 			_:
 				h = Slammer.new()
 		add_child(h)
@@ -283,27 +286,12 @@ func tile_state_at(x: float, z: float, t: float) -> int:
 	return _state_for(bar, tile.x, tile.y, t)
 
 
-# LETHAL for the first LETHAL_BEAT_FRACTION of its beat; ARMED (dark
-# magenta) for the whole beat before that.
-#
-# Before the first downbeat the whole grid REHEARSES: every plate plays
-# its pattern in warning colour on the extrapolated beat grid, never
-# lethal. A demo bar's plates do the same for good (they show, they
-# never kill). The player can walk over both freely.
+# The one plate rule lives in Rules.plate_state (0/1/2 = SAFE/ARMED/LETHAL):
+# armed for a whole period, lethal for the first LETHAL_BEAT_FRACTION of a
+# beat after the period starts; only the warning colour before the first
+# downbeat and on demo bars.
 func _state_for(bar: int, col: int, row: int, t: float) -> int:
-	var entry: Dictionary = plan["bars"][bar]
-	var pattern := String(entry["pattern"])
-	if pattern == "none" or entry["plain_rows"].has(row):
-		return TileState.SAFE
-	var lethal_allowed := BeatClock.hazards_armed_at(t) and not bool(entry["demo"])
-	var k := BeatClock.beat_in_bar_at(t)
-	var firing := Rules.pattern_lethal(pattern, col, row, k) \
-		and BeatClock.beat_phase_at(t) < Rules.LETHAL_BEAT_FRACTION
-	if firing:
-		return TileState.LETHAL if lethal_allowed else TileState.ARMED
-	if Rules.pattern_lethal(pattern, col, row, (k + 1) % 4):
-		return TileState.ARMED
-	return TileState.SAFE
+	return Rules.plate_state(plan["bars"][bar], col, row, t)
 
 
 # Repaint the tiles of the bars near the window. Only changed tiles touch
@@ -350,7 +338,7 @@ func nearest_danger_tile(x: float, z: float, t: float) -> Variant:
 	var best_d := 1e9
 	for b in range(maxi(1, bar - 1), mini(BeatClock.bar_count(), bar + 1) + 1):
 		var entry: Dictionary = plan["bars"][b]
-		if entry["pattern"] == "none":
+		if entry["pattern"] == "none" and entry["plates"].is_empty():
 			continue
 		var z0 := _bar_z0[b - 1]
 		var depth := (_bar_z1[b - 1] - z0) / Rules.ROWS

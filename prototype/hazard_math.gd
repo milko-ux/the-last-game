@@ -5,17 +5,19 @@ extends RefCounted
 # pose themselves) AND the fairness validator (to test layouts
 # before the scene runs), so both always agree.
 #
-# Every hazard is periodic with the bar (or two bars) and locked
-# to the downbeats, so it is live whenever it is on screen, not
-# only during "its" bar. Nothing here keeps state.
+# Every hazard is periodic with the level's hazard PERIOD (addendum
+# 3: one bar on level 1, see BeatClock.period_beats) and locked to
+# its downbeats, so it is live whenever it is on screen, not only
+# during "its" bar. Nothing here keeps state.
 # ============================================================
 
 const Rules := preload("res://prototype/rules.gd")
 
 const WALL_H := 3.0
 const WALL_D := 0.6
-const SWEEP_GAP := 3.0
-const GATE_GAP := 4.0
+# Sweeper gap / gate opening widths are level knobs: Rules.sweep_gap(),
+# Rules.gate_gap().
+const VOLLEY_R := 0.75          # orb radius; top at 1.5 so a jump clears it
 const ORBIT_R := 3.0
 const ORB_R := 0.6
 const ORB_Y := 1.0
@@ -28,37 +30,36 @@ const SLAM_DROP_S := 0.10
 const SLAM_LETHAL_BELOW := 1.2
 
 
-# 0..1 progress through the current bar, locked to the real downbeats.
-static func bar_cycle(t: float) -> float:
-	var bar := BeatClock.bar_at(t)
-	if bar < 1:
-		return 0.0
-	return BeatClock.bar_progress(bar, t)
+# Continuous period count (e.g. 12.37 = 37 % through period 12). Runs
+# through the intro too (0, -1, ...) so hazards can rehearse there.
+static func period_float(t: float) -> float:
+	return BeatClock.period_float_at(t)
 
 
-# Continuous bar count (e.g. 12.37 = 37 % through bar 12). 0 in the intro.
-static func bar_float(t: float) -> float:
-	var bar := BeatClock.bar_at(t)
-	if bar < 1:
-		return 0.0
-	return float(bar) + BeatClock.bar_progress(bar, t)
+# The "thrown" family (volley, slammer) works on a two-period cycle:
+# one period of warning, then it fires at the start of the next. Which
+# periods fire is set per instance by `cycle` (0 or 1).
+static func fires_in_period(spec: Dictionary, idx: int) -> bool:
+	return idx >= 1 and posmod(idx + int(spec.get("cycle", 0)), 2) == 0
 
 
-# --- Sweeper: a gap that crosses the field once per bar (ping-pong over
-# two bars, so it never teleports). `phase` offsets consecutive sweepers.
+# --- Sweeper: a gap that crosses the field once per period (ping-pong
+# over two periods, so it never teleports). `phase` offsets consecutive
+# sweepers.
 static func sweeper_gap_x(spec: Dictionary, t: float) -> float:
-	var travel := Rules.FIELD_WIDTH - SWEEP_GAP
-	var u := fposmod(bar_float(t) * 0.5 + float(spec.get("phase", 0.0)), 1.0)
+	var travel := Rules.FIELD_WIDTH - Rules.sweep_gap()
+	var u := fposmod(period_float(t) * 0.5 + float(spec.get("phase", 0.0)), 1.0)
 	var tri := 1.0 - absf(2.0 * u - 1.0)
 	var x := -travel * 0.5 + travel * tri
 	return x * float(spec.get("dir", 1))
 
 
-# --- Gate: the opening jumps to a new seeded x on every downbeat.
+# --- Gate: the opening jumps to a new seeded x at the start of every
+# period (and rehearses that through the intro grid).
 static func gate_opening_x(spec: Dictionary, t: float) -> float:
-	var bar := BeatClock.bar_at(t)
-	var h := hash(Vector2i(int(spec.get("seed", 0)), bar))
-	var span := Rules.FIELD_WIDTH - GATE_GAP
+	var idx := BeatClock.period_index_at(t)
+	var h := hash(Vector2i(int(spec.get("seed", 0)), idx))
+	var span := Rules.FIELD_WIDTH - Rules.gate_gap()
 	return -span * 0.5 + span * float(h % 10007) / 10006.0
 
 
@@ -79,30 +80,54 @@ static func gate_crossed(spec: Dictionary, prev: Vector3, pos: Vector3, half_w: 
 	var u := a / (a - b)
 	var x := lerpf(prev.x, pos.x, u)
 	for ot in [t, t_prev]:
-		if absf(x - gate_opening_x(spec, ot)) + half_w <= GATE_GAP * 0.5:
+		if absf(x - gate_opening_x(spec, ot)) + half_w <= Rules.gate_gap() * 0.5:
 			return false
 	return true
 
 
-# --- Orbiter: one revolution per bar, phase locked to the downbeat.
+# --- Orbiter: one revolution per period, phase locked to its start.
 static func orbiter_orb_pos(spec: Dictionary, t: float) -> Vector3:
-	var a := TAU * bar_float(t) * float(spec.get("dir", 1)) + float(spec.get("phase", 0.0))
+	var a := TAU * period_float(t) * float(spec.get("dir", 1)) + float(spec.get("phase", 0.0))
 	return Vector3(float(spec["x"]) + ORBIT_R * cos(a), ORB_Y, float(spec["z"]) + ORBIT_R * sin(a))
 
 
-# --- Slammer: hovers, drops on beat k of every bar, lifts by the next beat.
+# --- Slammer: hovers, drops at the start of its firing periods (see
+# fires_in_period), lifts by the next beat. Hot (bright) for the whole
+# period before a drop.
 static func slammer_bottom(spec: Dictionary, t: float) -> float:
-	var bar := BeatClock.bar_at(t)
-	if bar < 1:
+	var idx := BeatClock.period_index_at(t)
+	if idx < 0:
 		return SLAM_HOVER
-	var k := int(spec.get("beat", 0))
 	var best := SLAM_HOVER
-	for b in [bar, bar + 1]:
-		if b > BeatClock.bar_count():
-			continue
-		var tb: float = BeatClock.bar_beats(b)[k]
-		best = minf(best, _slam_curve(t - tb))
+	for i in [idx, idx + 1]:
+		if fires_in_period(spec, i):
+			best = minf(best, _slam_curve(t - BeatClock.period_start(i)))
 	return best
+
+
+static func slammer_hot(spec: Dictionary, t: float) -> bool:
+	var idx := BeatClock.period_index_at(t)
+	if fires_in_period(spec, idx + 1):
+		return true
+	return fires_in_period(spec, idx) and t - BeatClock.period_start(idx) < BeatClock.beat_interval
+
+
+# --- Volley: an orb fired from one side of the field along one tile-row
+# (constant z), across the full width in exactly one period. The period
+# before it fires is the warning (a line along the row, a muzzle block
+# at the edge it comes from). Lethal only on contact with the orb.
+# Returns the orb's x, or null while nothing is in flight.
+static func volley_orb_x(spec: Dictionary, t: float) -> Variant:
+	var idx := BeatClock.period_index_at(t)
+	if not fires_in_period(spec, idx):
+		return null
+	var d := float(spec.get("dir", 1))
+	var reach := Rules.half_width() + VOLLEY_R
+	return lerpf(-d * reach, d * reach, BeatClock.period_progress_at(t))
+
+
+static func volley_warning(spec: Dictionary, t: float) -> bool:
+	return fires_in_period(spec, BeatClock.period_index_at(t) + 1)
 
 
 static func _slam_curve(dt: float) -> float:
@@ -137,10 +162,15 @@ static func shape_boxes_at(spec: Dictionary, t: float) -> Array:
 	match String(spec["kind"]):
 		"sweeper":
 			var gx := sweeper_gap_x(spec, t)
-			return _walls_with_gap(gx, SWEEP_GAP, z, hw)
+			return _walls_with_gap(gx, Rules.sweep_gap(), z, hw)
 		"gate":
 			var ox := gate_opening_x(spec, t)
-			return _walls_with_gap(ox, GATE_GAP, z, hw)
+			return _walls_with_gap(ox, Rules.gate_gap(), z, hw)
+		"volley":
+			var vx: Variant = volley_orb_x(spec, t)
+			if vx == null:
+				return []
+			return [AABB(Vector3(float(vx) - VOLLEY_R, 0.0, z - VOLLEY_R), Vector3(VOLLEY_R, VOLLEY_R, VOLLEY_R) * 2.0)]
 		"orbiter":
 			var p := orbiter_orb_pos(spec, t)
 			return [AABB(p - Vector3(ORB_R, ORB_R, ORB_R), Vector3(ORB_R, ORB_R, ORB_R) * 2.0)]

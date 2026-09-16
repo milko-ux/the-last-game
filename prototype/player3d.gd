@@ -57,13 +57,16 @@ func reset_to(x: float, z: float) -> void:
 	_eye_pivot.rotation.y = 0.0
 
 
-func tick(delta: float, z_front: float, field: Node3D) -> void:
+func tick(delta: float, z_back: float, z_front: float, field: Node3D) -> void:
 	prev_position = position
 	var v := move_dir
 	if v.length() > 1.0:
 		v = v.normalized()
 	position.x += v.x * SCREEN_X * Rules.player_speed() * delta
 	position.z = minf(position.z + v.y * Rules.player_speed() * delta, z_front - HALF_D)
+	# The intro carry: the window pushes an idle player forward instead of
+	# killing them (Rules.carry_line is -INF once hazards are armed).
+	position.z = maxf(position.z, Rules.carry_line(z_back))
 
 	var floor_here: bool = field.floor_at(position.x, position.z)
 	if on_ground and not floor_here:

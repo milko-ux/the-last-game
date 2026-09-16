@@ -12,11 +12,9 @@ config_version=5
 
 config/name="THE LAST GAME"
 run/main_scene="res://main.tscn"
-; Phase R: the "Web (Phase R)" export preset sets the custom feature
-; "phase_r", which switches the main scene to the prototype for that build only.
-run/main_scene.phase_r="res://prototype/track_test.tscn"
 config/features=PackedStringArray("4.7", "Mobile")
 config/icon="res://icon.svg"
+run/main_scene.phase_r="res://prototype/track_test.tscn"
 
 [autoload]
 
@@ -35,6 +33,9 @@ window/size/viewport_height=540
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
 
+[editor_plugins]
+
+
 [physics]
 
 3d/physics_engine="Jolt Physics"
@@ -43,5 +44,4 @@ window/stretch/aspect="expand"
 
 rendering_device/driver.windows="d3d12"
 renderer/rendering_method="mobile"
-renderer/rendering_method.mobile="mobile"
 viewport/hdr_2d=true
