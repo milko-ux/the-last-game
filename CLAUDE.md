@@ -77,6 +77,7 @@ Clearing Standard unlocks **both** Hard and Extreme (Milko's wording was "unlock
 - **Ads:** rewarded video only. **Never show an ad on death** — this was explicitly rejected earlier and should not resurface.
 - **Onboarding:** guest-first. Registration is deferred to the results screen, not forced upfront. **Milko asked for upfront sign-up on 2026-08-22; this entry is the agreed outcome after pushing back** — a signup wall is the biggest drop-off point in a free game, and Talo only offers email/password + Google Play Games natively anyway (no Apple/Facebook without custom work, and offering Google on iOS may drag in Sign in with Apple).
 - **Data & privacy (GDPR/EU):** any feature that collects or stores player data (accounts, leaderboards) needs consent handling before it ships. Flag this before implementing Phase 3.
+- The Godot MCP plugin and its autoloads are dev tooling; disable them before any release export.
 
 **Note on Phase 1.5:** moving from hand-drawn rendering to scenes/shaders is a pre-approved architecture change, not a violation of the visual non-negotiables above — the goal is the identical look on a better-built foundation. Still flag it if the actual visual result (glow intensity, exact colors, control feel) ends up noticeably different from what's live now.
 
