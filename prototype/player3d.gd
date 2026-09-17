@@ -1,7 +1,10 @@
 extends CharacterBody3D
 # ============================================================
-# PLAYER (3D) — a white capsule with one black eye. Moves freely
-# on the field in x and z at PLAYER_SPEED, plus jump. The only
+# PLAYER (3D) — position, jump and the hit box. What you SEE is the
+# creature (creature.gd, Phase A brief 1): purely visual, 3 units tall,
+# while the hit box stays the gray-box capsule's (0.8 x 1.6 x 0.8 at the
+# feet, Rules.player_box) — bigger to look at than to hit, on purpose.
+# Moves freely on the field in x and z at PLAYER_SPEED, plus jump. The only
 # constraints are the window: it cannot pass the front edge, and
 # dropping out of the back edge is a death (handled by the scene).
 #
@@ -31,20 +34,9 @@ var prev_position := Vector3.ZERO   # feet position last frame, for swept checks
 var y := 0.0
 var vy := 0.0
 var on_ground := true
-var dead := false:
-	set(v):
-		dead = v
-		_mesh.material_override = Mats.player(Palette.HAZ) if v else Mats.player(Color.WHITE)
+var dead := false
 
-@onready var _mesh: MeshInstance3D = $Mesh
-@onready var _eye_pivot: Node3D = $EyePivot
-@onready var _eye: MeshInstance3D = $EyePivot/Eye
-
-
-func _ready() -> void:
-	_mesh.material_override = Mats.player(Color.WHITE)
-	_eye.material_override = Mats.player(Color(0.02, 0.02, 0.03))
-	_eye.material_override.render_priority = 11
+@onready var creature: Node3D = $Creature
 
 
 func reset_to(x: float, z: float) -> void:
@@ -54,7 +46,6 @@ func reset_to(x: float, z: float) -> void:
 	vy = 0.0
 	on_ground = true
 	move_dir = Vector2.ZERO
-	_eye_pivot.rotation.y = 0.0
 
 
 func tick(delta: float, z_back: float, z_front: float, field: Node3D) -> void:
@@ -86,6 +77,7 @@ func jump() -> bool:
 		return false
 	vy = JUMP_VELOCITY_PX * WORLD_PER_PX
 	on_ground = false
+	creature.on_jump(2.0 * JUMP_VELOCITY_PX / GRAVITY_PX)
 	return true
 
 
@@ -94,14 +86,11 @@ func fell() -> bool:
 
 
 # The eye turns toward the nearest thing that will be lethal within the
-# next beat; forward when nothing is. (Milko's one-eyed creature: the eye
-# telegraphing danger is gameplay, so it lives in the gray-box.)
+# next beat; forward when nothing is. The eye telegraphing danger is
+# gameplay; the turning itself (and the bracing when it is close) is the
+# creature's job.
 func look_at_danger(target: Variant) -> void:
-	var yaw := 0.0
-	if target != null:
-		var d: Vector3 = target - position
-		yaw = atan2(d.x, d.z)
-	_eye_pivot.rotation.y = lerp_angle(_eye_pivot.rotation.y, yaw, 0.35)
+	creature.set_look_target(target)
 
 
 # World-space box used for hazard hit tests.

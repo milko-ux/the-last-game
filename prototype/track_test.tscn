@@ -29,6 +29,11 @@ script = ExtResource("1_test")
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 environment = SubResource("Environment_fog")
 
+[node name="CreatureLight" type="DirectionalLight3D" parent="."]
+transform = Transform3D(-0.80000, -0.48000, 0.36000, 0.00000, 0.60000, 0.80000, -0.60000, 0.64000, -0.48000, 0, 10, 0)
+light_energy = 1.1
+shadow_enabled = false
+
 [node name="Music" type="AudioStreamPlayer" parent="."]
 stream = ExtResource("6_music")
 

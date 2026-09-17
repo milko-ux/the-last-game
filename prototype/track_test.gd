@@ -363,6 +363,7 @@ func _die() -> void:
 	BeatClock.pause()
 	rig.shake()
 	_freeze = DEATH_FREEZE_LIVES_S if Rules.lives_enabled() else DEATH_FREEZE_S
+	player.creature.play_death(_freeze)
 	Progress.record_best(Rules.LEVEL, BeatClock.song_time())
 	if Rules.lives_enabled() and lives <= 0:
 		_game_over()
@@ -391,6 +392,7 @@ func _rewind() -> void:
 		z = float(cp["z"])
 	player.reset_to(x, z)
 	player.dead = false
+	player.creature.play_respawn()
 	BeatClock.seek(t)
 	var z_back := BeatClock.z_at(t)
 	rig.set_window(z_back)
@@ -402,6 +404,7 @@ func _win() -> void:
 	state = State.WON
 	_end_shown = 0.0
 	player.move_dir = Vector2.ZERO
+	player.creature.play_goal()
 	Input.vibrate_handheld(HAPTIC_WIN_MS)
 	hud.fill = 1.0
 	furthest_t = BeatClock.duration
