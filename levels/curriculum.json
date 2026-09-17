@@ -152,7 +152,7 @@
     "spiral"
    ],
    "gate_opening": 4.0,
-   "sweeper_gap": 3.0,
+   "sweeper_gap": 4.0,
    "types_per_bar": 2,
    "orbiter_pairs": true,
    "orbiter_period": "half_bar",
@@ -180,7 +180,7 @@
     "spiral"
    ],
    "gate_opening": 3.0,
-   "sweeper_gap": 3.0,
+   "sweeper_gap": 4.0,
    "types_per_bar": 2,
    "orbiter_pairs": true,
    "orbiter_period": "half_bar",
@@ -195,7 +195,7 @@
    "song_offset_s": 10.0,
    "demo_bars": true,
    "structure": "mixed",
-   "_note": "addendum 4 section 7: plate_coverage reduced 0.5 -> 0.4 after the first human-bot batch (all 20 seeds hit the cap); sweepers (gap 3) caused 193 of 313 deaths, plates 4 \u2014 see prototype/README.md"
+   "_note": "addendum 4 section 7: plate_coverage reduced 0.5 -> 0.4 after the first human-bot batch (all 20 seeds hit the cap); sweepers (gap 3) caused 193 of 313 deaths, plates 4 \u2014 see prototype/README.md. 2026-09-17: sweeper_gap 3 -> 4 on levels 5-9 (Milko: gap 3 is only for levels 10 and up)"
   },
   {
    "level": 7,
@@ -209,7 +209,7 @@
     "spiral"
    ],
    "gate_opening": 3.0,
-   "sweeper_gap": 3.0,
+   "sweeper_gap": 4.0,
    "types_per_bar": 2,
    "orbiter_pairs": true,
    "orbiter_period": "half_bar",
@@ -237,7 +237,7 @@
     "spiral"
    ],
    "gate_opening": 3.0,
-   "sweeper_gap": 3.0,
+   "sweeper_gap": 4.0,
    "types_per_bar": 2,
    "orbiter_pairs": true,
    "orbiter_period": "half_bar",
@@ -265,7 +265,7 @@
     "spiral"
    ],
    "gate_opening": 3.0,
-   "sweeper_gap": 3.0,
+   "sweeper_gap": 4.0,
    "types_per_bar": 2,
    "orbiter_pairs": true,
    "orbiter_period": "half_bar",
