@@ -10,7 +10,13 @@ const ROWS := 4                      # tile-rows per bar, one per beat
 const TILE := 2.0
 const BAR_LENGTH := 8.0              # z per bar (BeatClock.BAR_UNITS)
 const WINDOW_DEPTH := 2.5 * BAR_LENGTH
-const PLAYER_SPEED_FACTOR := 2.2     # the player can outrun the scroll
+# The player outruns the scroll by this factor (2.2 until the 2026-09-17
+# phone playtest). A level may override it with its `player_speed` knob:
+# below ~2.1 the player covers less than two tile rows per beat (3.44 of
+# the 4.02 units needed), and the fairness validator cannot find a fair
+# layout for levels 3+ (levels 3-4 need ~20 re-roll passes, 5-6 fail
+# after 40), so those levels carry 2.1 in levels/curriculum.json.
+const PLAYER_SPEED_FACTOR := 1.8
 # A pulse plate is lethal for this fraction of its beat (bright magenta),
 # and "armed" (dark magenta) for the same fraction before it. The gap is
 # what makes stepping on the beat physically possible.
@@ -122,8 +128,15 @@ static func lives_enabled() -> bool:
 	return lives() > 0
 
 
+# song_offset_s is written for the original tempo; on a slowed level the
+# same musical spot is later in the (longer) file, so it scales with it.
 static func song_offset() -> float:
-	return float(level().get("song_offset_s", 0.0))
+	return float(level().get("song_offset_s", 0.0)) / song_tempo()
+
+
+# 0.90 / 0.95 / 1.0: which version of the song (and its beatmap) plays.
+static func song_tempo() -> float:
+	return float(level().get("song_tempo", 1.0))
 
 
 static func demo_bars_on() -> bool:
@@ -189,12 +202,12 @@ static func incompatible(a: String, b: String) -> bool:
 
 static func knobs_line() -> String:
 	var l := level()
-	return "LEVEL %d knobs: hazard_rate=%s plate_coverage=%.2f plate_patterns=%s gate_opening=%.1f sweeper_gap=%.1f types_per_bar=%d%s orbiter_pairs=%s orbiter_period=%s lives=%d density_curve=%s song_offset=%.1f demo_bars=%s structure=%s" % [
+	return "LEVEL %d knobs: hazard_rate=%s plate_coverage=%.2f plate_patterns=%s gate_opening=%.1f sweeper_gap=%.1f types_per_bar=%d%s orbiter_pairs=%s orbiter_period=%s lives=%d density_curve=%s song_offset=%.1f song_tempo=%.2f player_speed=%.1fx demo_bars=%s structure=%s" % [
 		LEVEL, l["hazard_rate"], l["plate_coverage"], str(l["plate_patterns"]), l["gate_opening"],
 		l["sweeper_gap"], int(l["types_per_bar"]),
 		("->%d" % int(l["types_per_bar_final"])) if l.has("types_per_bar_final") else "",
 		l.get("orbiter_pairs", false), l.get("orbiter_period", "bar"), lives(), str(density_curve()),
-		song_offset(), demo_bars_on(), l.get("structure", "mixed")]
+		song_offset(), song_tempo(), float(l.get("player_speed", PLAYER_SPEED_FACTOR)), demo_bars_on(), l.get("structure", "mixed")]
 
 # Player hit box (feet at pos, HEIGHT tall).
 const PLAYER_HALF_W := 0.4
@@ -211,7 +224,7 @@ static func scroll_speed() -> float:
 
 
 static func player_speed() -> float:
-	return PLAYER_SPEED_FACTOR * scroll_speed()
+	return float(level().get("player_speed", PLAYER_SPEED_FACTOR)) * scroll_speed()
 
 
 static func half_width() -> float:

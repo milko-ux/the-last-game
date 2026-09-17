@@ -118,9 +118,15 @@ func mark_level_cleared(level: int) -> void:
 		save_progress()
 
 
+# DEV SWITCH (Phase R playtesting): true opens every level the level
+# select can play (1-6) without clearing the one before. Set to false
+# before anything ships. Does not touch the 2D game's difficulty unlocks.
+const UNLOCK_ALL := true
+
+
 # Level 1 is always open; level n opens when level n-1 has been cleared.
 func is_level_unlocked(level: int) -> bool:
-	return level <= 1 or is_level_cleared(level - 1)
+	return UNLOCK_ALL or level <= 1 or is_level_cleared(level - 1)
 
 
 func save_progress() -> void:

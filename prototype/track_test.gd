@@ -77,6 +77,8 @@ func _ready() -> void:
 	# The level's knobs (addendum 3 / 4): hazards act once per period, the
 	# song starts at the level's offset. Both before the field is built,
 	# since the layout is a function of them.
+	BeatClock.set_tempo(Rules.song_tempo())
+	music.stream = load(BeatClock.music_path())
 	BeatClock.period_beats = Rules.period_beats()
 	BeatClock.start_offset = Rules.song_offset()
 	lives = Rules.lives()
@@ -293,11 +295,23 @@ func _nearest_danger(ht: float) -> Variant:
 # normalised direction is used at full speed, the 2D game's rule.
 # Input is WORLD-relative by default (joystick up = down the field
 # whatever the camera's yaw); CameraRig.INPUT_CAMERA_RELATIVE flips it.
+# The joystick, raw: the thumb's offset from where it landed, read every
+# frame, no smoothing and no lerp anywhere between the touch and the
+# player's position. Dead zone 6 % of the stick radius (was 13 %); full
+# speed at STICK_FULL of the radius, so a small flick is already a run.
+const STICK_DEADZONE_FRAC := 0.06
+const STICK_FULL_FRAC := 0.30
+
+
 func _move_input() -> Vector2:
 	var v := Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")
 	if ui.stick_touch_id != -1:
 		var drag: Vector2 = ui.stick_current - ui.stick_origin
-		v = drag.normalized() if drag.length() > ui.STICK_DEADZONE else Vector2.ZERO
+		var r: float = ui.STICK_RADIUS
+		if drag.length() <= r * STICK_DEADZONE_FRAC:
+			v = Vector2.ZERO
+		else:
+			v = (drag / (r * STICK_FULL_FRAC)).limit_length(1.0)
 	var dir := Vector2(v.x, -v.y)
 	if rig.INPUT_CAMERA_RELATIVE:
 		dir = rig.screen_to_world_dir(dir)

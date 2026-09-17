@@ -22,7 +22,16 @@ in the commits on `phase-r-prototype`.
 
 - **Camera v2:** DONE — `camera_rig.gd`: still yaw 24° / pitch 54°, now `CAMERA_DISTANCE = 32`, `FOV = 55` (was 26 / 48). The camera orbits the window centre and looks straight at it (it already did in v1; what made v1 read as "offset" was the unfogged field running off the top-right and the near-right corner being off screen). By projection the window's corners land at x 757-1562, y 268-979 of 2400x1080: ~100 px margin at the near edge, clear of both controls. Screenshot `docs/screenshots/a4-camera-v2-bar1.png`.
 - **Fog:** Godot's depth fog does NOTHING in the gl_compatibility renderer the web export uses (checked with a screenshot under `--rendering-method gl_compatibility`: every row in full colour), so it is switched off and replaced by a distance fade inside the materials (`flat_mats.gd`): every world material lerps to the background colour by its distance from the window along z, identical on web and native. Knobs: `FADE_AHEAD_START/END` = 14 / 27 units ahead of the death line (a bar is 8, so everything past ~3 bars is gone), `FADE_BEHIND_START/END` = 2 / 10 behind it. The rig publishes the window position as the global shader uniform `pr_window_back` (declared in `project.godot`). Fully faded pixels are discarded, because the web renderer rounds the near-black background to pure black and a black silhouette showed. The player and the death line never fade.
-- **Sweeper gap:** `sweeper_gap` 4 on levels 5-9, gap 3 starts at level 10. Level-6 human-bot rerun: see the bot table.
+- **Sweeper gap:** `sweeper_gap` 4 on levels 5-9, gap 3 starts at level 10. Level-6 human-bot rerun: see the bot table (still FAIL, but for a different reason).
+
+### Tuning pass from the phone playtest (2026-09-17, evening)
+
+- **Song tempo:** `song_tempo` per level (0.90 level 1, 0.95 level 2, 1.0 from 3). `BeatClock.set_tempo()` picks `fuffens_instrumental_vers[_90|_95].mp3` with its own pre-scaled `fuffens_beatmap[_90|_95].json`; nothing is rescaled in code. `song_offset_s` stays written for tempo 1.0 and is divided by the tempo, so the song starts at the same musical spot (level 1: 8.9 s).
+- **Player speed:** `PLAYER_SPEED_FACTOR` 2.2 → 1.8, **but only levels 1-2 run at 1.8** (`player_speed` knob); levels 3+ carry 2.1. Reason, from the validator: below ~2.1 the player covers 3.44 units per beat and a two-row step is 4.02, so at 1.8 levels 3-4 need ~20 re-roll passes to become fair (the game allows 10) and levels 5-6 are still unfair after 40. At 2.1 all six validate in 1-2 passes. A true 1.8 on levels 3+ needs the generator to space hazards for the slower player — Milko's call.
+- **Joystick:** there was no smoothing to remove (the touch offset was already read raw every frame), but the dead zone was 13 % of the stick radius and the stick was digital. Now (`track_test.gd`): dead zone 6 % (`STICK_DEADZONE_FRAC`), analog, full speed at 30 % of the radius (`STICK_FULL_FRAC`). The 2D game's `ui.gd` is untouched.
+- **iOS Safari / home-screen web app:** the export has no threads (so no cross-origin-isolation headers are needed, which is what usually breaks standalone mode) and the canvas already had `touch-action: none`. Added to the "Web (Phase R)" preset's head: `apple-mobile-web-app-capable`, black-translucent status bar, `viewport-fit=cover`, a fixed non-scrolling body with selection / callout / tap-highlight off, and non-passive `touchmove` / `gesturestart` / `dblclick` blockers so Safari never waits to see whether a touch is a scroll, pinch or double-tap. No service worker on purpose (it would cache `index.pck`, the stale-build trap). Not verifiable from here: whether iOS honours the self-signed certificate inside a home-screen app.
+- **Camera:** `CAMERA_DISTANCE` 32 → 28, FOV 55 and angles unchanged; the window spans x 686-1608 of 2400 (about 40 % of the width), the near-right corner sits just inside the bottom edge.
+- **Dev unlock:** `Progress.UNLOCK_ALL := true` (`autoload/progress.gd`) opens levels 1-6 in the level select. Set to false before anything ships.
 
 
 Run it (from the repo root):
@@ -50,6 +59,7 @@ Human bot, 20 seeds each, bots play without lives (rewind to checkpoint on every
 | 3 (target: median ≤ 10) | **4** | 5.4 | 17/20 | 16/20 | gate 44, sweeper 37, back edge 14, volley 10, orbiter 3 | PASS |
 | 6, first run (target: median ≤ 16, ≥ 70 % goal), cap 20 | **20 (cap)** | 20 | 0/20 | 0/20 | sweeper 257, back edge 111, gate 22, plate 5, orbiter 5 (400 deaths) | FAIL |
 | 6, plate_coverage 0.5 → 0.4 (the addendum's first remedy), cap 20 | **20 (cap)** | 20 | 0/20 | 0/20 | sweeper 239, back edge 103, gate 30, orbiter 21, plate 6, volley 1 (400 deaths) | FAIL — unchanged, as the death profile predicted |
+| 6, `sweeper_gap` 3 → 4 (2026-09-17, speed still 2.2x), cap 20 | **20 (cap)** | 19.95 | 1/20 | 0/20 | back edge 256, sweeper 68, gate 40, orbiter 28, volley 6, plate 1 (399 deaths) | FAIL — sweeper deaths fell 257 → 68, but back-edge deaths rose 111 → 256 |
 
 Per-seed deaths, level 1: 3 3 0 2 3 2 1 2 2 0 2 3 0 2 4 0 0 1 6 1. Level 3: 3 4 2 2 3 2 11 8 4 3 13 13 6 13 0 7 6 4 3 1.
 
@@ -61,6 +71,13 @@ order (plate_coverage first, then types_per_bar) does not touch the killer;
 the coverage step was applied once as prescribed and re-run (row above).
 The decision that would actually move the number — `sweeper_gap` 4 on
 levels 5-6 — is Milko's to make; it is one number in `levels/curriculum.json`.
+
+**Reading level 6 after gap 4:** the wall is no longer the killer. 205 of
+the 399 deaths are the death line at three bars (40: 84, 19: 69, 10: 52),
+the same spot after every rewind — by the rule learned on level 1
+("an identical death after every rewind means the BOT is wrong") that
+points at the bot's staging, not the layout; the validator bot clears the
+level with 0 deaths. No further bot pass was made (one-pass rule).
 
 ## What this is
 

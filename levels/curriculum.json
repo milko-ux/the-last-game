@@ -8,7 +8,9 @@
   "(level 1 starts at 1 and reaches types_per_bar_final in wave 5). orbiter_pairs: opposite-spin pair allowed",
   "(level 1: only from orbiter_pairs_from_wave). orbiter_period: bar | half_bar (the fast variant, levels 4+).",
   "lives: 0 = no lives (level 1), 3 from level 2. density_curve: multiplier per wave on hazards per bar.",
-  "song_offset_s: playback starts this far into the track (8 s level 1, 10 s later levels).",
+  "song_tempo: 0.90 | 0.95 | 1.0 - which time-stretched version of the song (and its own pre-scaled beatmap) plays: 0.90 level 1, 0.95 level 2, 1.0 from level 3.",
+  "player_speed: the player's speed as a multiple of the scroll speed. 1.8 on levels 1-2 (Milko, phone playtest 2026-09-17); 2.1 from level 3, the lowest value at which the fairness validator still finds fair layouts there.",
+  "song_offset_s: playback starts this far into the track (8 s level 1, 10 s later levels); written for tempo 1.0, divided by song_tempo at load.",
   "demo_bars: true = every new type/pattern gets a demo bar; false from level 7 (everything mixed).",
   "structure: curriculum = level 1's fixed wave order (addendum 3 section 3); mixed = types mix from the start."
  ],
@@ -37,6 +39,8 @@
  "levels": [
   {
    "level": 1,
+   "song_tempo": 0.9,
+   "player_speed": 1.8,
    "hazard_rate": "bar",
    "plate_coverage": 0.12,
    "plate_patterns": [
@@ -64,6 +68,8 @@
   },
   {
    "level": 2,
+   "song_tempo": 0.95,
+   "player_speed": 1.8,
    "hazard_rate": "half_bar",
    "plate_coverage": 0.2,
    "plate_patterns": [
@@ -89,6 +95,8 @@
   },
   {
    "level": 3,
+   "song_tempo": 1.0,
+   "player_speed": 2.1,
    "hazard_rate": "half_bar",
    "plate_coverage": 0.3,
    "plate_patterns": [
@@ -115,6 +123,8 @@
   },
   {
    "level": 4,
+   "song_tempo": 1.0,
+   "player_speed": 2.1,
    "hazard_rate": "half_bar",
    "plate_coverage": 0.4,
    "plate_patterns": [
@@ -142,6 +152,8 @@
   },
   {
    "level": 5,
+   "song_tempo": 1.0,
+   "player_speed": 2.1,
    "hazard_rate": "beat",
    "plate_coverage": 0.45,
    "plate_patterns": [
@@ -170,6 +182,8 @@
   },
   {
    "level": 6,
+   "song_tempo": 1.0,
+   "player_speed": 2.1,
    "hazard_rate": "beat",
    "plate_coverage": 0.4,
    "plate_patterns": [
@@ -199,6 +213,8 @@
   },
   {
    "level": 7,
+   "song_tempo": 1.0,
+   "player_speed": 2.1,
    "hazard_rate": "beat",
    "plate_coverage": 0.5,
    "plate_patterns": [
@@ -227,6 +243,8 @@
   },
   {
    "level": 8,
+   "song_tempo": 1.0,
+   "player_speed": 2.1,
    "hazard_rate": "beat",
    "plate_coverage": 0.509,
    "plate_patterns": [
@@ -255,6 +273,8 @@
   },
   {
    "level": 9,
+   "song_tempo": 1.0,
+   "player_speed": 2.1,
    "hazard_rate": "beat",
    "plate_coverage": 0.517,
    "plate_patterns": [
@@ -283,6 +303,8 @@
   },
   {
    "level": 10,
+   "song_tempo": 1.0,
+   "player_speed": 2.1,
    "hazard_rate": "beat",
    "plate_coverage": 0.526,
    "plate_patterns": [
@@ -311,6 +333,8 @@
   },
   {
    "level": 11,
+   "song_tempo": 1.0,
+   "player_speed": 2.1,
    "hazard_rate": "beat",
    "plate_coverage": 0.535,
    "plate_patterns": [
@@ -339,6 +363,8 @@
   },
   {
    "level": 12,
+   "song_tempo": 1.0,
+   "player_speed": 2.1,
    "hazard_rate": "beat",
    "plate_coverage": 0.543,
    "plate_patterns": [
@@ -367,6 +393,8 @@
   },
   {
    "level": 13,
+   "song_tempo": 1.0,
+   "player_speed": 2.1,
    "hazard_rate": "beat",
    "plate_coverage": 0.552,
    "plate_patterns": [
@@ -395,6 +423,8 @@
   },
   {
    "level": 14,
+   "song_tempo": 1.0,
+   "player_speed": 2.1,
    "hazard_rate": "beat",
    "plate_coverage": 0.561,
    "plate_patterns": [
@@ -423,6 +453,8 @@
   },
   {
    "level": 15,
+   "song_tempo": 1.0,
+   "player_speed": 2.1,
    "hazard_rate": "beat",
    "plate_coverage": 0.57,
    "plate_patterns": [
@@ -451,6 +483,8 @@
   },
   {
    "level": 16,
+   "song_tempo": 1.0,
+   "player_speed": 2.1,
    "hazard_rate": "beat",
    "plate_coverage": 0.578,
    "plate_patterns": [
@@ -479,6 +513,8 @@
   },
   {
    "level": 17,
+   "song_tempo": 1.0,
+   "player_speed": 2.1,
    "hazard_rate": "beat",
    "plate_coverage": 0.587,
    "plate_patterns": [
@@ -507,6 +543,8 @@
   },
   {
    "level": 18,
+   "song_tempo": 1.0,
+   "player_speed": 2.1,
    "hazard_rate": "beat",
    "plate_coverage": 0.596,
    "plate_patterns": [
@@ -535,6 +573,8 @@
   },
   {
    "level": 19,
+   "song_tempo": 1.0,
+   "player_speed": 2.1,
    "hazard_rate": "beat",
    "plate_coverage": 0.604,
    "plate_patterns": [
@@ -563,6 +603,8 @@
   },
   {
    "level": 20,
+   "song_tempo": 1.0,
+   "player_speed": 2.1,
    "hazard_rate": "beat",
    "plate_coverage": 0.613,
    "plate_patterns": [
@@ -591,6 +633,8 @@
   },
   {
    "level": 21,
+   "song_tempo": 1.0,
+   "player_speed": 2.1,
    "hazard_rate": "beat",
    "plate_coverage": 0.622,
    "plate_patterns": [
@@ -619,6 +663,8 @@
   },
   {
    "level": 22,
+   "song_tempo": 1.0,
+   "player_speed": 2.1,
    "hazard_rate": "beat",
    "plate_coverage": 0.63,
    "plate_patterns": [
@@ -647,6 +693,8 @@
   },
   {
    "level": 23,
+   "song_tempo": 1.0,
+   "player_speed": 2.1,
    "hazard_rate": "beat",
    "plate_coverage": 0.639,
    "plate_patterns": [
@@ -675,6 +723,8 @@
   },
   {
    "level": 24,
+   "song_tempo": 1.0,
+   "player_speed": 2.1,
    "hazard_rate": "beat",
    "plate_coverage": 0.648,
    "plate_patterns": [
@@ -703,6 +753,8 @@
   },
   {
    "level": 25,
+   "song_tempo": 1.0,
+   "player_speed": 2.1,
    "hazard_rate": "beat",
    "plate_coverage": 0.657,
    "plate_patterns": [
@@ -731,6 +783,8 @@
   },
   {
    "level": 26,
+   "song_tempo": 1.0,
+   "player_speed": 2.1,
    "hazard_rate": "beat",
    "plate_coverage": 0.665,
    "plate_patterns": [
@@ -759,6 +813,8 @@
   },
   {
    "level": 27,
+   "song_tempo": 1.0,
+   "player_speed": 2.1,
    "hazard_rate": "beat",
    "plate_coverage": 0.674,
    "plate_patterns": [
@@ -787,6 +843,8 @@
   },
   {
    "level": 28,
+   "song_tempo": 1.0,
+   "player_speed": 2.1,
    "hazard_rate": "beat",
    "plate_coverage": 0.683,
    "plate_patterns": [
@@ -815,6 +873,8 @@
   },
   {
    "level": 29,
+   "song_tempo": 1.0,
+   "player_speed": 2.1,
    "hazard_rate": "beat",
    "plate_coverage": 0.691,
    "plate_patterns": [
@@ -843,6 +903,8 @@
   },
   {
    "level": 30,
+   "song_tempo": 1.0,
+   "player_speed": 2.1,
    "hazard_rate": "beat",
    "plate_coverage": 0.7,
    "plate_patterns": [

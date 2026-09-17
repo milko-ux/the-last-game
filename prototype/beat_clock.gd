@@ -21,7 +21,14 @@ signal beat(index: int)
 signal downbeat(bar: int)
 signal section_changed(section_id: int)
 
-const BEATMAP_PATH := "res://assets/audio/fuffens_beatmap.json"
+# The song exists at three tempos (the level's `song_tempo` knob): the
+# original, and time-stretched 0.95 and 0.90 versions for the first
+# levels. Each has its OWN beatmap, already scaled: nothing here ever
+# rescales beat times. set_tempo() picks the pair.
+const BEATMAP_BASE := "res://assets/audio/fuffens_beatmap"
+const MUSIC_BASE := "res://assets/audio/fuffens_instrumental_vers"
+var tempo := 1.0
+var beatmap_path := BEATMAP_BASE + ".json"
 
 # Hazards run this much BEHIND the audio clock so the visual hit lands
 # with the transient you actually hear (audio output tends to be later
@@ -70,14 +77,35 @@ func _ready() -> void:
 	_load()
 
 
+# "" for 1.0, "_95" for 0.95, "_90" for 0.90.
+static func tempo_suffix(t: float) -> String:
+	var pct := roundi(t * 100.0)
+	return "" if pct == 100 else "_%d" % pct
+
+
+# Called by the scene (and the tools) before the field is built.
+func set_tempo(t: float) -> void:
+	var path := BEATMAP_BASE + tempo_suffix(t) + ".json"
+	tempo = t
+	if path == beatmap_path and loaded:
+		return
+	beatmap_path = path
+	loaded = false
+	_load()
+
+
+func music_path() -> String:
+	return MUSIC_BASE + tempo_suffix(tempo) + ".mp3"
+
+
 func _load() -> void:
-	var f := FileAccess.open(BEATMAP_PATH, FileAccess.READ)
+	var f := FileAccess.open(beatmap_path, FileAccess.READ)
 	if f == null:
-		push_error("BeatClock: cannot open %s" % BEATMAP_PATH)
+		push_error("BeatClock: cannot open %s" % beatmap_path)
 		return
 	var data = JSON.parse_string(f.get_as_text())
 	if typeof(data) != TYPE_DICTIONARY:
-		push_error("BeatClock: %s is not valid JSON" % BEATMAP_PATH)
+		push_error("BeatClock: %s is not valid JSON" % beatmap_path)
 		return
 	bpm = float(data.get("bpm", 120.0))
 	beat_interval = float(data.get("beat_interval_s", 60.0 / bpm))

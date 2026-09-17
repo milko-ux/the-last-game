@@ -164,7 +164,7 @@ func _verdict_path() -> String:
 			"res://prototype/fairness.gd", "res://levels/curriculum.json"]:
 		src += FileAccess.get_md5(f)
 	return "user://fairness_v%d_L%d_%s_%s.json" % [Fairness.VERSION, Rules.LEVEL,
-		FileAccess.get_md5(BeatClock.BEATMAP_PATH).substr(0, 12), src.md5_text().substr(0, 12)]
+		FileAccess.get_md5(BeatClock.beatmap_path).substr(0, 12), src.md5_text().substr(0, 12)]
 
 
 func _load_verdict() -> Dictionary:

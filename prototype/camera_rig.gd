@@ -22,13 +22,14 @@ const Rules := preload("res://prototype/rules.gd")
 # morning playtest: CAMERA_YAW_DEG = 0.0 gives the old straight view.
 const CAMERA_YAW_DEG := 24.0
 const CAMERA_PITCH_DEG := 54.0
-# Camera v2: wider and further back. By projection at 2400x1080 the
-# window's four corners land at x 757-1562, y 268-979, so the 18-unit
-# width has ~100 px of margin at the near edge and clears both controls.
-# (v1 was distance 26 / FOV 48: the near-right corner was off screen.)
+# Camera v2: wider and further back than v1 (26 / FOV 48, near-right
+# corner off screen). 32 felt far on the phone; 28 since 2026-09-17. By
+# projection at 2400x1080 the window's corners land at x 686-1608,
+# y 238-1064 (the near-right corner is only just on screen): the field
+# covers about 40 % of the screen width, which leaves room for the world background that gets added around it.
 # What lies beyond the window dissolves into the background: see the
 # distance fade in flat_mats.gd (depth fog does not work on web).
-const CAMERA_DISTANCE := 32.0
+const CAMERA_DISTANCE := 28.0
 const FOV := 55.0
 # false: joystick up = down the field regardless of the yaw (world-
 # relative). true: joystick up = away from the camera.

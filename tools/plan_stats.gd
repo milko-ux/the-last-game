@@ -27,6 +27,7 @@ func _initialize() -> void:
 		clock._load()
 	for L in levels:
 		Rules.LEVEL = int(L)
+		clock.set_tempo(Rules.song_tempo())
 		clock.period_beats = Rules.period_beats()
 		clock.start_offset = Rules.song_offset()
 		print(Rules.knobs_line())
