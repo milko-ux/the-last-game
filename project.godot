@@ -49,3 +49,10 @@ enabled=PackedStringArray("res://addons/godot_mcp/plugin.cfg")
 rendering_device/driver.windows="d3d12"
 renderer/rendering_method="mobile"
 viewport/hdr_2d=true
+
+[shader_globals]
+
+pr_window_back={
+"type": "float",
+"value": 0.0
+}

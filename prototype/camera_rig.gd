@@ -1,7 +1,10 @@
 extends Node3D
 # ============================================================
-# CAMERA RIG — follows the WINDOW, not the player. High, back and
-# to one side of the window centre, looking at it, so the whole
+# CAMERA RIG — follows the WINDOW, not the player. The camera ORBITS
+# the window centre: it sits on a sphere around that point (yaw, pitch,
+# distance) and looks straight at it, so the window centre is always
+# the centre of the screen and the field's centre line runs through
+# the middle of the frame. High, back and to one side, so the whole
 # field width and about two bars ahead are in frame and the field
 # is seen OBLIQUELY, as in docs/concept/field_monolith.png (addendum
 # 4 section 1): the near edge runs diagonally across the lower part
@@ -19,10 +22,14 @@ const Rules := preload("res://prototype/rules.gd")
 # morning playtest: CAMERA_YAW_DEG = 0.0 gives the old straight view.
 const CAMERA_YAW_DEG := 24.0
 const CAMERA_PITCH_DEG := 54.0
-# Distance from the look-at point: at 2400x1080 the full 18-unit width
-# and two bars ahead stay on screen with margin (checked by projection).
-const CAMERA_DISTANCE := 26.0
-const FOV := 48.0
+# Camera v2: wider and further back. By projection at 2400x1080 the
+# window's four corners land at x 757-1562, y 268-979, so the 18-unit
+# width has ~100 px of margin at the near edge and clears both controls.
+# (v1 was distance 26 / FOV 48: the near-right corner was off screen.)
+# What lies beyond the window dissolves into the background: see the
+# distance fade in flat_mats.gd (depth fog does not work on web).
+const CAMERA_DISTANCE := 32.0
+const FOV := 55.0
 # false: joystick up = down the field regardless of the yaw (world-
 # relative). true: joystick up = away from the camera.
 const INPUT_CAMERA_RELATIVE := false
@@ -55,6 +62,8 @@ func shake() -> void:
 func set_window(z_back: float) -> void:
 	window_back = z_back
 	position = Vector3(0.0, 0.0, z_back + Rules.WINDOW_DEPTH * 0.5)
+	# The distance fade in flat_mats.gd is measured from the window.
+	RenderingServer.global_shader_parameter_set("pr_window_back", z_back)
 
 
 # The camera's offset from the look-at point for the reference angle.

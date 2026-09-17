@@ -51,7 +51,7 @@ func boxes_at(t: float) -> Array:
 	return HazardMath.boxes_at(spec, t)
 
 
-func _box_mesh(size: Vector3, mat: StandardMaterial3D) -> MeshInstance3D:
+func _box_mesh(size: Vector3, mat: Material) -> MeshInstance3D:
 	var mi := MeshInstance3D.new()
 	var bm := BoxMesh.new()
 	bm.size = size
