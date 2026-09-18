@@ -43,6 +43,7 @@ in the commits on `phase-r-prototype`.
 - **Joystick:** there was no smoothing to remove (the touch offset was already read raw every frame), but the dead zone was 13 % of the stick radius and the stick was digital. Now (`track_test.gd`): dead zone 6 % (`STICK_DEADZONE_FRAC`), analog, full speed at 30 % of the radius (`STICK_FULL_FRAC`). The 2D game's `ui.gd` is untouched.
 - **iOS Safari / home-screen web app:** the export has no threads (so no cross-origin-isolation headers are needed, which is what usually breaks standalone mode) and the canvas already had `touch-action: none`. Added to the "Web (Phase R)" preset's head: `apple-mobile-web-app-capable`, black-translucent status bar, `viewport-fit=cover`, a fixed non-scrolling body with selection / callout / tap-highlight off, and non-passive `touchmove` / `gesturestart` / `dblclick` blockers so Safari never waits to see whether a touch is a scroll, pinch or double-tap. No service worker on purpose (it would cache `index.pck`, the stale-build trap). Not verifiable from here: whether iOS honours the self-signed certificate inside a home-screen app.
 - **Camera:** `CAMERA_DISTANCE` 32 → 28, FOV 55 and angles unchanged; the window spans x 686-1608 of 2400 (about 40 % of the width), the near-right corner sits just inside the bottom edge.
+- **Bots after the pass:** validator bot 0 deaths, goal reached, on all six levels. Human bot on level 1 (tempo 0.90, 1.8x): median 3, 18/20 within 8 — still PASS, but it slipped from median 2 / 20/20; see the table.
 - **Dev unlock:** `Progress.UNLOCK_ALL := true` (`autoload/progress.gd`) opens levels 1-6 in the level select. Set to false before anything ships.
 
 
@@ -72,8 +73,9 @@ Human bot, 20 seeds each, bots play without lives (rewind to checkpoint on every
 | 6, first run (target: median ≤ 16, ≥ 70 % goal), cap 20 | **20 (cap)** | 20 | 0/20 | 0/20 | sweeper 257, back edge 111, gate 22, plate 5, orbiter 5 (400 deaths) | FAIL |
 | 6, plate_coverage 0.5 → 0.4 (the addendum's first remedy), cap 20 | **20 (cap)** | 20 | 0/20 | 0/20 | sweeper 239, back edge 103, gate 30, orbiter 21, plate 6, volley 1 (400 deaths) | FAIL — unchanged, as the death profile predicted |
 | 6, `sweeper_gap` 3 → 4 (2026-09-17, speed still 2.2x), cap 20 | **20 (cap)** | 19.95 | 1/20 | 0/20 | back edge 256, sweeper 68, gate 40, orbiter 28, volley 6, plate 1 (399 deaths) | FAIL — sweeper deaths fell 257 → 68, but back-edge deaths rose 111 → 256 |
+| 1 after the tuning pass (tempo 0.90, player 1.8x, gap 4), cap 9 | **3** | 3.3 | 18/20 | **18/20 (90 %)** | back edge 49, sweeper 13, volley 4 (66 deaths) | PASS — on the line: median 2 → 3, 36 of the 49 back-edge deaths at bar 32 (the sweeper demo), the slower player staging late at the first wall |
 
-Per-seed deaths, level 1: 3 3 0 2 3 2 1 2 2 0 2 3 0 2 4 0 0 1 6 1. Level 3: 3 4 2 2 3 2 11 8 4 3 13 13 6 13 0 7 6 4 3 1.
+Per-seed deaths, level 1: 3 3 0 2 3 2 1 2 2 0 2 3 0 2 4 0 0 1 6 1; after the tuning pass: 0 3 2 2 6 1 6 3 9 6 0 9 3 1 5 4 3 1 1 1. Level 3: 3 4 2 2 3 2 11 8 4 3 13 13 6 13 0 7 6 4 3 1.
 
 **Reading level 6:** the failure is the sweeper, not the plates — 257 of 400
 deaths are sweeper walls, 5 are plates. Level 6 has `sweeper_gap` 3 (level 1:
