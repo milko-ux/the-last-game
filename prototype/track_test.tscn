@@ -10,13 +10,13 @@
 
 [sub_resource type="Environment" id="Environment_fog"]
 background_mode = 1
-background_color = Color(0.027451, 0.027451, 0.047059, 1)
+background_color = Color(0.043137, 0.05098, 0.078431, 1)
 ambient_light_source = 1
 tonemap_mode = 0
 glow_enabled = false
 fog_enabled = false
 fog_mode = 1
-fog_light_color = Color(0.027451, 0.027451, 0.047059, 1)
+fog_light_color = Color(0.043137, 0.05098, 0.078431, 1)
 fog_light_energy = 1.0
 fog_density = 1.0
 fog_depth_curve = 1.0

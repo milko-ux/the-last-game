@@ -1,7 +1,7 @@
 extends RefCounted
 # ============================================================
-# FLAT MATERIALS — the entire Phase R look. Unlit, flat, no glow.
-# Colours come from Palette so the meaning is unchanged:
+# WORLD MATERIALS — unlit, flat, no glow. Every colour comes from
+# WorldPalette (prototype/palette.gd, brief 2) so the meaning stays:
 #   magenta = will kill you, cyan = safe surface, amber = goal.
 # Materials are cached so the whole track shares a handful.
 #
@@ -12,7 +12,11 @@ extends RefCounted
 # material lerps toward the background colour by how far its pixel is
 # from the window along z. The camera rig publishes the window's back
 # edge as the global shader uniform `pr_window_back` every frame.
-# The player and the death line keep plain materials: they never fade.
+# The player, its shadow ring and the death line never fade.
+#
+# Three shaders share the fade: FLAT (hazards, markers), TILE (the
+# floor: stone face, cyan seams, dark sides) and MONOLITH (brief 2,
+# see monoliths.gd). All are built from the same snippets below.
 # ============================================================
 
 # Units ahead of the window's back edge (a bar is 8 units): full colour
@@ -24,31 +28,85 @@ const FADE_AHEAD_END := 27.0
 # the bottom of the screen.
 const FADE_BEHIND_START := 2.0
 const FADE_BEHIND_END := 10.0
-# Must match the Environment background in track_test.tscn.
-const BACKGROUND := Color(0.027451, 0.027451, 0.047059)
 
-const _SHADER_BODY := """
-uniform vec4 albedo : source_color;
+# Tile seam width in world units (brief 2 section 1).
+const SEAM_WIDTH := 0.06
+
+# Shared: the fade uniforms and the fade amount for this pixel.
+const FADE_HEAD := """
 uniform vec3 background : source_color;
 uniform vec4 fade;   // ahead start, ahead end, behind start, behind end
 global uniform float pr_window_back;
 varying float world_z;
+
+float fade_amount() {
+	float d = world_z - pr_window_back;
+	return max(smoothstep(fade.x, fade.y, d), smoothstep(fade.z, fade.w, -d));
+}
+"""
+# Fully faded pixels are dropped, not painted: the web renderer's 8-bit
+# buffer rounds the near-black background colour to pure black, which
+# showed as a black silhouette against the background.
+const FADE_APPLY := """
+	float f = fade_amount();
+	if (f > 0.97) {
+		discard;
+	}
+	ALBEDO = mix(ALBEDO, background, f);
+"""
+
+const FLAT_SHADER := """
+shader_type spatial;
+render_mode unshaded, fog_disabled CULL;
+uniform vec4 albedo : source_color;
+FADE_HEAD
 
 void vertex() {
 	world_z = (MODEL_MATRIX * vec4(VERTEX, 1.0)).z;
 }
 
 void fragment() {
-	float d = world_z - pr_window_back;
-	float f = max(smoothstep(fade.x, fade.y, d), smoothstep(fade.z, fade.w, -d));
-	// Fully faded pixels are dropped, not painted: the web renderer's
-	// 8-bit buffer rounds the near-black background colour to pure black,
-	// which showed as a black silhouette against the background.
-	if (f > 0.97) {
-		discard;
-	}
-	ALBEDO = mix(albedo.rgb, background, f);
+	ALBEDO = albedo.rgb;
+FADE_APPLY
 	ALPHA_LINE
+}
+"""
+
+# The floor. A box per tile (or per plain slab): the top face is `face`
+# with a `seam`-coloured line SEAM_WIDTH in from every edge (drawn from
+# the vertex's position inside the box, not from extra geometry); the
+# side faces are `side` with one seam line along their top edge, which is
+# what gives the slab its rim and a pit its lit lip.
+const TILE_SHADER := """
+shader_type spatial;
+render_mode unshaded, fog_disabled;
+uniform vec4 face : source_color;
+uniform vec4 seam : source_color;
+uniform vec4 side : source_color;
+uniform vec3 half_size;      // the box's half extents (x, y, z)
+uniform float seam_width = 0.06;
+FADE_HEAD
+varying vec3 local_pos;
+varying vec3 local_normal;
+
+void vertex() {
+	world_z = (MODEL_MATRIX * vec4(VERTEX, 1.0)).z;
+	local_pos = VERTEX;
+	local_normal = NORMAL;
+}
+
+void fragment() {
+	bool top = local_normal.y > 0.5;
+	float edge;
+	if (top) {
+		edge = min(half_size.x - abs(local_pos.x), half_size.z - abs(local_pos.z));
+	} else {
+		edge = half_size.y - local_pos.y;   // distance below the top edge
+	}
+	float s = 1.0 - smoothstep(seam_width - 0.015, seam_width + 0.015, edge);
+	vec3 base = top ? face.rgb : side.rgb;
+	ALBEDO = mix(base, seam.rgb, s);
+FADE_APPLY
 }
 """
 
@@ -56,22 +114,32 @@ static var _cache := {}
 static var _shaders := {}
 
 
-static func _shader(see_through: bool) -> Shader:
-	if not _shaders.has(see_through):
+static func _shader(kind: String) -> Shader:
+	if not _shaders.has(kind):
 		var sh := Shader.new()
-		var mode := "shader_type spatial;\nrender_mode unshaded, fog_disabled%s;\n" % (", cull_disabled" if see_through else "")
-		sh.code = mode + _SHADER_BODY.replace("ALPHA_LINE", "ALPHA = albedo.a;" if see_through else "")
-		_shaders[see_through] = sh
-	return _shaders[see_through]
+		match kind:
+			"flat":
+				sh.code = FLAT_SHADER.replace("CULL", "").replace("ALPHA_LINE", "")
+			"wall":
+				sh.code = FLAT_SHADER.replace("CULL", ", cull_disabled").replace("ALPHA_LINE", "ALPHA = albedo.a;")
+			"tile":
+				sh.code = TILE_SHADER
+		sh.code = sh.code.replace("FADE_HEAD", FADE_HEAD).replace("FADE_APPLY", FADE_APPLY)
+		_shaders[kind] = sh
+	return _shaders[kind]
+
+
+static func _with_fade(m: ShaderMaterial) -> ShaderMaterial:
+	m.set_shader_parameter("background", WorldPalette.BG_BOTTOM)
+	m.set_shader_parameter("fade", Quaternion(FADE_AHEAD_START, FADE_AHEAD_END, FADE_BEHIND_START, FADE_BEHIND_END))
+	return m
 
 
 static func _fading(c: Color, see_through: bool) -> ShaderMaterial:
 	var m := ShaderMaterial.new()
-	m.shader = _shader(see_through)
+	m.shader = _shader("wall" if see_through else "flat")
 	m.set_shader_parameter("albedo", c)
-	m.set_shader_parameter("background", BACKGROUND)
-	m.set_shader_parameter("fade", Quaternion(FADE_AHEAD_START, FADE_AHEAD_END, FADE_BEHIND_START, FADE_BEHIND_END))
-	return m
+	return _with_fade(m)
 
 
 static func flat(c: Color) -> Material:
@@ -81,35 +149,50 @@ static func flat(c: Color) -> Material:
 	return _cache[key]
 
 
+# ------------------------------------------------------------
+# Hazards and markers
+# ------------------------------------------------------------
 static func magenta() -> Material:
-	return flat(Palette.HAZ)
+	return flat(WorldPalette.LETHAL_LIVE)
 
 
 # Dormant hazard state: still clearly magenta, clearly "not yet".
 static func magenta_dim() -> Material:
-	return flat(Palette.HAZ.darkened(0.62))
+	return flat(WorldPalette.LETHAL_ARMED)
 
 
-# Slightly under full cyan so the magenta stays the loudest thing on screen.
+# Anything safe that stands on the field: pillars, checkpoint marker.
 static func cyan() -> Material:
-	return flat(Palette.EDGE.darkened(0.42))
+	return flat(WorldPalette.SAFE)
 
 
 # Walls (sweepers, gates): see-through so a wall between the camera and
 # the player can never hide the player or the floor behind it.
 static func magenta_wall() -> Material:
-	return _wall("wall", Palette.HAZ, 0.55)
+	return _wall("wall", WorldPalette.LETHAL_LIVE, 0.55)
 
 
 # Demo (non-lethal) wall: the warning colour.
 static func magenta_wall_dim() -> Material:
-	return _wall("wall_dim", Palette.HAZ.darkened(0.62), 0.5)
+	return _wall("wall_dim", WorldPalette.LETHAL_ARMED, 0.6)
 
 
 static func _wall(key: String, c: Color, a: float) -> Material:
 	if not _cache.has(key):
 		_cache[key] = _fading(Color(c.r, c.g, c.b, a), true)
 	return _cache[key]
+
+
+static func amber() -> Material:
+	return flat(WorldPalette.GOAL)
+
+
+static func amber_dim() -> Material:
+	return flat(WorldPalette.GOAL.darkened(0.55))
+
+
+static func white() -> Material:
+	return flat(Color.WHITE)
 
 
 # The player draws on top of everything: you can always see yourself.
@@ -125,13 +208,28 @@ static func player(c: Color) -> StandardMaterial3D:
 	return _cache[key]
 
 
-static func amber() -> Material:
-	return flat(Palette.GOAL)
-
-
-static func amber_dim() -> Material:
-	return flat(Palette.GOAL.darkened(0.55))
-
-
-static func white() -> Material:
-	return flat(Color.WHITE)
+# ------------------------------------------------------------
+# The floor
+# ------------------------------------------------------------
+# One material per (box size, state). Tiles of one bar all share a size,
+# so a level still uses only a handful.
+static func tile(state: int, half: Vector3) -> Material:
+	var key := "tile_%d_%s" % [state, half]
+	if not _cache.has(key):
+		var m := ShaderMaterial.new()
+		m.shader = _shader("tile")
+		match state:
+			2:   # lethal now: the face turns live and the seam lights up
+				m.set_shader_parameter("face", WorldPalette.LETHAL_LIVE)
+				m.set_shader_parameter("seam", WorldPalette.LETHAL_SEAM)
+			1:   # armed: the face tints toward the warning colour
+				m.set_shader_parameter("face", WorldPalette.LETHAL_ARMED)
+				m.set_shader_parameter("seam", WorldPalette.TILE_SEAM)
+			_:
+				m.set_shader_parameter("face", WorldPalette.TILE)
+				m.set_shader_parameter("seam", WorldPalette.TILE_SEAM)
+		m.set_shader_parameter("side", WorldPalette.TILE_SIDE)
+		m.set_shader_parameter("half_size", half)
+		m.set_shader_parameter("seam_width", SEAM_WIDTH)
+		_cache[key] = _with_fade(m)
+	return _cache[key]

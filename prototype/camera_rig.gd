@@ -46,10 +46,48 @@ var window_back := 0.0
 @onready var cam: Camera3D = $Camera3D
 
 
+# Brief 2 section 4: the background is a two-stop vertical gradient,
+# BG_TOP -> BG_BOTTOM, drawn on an unlit quad that rides on the camera far
+# behind everything (the cheapest thing that looks the same on the web
+# renderer and native). Nothing else back there.
+const BACKDROP_DISTANCE := 600.0
+const BACKDROP_SHADER := """
+shader_type spatial;
+render_mode unshaded, depth_draw_never, fog_disabled, cull_disabled;
+uniform vec3 top : source_color;
+uniform vec3 bottom : source_color;
+
+void fragment() {
+	ALBEDO = mix(bottom, top, UV.y);
+}
+"""
+
+
 func _ready() -> void:
 	cam.fov = FOV
+	_build_backdrop()
 	BeatClock.downbeat.connect(_on_downbeat)
 	set_window(0.0)
+
+
+func _build_backdrop() -> void:
+	var quad := MeshInstance3D.new()
+	var mesh := QuadMesh.new()
+	# Big enough to cover the view at that distance for any aspect ratio.
+	var h := 2.2 * BACKDROP_DISTANCE * tan(deg_to_rad(FOV * 0.6))
+	mesh.size = Vector2(h * 3.0, h)
+	quad.mesh = mesh
+	var sh := Shader.new()
+	sh.code = BACKDROP_SHADER
+	var m := ShaderMaterial.new()
+	m.shader = sh
+	m.render_priority = -100
+	m.set_shader_parameter("top", WorldPalette.BG_TOP)
+	m.set_shader_parameter("bottom", WorldPalette.BG_BOTTOM)
+	quad.material_override = m
+	quad.position = Vector3(0.0, 0.0, -BACKDROP_DISTANCE)
+	quad.extra_cull_margin = 16384.0
+	cam.add_child(quad)
 
 
 func _on_downbeat(_bar: int) -> void:

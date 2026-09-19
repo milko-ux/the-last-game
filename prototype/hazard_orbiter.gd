@@ -16,7 +16,7 @@ func _build() -> void:
 	cm.height = 3.0
 	cm.radial_segments = 12
 	pillar.mesh = cm
-	pillar.material_override = Mats.flat(Palette.EDGE)   # bright cyan: safe, and visible against the floor
+	pillar.material_override = Mats.cyan()   # safe, and visible against the floor
 	pillar.position.y = 1.5
 	add_child(pillar)
 

@@ -81,7 +81,7 @@ const GOAL_HOLD_AT_APEX := true        # the last hop freezes at its top, facing
 # body's ON_TOP). Set it below 0.92 to put the ring under the body instead.
 const RING_ON_TOP := 0.95
 const RING_ALPHA := 0.4
-const RING_RIM_COLOR := Color(0.1, 0.83, 0.79, 0.7)
+const RING_RIM_COLOR := Color(WorldPalette.SAFE, 0.7)
 const RING_RIM_WIDTH := 0.14           # fraction of the radius
 const RING_SHADER := """
 shader_type spatial;

@@ -103,7 +103,7 @@ func _setup() -> void:
 	root.add_child(test)
 	if bar > 1:
 		# Let the validator bot carry the player to the requested bar alive.
-		var ap: Node = load("res://tools/autoplay.gd").new()
+		var ap: Object = load("res://tools/autoplay.gd").new()   # a SceneTree script, not a Node
 		bot = ap
 		test.bot = ap
 		ap.mode = "validator"

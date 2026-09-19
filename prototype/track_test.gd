@@ -95,7 +95,7 @@ func _ready() -> void:
 	var bm := BoxMesh.new()
 	bm.size = Vector3(Rules.FIELD_WIDTH + 0.6, 0.06, 0.5)
 	_edge_line.mesh = bm
-	_edge_line.material_override = Mats.player(Palette.EDGE)
+	_edge_line.material_override = Mats.player(WorldPalette.SAFE)
 	add_child(_edge_line)
 	hud.ticks = []
 	for cp in field.checkpoints:

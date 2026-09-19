@@ -20,12 +20,15 @@ const Sweeper := preload("res://prototype/hazard_sweeper.gd")
 const Orbiter := preload("res://prototype/hazard_orbiter.gd")
 const Gate := preload("res://prototype/hazard_gate.gd")
 const Volley := preload("res://prototype/hazard_volley.gd")
+const Monoliths := preload("res://prototype/monoliths.gd")
 
 enum TileState { SAFE, ARMED, LETHAL }
 
-const SEAM := 0.1        # between slabs / bars
-const TILE_SEAM := 0.3   # between tiles: wide enough that the grid reads from the camera
-const THICK := 0.5
+# Brief 2: tiles touch; the seams between them are drawn by the tile
+# shader (flat_mats.gd TILE_SHADER), not left as gaps. The slab is 2.0
+# units thick so it reads as a floating block, with its side faces and
+# the pit walls in TILE_SIDE.
+const THICK := 2.0
 const PLAIN_LEN := 8.0
 const MAX_REROLL_PASSES := 10
 
@@ -110,6 +113,11 @@ func build() -> void:
 	goal_z = outro_z1 - 1.0
 	_gate_mesh(goal_z)
 
+	# Brief 2: the monoliths around the field, one draw call for the level.
+	var mono := Monoliths.new()
+	add_child(mono)
+	mono.build(runup_z0 - 2.0 * PLAIN_LEN, outro_z1 + 3.0 * PLAIN_LEN)
+
 	for spec in plan["hazards"]:
 		var h: Node3D
 		match String(spec["kind"]):
@@ -145,7 +153,7 @@ func build() -> void:
 		var bm := BoxMesh.new()
 		bm.size = Vector3(Rules.FIELD_WIDTH, 0.06, 0.3)
 		mi.mesh = bm
-		mi.material_override = Mats.amber()
+		mi.material_override = Mats.cyan()
 		mi.position = Vector3(0.0, 0.03, c.z_at(float(cp["t"])))
 		add_child(mi)
 		var entry: Dictionary = cp.duplicate()
@@ -196,9 +204,9 @@ func plan_first_z() -> float:
 func _slab(z_start: float, length: float) -> void:
 	var mi := MeshInstance3D.new()
 	var bm := BoxMesh.new()
-	bm.size = Vector3(Rules.FIELD_WIDTH, THICK, maxf(length - SEAM, 0.2))
+	bm.size = Vector3(Rules.FIELD_WIDTH, THICK, length)
 	mi.mesh = bm
-	mi.material_override = Mats.cyan()
+	mi.material_override = Mats.tile(TileState.SAFE, bm.size * 0.5)
 	mi.position = Vector3(0.0, -THICK * 0.5, z_start + length * 0.5)
 	add_child(mi)
 
@@ -218,9 +226,9 @@ func _bar_tiles(bar: int, z0: float, z1: float) -> void:
 				continue
 			var mi := MeshInstance3D.new()
 			var bm := BoxMesh.new()
-			bm.size = Vector3(Rules.TILE - TILE_SEAM, THICK, depth - TILE_SEAM)
+			bm.size = Vector3(Rules.TILE, THICK, depth)
 			mi.mesh = bm
-			mi.material_override = Mats.cyan()
+			mi.material_override = Mats.tile(TileState.SAFE, bm.size * 0.5)
 			mi.position = Vector3(Rules.col_x(col), -THICK * 0.5, z0 + (row + 0.5) * depth)
 			add_child(mi)
 			arr[idx] = mi
@@ -329,13 +337,7 @@ func update_tiles(t: float, z_back: float) -> void:
 				var s := _state_for(bar, col, row, t)
 				if s != states[idx]:
 					states[idx] = s
-					match s:
-						TileState.LETHAL:
-							mi.material_override = Mats.magenta()
-						TileState.ARMED:
-							mi.material_override = Mats.magenta_dim()
-						_:
-							mi.material_override = Mats.cyan()
+					mi.material_override = Mats.tile(s, mi.mesh.size * 0.5)
 		_tile_state[bar] = states
 
 
@@ -365,12 +367,12 @@ func nearest_danger_tile(x: float, z: float, t: float) -> Variant:
 
 
 func mark_checkpoint(i: int) -> void:
-	checkpoints[i]["node"].material_override = Mats.amber_dim()
+	checkpoints[i]["node"].material_override = Mats.flat(WorldPalette.SAFE.darkened(0.55))
 
 
 func reset_run() -> void:
 	for cp in checkpoints:
-		cp["node"].material_override = Mats.amber()
+		cp["node"].material_override = Mats.cyan()
 	for n in notes:
 		n["taken"] = false
 		n["node"].visible = true
