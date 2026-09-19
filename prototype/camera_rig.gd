@@ -60,16 +60,53 @@ var _kick_dir := Vector3.ZERO
 # behind everything (the cheapest thing that looks the same on the web
 # renderer and native). Nothing else back there.
 const BACKDROP_DISTANCE := 600.0
+# Brief 2b section 5: the gradient carries two layers of slow noise (fog
+# with weather in it) in a world-ish space that scrolls with the window.
 const BACKDROP_SHADER := """
 shader_type spatial;
 render_mode unshaded, depth_draw_never, fog_disabled, cull_disabled;
 uniform vec3 top : source_color;
 uniform vec3 bottom : source_color;
+uniform vec2 quad_size;
+uniform float big_scale = 40.0;
+uniform float big_contrast = 0.06;
+uniform float big_speed = 0.05;
+uniform float small_scale = 12.0;
+uniform float small_contrast = 0.03;
+uniform float small_speed = 0.12;
+global uniform float pr_window_back;
+
+float hash2(vec2 p) {
+	p = fract(p * vec2(0.3183099, 0.3678794) + vec2(0.1, 0.7));
+	p *= 23.0;
+	return fract(p.x * p.y * (p.x + p.y));
+}
+float vnoise2(vec2 p) {
+	vec2 i = floor(p);
+	vec2 f = fract(p);
+	f = f * f * (3.0 - 2.0 * f);
+	return mix(mix(hash2(i), hash2(i + vec2(1, 0)), f.x), mix(hash2(i + vec2(0, 1)), hash2(i + vec2(1, 1)), f.x), f.y);
+}
 
 void fragment() {
-	ALBEDO = mix(bottom, top, UV.y);
+	// UV -> a "world-ish" plane in units, scrolling at 20 % of the window.
+	vec2 p = (UV - 0.5) * quad_size * 0.25 + vec2(0.0, pr_window_back * 0.2);
+	float big = vnoise2(p / big_scale + vec2(TIME * big_speed / big_scale, 0.0)) * 2.0 - 1.0;
+	float small = vnoise2(p / small_scale + vec2(0.0, TIME * small_speed / small_scale)) * 2.0 - 1.0;
+	ALBEDO = mix(bottom, top, UV.y) * (1.0 + big * big_contrast + small * small_contrast);
 }
 """
+
+# Huge faint monolith silhouettes far behind the field, on the rig with
+# a 20 % parallax (they move at a fifth of the scroll), 4 % above the
+# background. Distance, size and colour are the knobs.
+const FAR_SILHOUETTES := [
+	[Vector3(-70.0, -30.0, 40.0), Vector3(22.0, 90.0, 18.0)],
+	[Vector3(62.0, -35.0, 70.0), Vector3(30.0, 110.0, 24.0)],
+	[Vector3(-40.0, -40.0, 110.0), Vector3(18.0, 75.0, 16.0)],
+]
+const FAR_LIFT := 1.04
+var _far: Node3D
 
 
 func _ready() -> void:
@@ -93,10 +130,26 @@ func _build_backdrop() -> void:
 	m.render_priority = -100
 	m.set_shader_parameter("top", WorldPalette.BG_TOP)
 	m.set_shader_parameter("bottom", WorldPalette.BG_BOTTOM)
+	m.set_shader_parameter("quad_size", mesh.size)
 	quad.material_override = m
 	quad.position = Vector3(0.0, 0.0, -BACKDROP_DISTANCE)
 	quad.extra_cull_margin = 16384.0
 	cam.add_child(quad)
+
+	_far = Node3D.new()
+	add_child(_far)
+	var far_mat := StandardMaterial3D.new()
+	far_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	far_mat.albedo_color = WorldPalette.BG_BOTTOM * FAR_LIFT
+	far_mat.disable_fog = true
+	for spec in FAR_SILHOUETTES:
+		var mi := MeshInstance3D.new()
+		var bm := BoxMesh.new()
+		bm.size = spec[1]
+		mi.mesh = bm
+		mi.material_override = far_mat
+		mi.position = spec[0] + Vector3(0.0, spec[1].y * 0.5, 0.0)
+		_far.add_child(mi)
 
 
 func _on_downbeat(_bar: int) -> void:
@@ -120,6 +173,8 @@ func kick(duration: float, amount: float, fov_punch: float, away: Vector3) -> vo
 func set_window(z_back: float) -> void:
 	window_back = z_back
 	position = Vector3(0.0, 0.0, z_back + Rules.WINDOW_DEPTH * 0.5)
+	if _far != null:
+		_far.position.z = -0.8 * z_back   # so the silhouettes advance at 20 % of the scroll
 	# The distance fade in flat_mats.gd is measured from the window.
 	RenderingServer.global_shader_parameter_set("pr_window_back", z_back)
 
