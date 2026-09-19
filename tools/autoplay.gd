@@ -70,7 +70,7 @@ func _process(_delta: float) -> bool:
 	if start_bar > 0 and not _started_at_bar and test.state == test.State.RUN:
 		# Jump in at bar N the way a checkpoint rewind would.
 		_started_at_bar = true
-		var lead: float = Rules.WINDOW_DEPTH * 0.45 / clock.track_speed
+		var lead: float = Rules.window_depth() * 0.45 / clock.track_speed
 		var t0: float = maxf(clock.start_offset, clock.bar_start(start_bar) - lead)
 		test.player.reset_to(0.0, clock.z_at(clock.bar_start(start_bar)) + 1.0)
 		clock.seek(t0)
@@ -162,18 +162,18 @@ func _validator_target(scene: Node) -> Variant:
 	if i < first_beat:
 		# Run-up: ride the front of the window in the first tile's column,
 		# so the first tile is reached well before the first downbeat.
-		var front: float = z_back + Rules.WINDOW_DEPTH - 1.5
+		var front: float = z_back + Rules.window_depth() - 1.5
 		if path.size() > 0 and path[0] != null:
 			var p0: Vector2 = path[0]["pos"]
 			return Vector2(p0.x, minf(p0.y, front))
 		return Vector2(0.0, front)
 	var idx := i - first_beat
 	if idx >= path.size() or path[idx] == null:
-		return Vector2(0.0, z_back + Rules.WINDOW_DEPTH * 0.6)
+		return Vector2(0.0, z_back + Rules.window_depth() * 0.6)
 	var here: Dictionary = path[idx]
 	if idx + 1 >= path.size() or path[idx + 1] == null:
 		# Plan over (the outro): keep ahead of the back edge to the goal.
-		return Vector2(here["pos"].x, z_back + Rules.WINDOW_DEPTH * 0.6)
+		return Vector2(here["pos"].x, z_back + Rules.window_depth() * 0.6)
 	# Set off for the next tile at this beat's planned "leave" moment.
 	if clock.beat_phase_at(t) >= float(here["leave"]):
 		return path[idx + 1]["pos"]
@@ -195,8 +195,8 @@ func _naive_target(scene: Node) -> Variant:
 	var t: float = clock.hazard_time()
 	var z_back: float = clock.z_at(clock.song_time())
 	var goal := Vector2(HazardMath.gate_opening_x(spec, t), float(spec["z"]) + 1.5)
-	if goal.y > z_back + Rules.WINDOW_DEPTH - 1.0:
-		return Vector2(goal.x, z_back + Rules.WINDOW_DEPTH - 1.5)
+	if goal.y > z_back + Rules.window_depth() - 1.0:
+		return Vector2(goal.x, z_back + Rules.window_depth() - 1.5)
 	var p: Vector3 = scene.player.position
 	if p.z > float(spec["z"]) + 1.0:
 		naive_done = true
@@ -232,7 +232,7 @@ func _human_target_for(scene: Node) -> Variant:
 	var z_back: float = clock.z_at(clock.song_time())
 	var line: float = Rules.min_z(z_back) + 1.5
 	var comfort: float = line + HUMAN_COMFORT
-	var z_front: float = z_back + Rules.WINDOW_DEPTH - 1.0
+	var z_front: float = z_back + Rules.window_depth() - 1.0
 	var field = scene.field
 	var p: Vector3 = scene.player.position
 	var here := Vector2(p.x, p.z)

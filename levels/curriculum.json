@@ -10,6 +10,8 @@
   "lives: 0 = no lives (level 1), 3 from level 2. density_curve: multiplier per wave on hazards per bar.",
   "song_tempo: 1.0 | 1.05 | 1.10 - which time-stretched mp3 plays (_105, _110); the ONE beatmap's times are divided by it in BeatClock. Brief 2b: 1.0 level 1, 1.05 level 2, 1.10 from level 3.",
   "player_speed: the player's speed as a multiple of the scroll speed. 2.2 on levels 1-2, 2.3 from level 3 (brief 2b, 2026-09-20). Below ~2.1 the fairness validator cannot find fair layouts on levels 3+.",
+  "window_bars: depth of the window (death line to front edge) in bars: 2.5 on level 1, 2.2 from level 2; the camera distance follows it (28 / 26).",
+  "reroll_passes: how many generate-validate passes the game may take to find a fair layout (default 10; 40 on level 6).",
   "song_offset_s: playback starts this far into the track (8 s level 1, 10 s later levels); written for tempo 1.0, divided by song_tempo at load.",
   "demo_bars: true = every new type/pattern gets a demo bar; false from level 7 (everything mixed).",
   "structure: curriculum = level 1's fixed wave order (addendum 3 section 3); mixed = types mix from the start."
@@ -39,6 +41,7 @@
  "levels": [
   {
    "level": 1,
+   "window_bars": 2.5,
    "song_tempo": 1.0,
    "player_speed": 2.2,
    "hazard_rate": "bar",
@@ -68,6 +71,7 @@
   },
   {
    "level": 2,
+   "window_bars": 2.2,
    "song_tempo": 1.05,
    "player_speed": 2.2,
    "hazard_rate": "half_bar",
@@ -95,6 +99,7 @@
   },
   {
    "level": 3,
+   "window_bars": 2.2,
    "song_tempo": 1.1,
    "player_speed": 2.3,
    "hazard_rate": "half_bar",
@@ -123,6 +128,7 @@
   },
   {
    "level": 4,
+   "window_bars": 2.2,
    "song_tempo": 1.1,
    "player_speed": 2.3,
    "hazard_rate": "half_bar",
@@ -152,6 +158,7 @@
   },
   {
    "level": 5,
+   "window_bars": 2.2,
    "song_tempo": 1.1,
    "player_speed": 2.3,
    "hazard_rate": "beat",
@@ -182,6 +189,7 @@
   },
   {
    "level": 6,
+   "window_bars": 2.2,
    "song_tempo": 1.1,
    "player_speed": 2.3,
    "hazard_rate": "beat",
@@ -213,6 +221,7 @@
   },
   {
    "level": 7,
+   "window_bars": 2.2,
    "song_tempo": 1.1,
    "player_speed": 2.3,
    "hazard_rate": "beat",
@@ -243,6 +252,7 @@
   },
   {
    "level": 8,
+   "window_bars": 2.2,
    "song_tempo": 1.1,
    "player_speed": 2.3,
    "hazard_rate": "beat",
@@ -273,6 +283,7 @@
   },
   {
    "level": 9,
+   "window_bars": 2.2,
    "song_tempo": 1.1,
    "player_speed": 2.3,
    "hazard_rate": "beat",
@@ -303,6 +314,7 @@
   },
   {
    "level": 10,
+   "window_bars": 2.2,
    "song_tempo": 1.1,
    "player_speed": 2.3,
    "hazard_rate": "beat",
@@ -333,6 +345,7 @@
   },
   {
    "level": 11,
+   "window_bars": 2.2,
    "song_tempo": 1.1,
    "player_speed": 2.3,
    "hazard_rate": "beat",
@@ -363,6 +376,7 @@
   },
   {
    "level": 12,
+   "window_bars": 2.2,
    "song_tempo": 1.1,
    "player_speed": 2.3,
    "hazard_rate": "beat",
@@ -393,6 +407,7 @@
   },
   {
    "level": 13,
+   "window_bars": 2.2,
    "song_tempo": 1.1,
    "player_speed": 2.3,
    "hazard_rate": "beat",
@@ -423,6 +438,7 @@
   },
   {
    "level": 14,
+   "window_bars": 2.2,
    "song_tempo": 1.1,
    "player_speed": 2.3,
    "hazard_rate": "beat",
@@ -453,6 +469,7 @@
   },
   {
    "level": 15,
+   "window_bars": 2.2,
    "song_tempo": 1.1,
    "player_speed": 2.3,
    "hazard_rate": "beat",
@@ -483,6 +500,7 @@
   },
   {
    "level": 16,
+   "window_bars": 2.2,
    "song_tempo": 1.1,
    "player_speed": 2.3,
    "hazard_rate": "beat",
@@ -513,6 +531,7 @@
   },
   {
    "level": 17,
+   "window_bars": 2.2,
    "song_tempo": 1.1,
    "player_speed": 2.3,
    "hazard_rate": "beat",
@@ -543,6 +562,7 @@
   },
   {
    "level": 18,
+   "window_bars": 2.2,
    "song_tempo": 1.1,
    "player_speed": 2.3,
    "hazard_rate": "beat",
@@ -573,6 +593,7 @@
   },
   {
    "level": 19,
+   "window_bars": 2.2,
    "song_tempo": 1.1,
    "player_speed": 2.3,
    "hazard_rate": "beat",
@@ -603,6 +624,7 @@
   },
   {
    "level": 20,
+   "window_bars": 2.2,
    "song_tempo": 1.1,
    "player_speed": 2.3,
    "hazard_rate": "beat",
@@ -633,6 +655,7 @@
   },
   {
    "level": 21,
+   "window_bars": 2.2,
    "song_tempo": 1.1,
    "player_speed": 2.3,
    "hazard_rate": "beat",
@@ -663,6 +686,7 @@
   },
   {
    "level": 22,
+   "window_bars": 2.2,
    "song_tempo": 1.1,
    "player_speed": 2.3,
    "hazard_rate": "beat",
@@ -693,6 +717,7 @@
   },
   {
    "level": 23,
+   "window_bars": 2.2,
    "song_tempo": 1.1,
    "player_speed": 2.3,
    "hazard_rate": "beat",
@@ -723,6 +748,7 @@
   },
   {
    "level": 24,
+   "window_bars": 2.2,
    "song_tempo": 1.1,
    "player_speed": 2.3,
    "hazard_rate": "beat",
@@ -753,6 +779,7 @@
   },
   {
    "level": 25,
+   "window_bars": 2.2,
    "song_tempo": 1.1,
    "player_speed": 2.3,
    "hazard_rate": "beat",
@@ -783,6 +810,7 @@
   },
   {
    "level": 26,
+   "window_bars": 2.2,
    "song_tempo": 1.1,
    "player_speed": 2.3,
    "hazard_rate": "beat",
@@ -813,6 +841,7 @@
   },
   {
    "level": 27,
+   "window_bars": 2.2,
    "song_tempo": 1.1,
    "player_speed": 2.3,
    "hazard_rate": "beat",
@@ -843,6 +872,7 @@
   },
   {
    "level": 28,
+   "window_bars": 2.2,
    "song_tempo": 1.1,
    "player_speed": 2.3,
    "hazard_rate": "beat",
@@ -873,6 +903,7 @@
   },
   {
    "level": 29,
+   "window_bars": 2.2,
    "song_tempo": 1.1,
    "player_speed": 2.3,
    "hazard_rate": "beat",
@@ -903,6 +934,7 @@
   },
   {
    "level": 30,
+   "window_bars": 2.2,
    "song_tempo": 1.1,
    "player_speed": 2.3,
    "hazard_rate": "beat",

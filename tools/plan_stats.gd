@@ -35,7 +35,7 @@ func _initialize() -> void:
 		var fair := {}
 		var plan := {}
 		var passes := 0
-		for attempt in 10:
+		for attempt in Rules.reroll_passes():
 			passes += 1
 			plan = Placement.build(clock, rerolls)
 			fair = Fairness.validate(plan, clock)

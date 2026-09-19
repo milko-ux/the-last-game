@@ -30,7 +30,6 @@ enum TileState { SAFE, ARMED, LETHAL }
 # the pit walls in TILE_SIDE.
 const THICK := 2.0
 const PLAIN_LEN := 8.0
-const MAX_REROLL_PASSES := 10
 const GOAL_WIDEN := 1.5     # brief 3: each goal post moves out this far over the last bar
 
 var _goal_posts: Array = []
@@ -73,7 +72,7 @@ func build() -> void:
 		fairness = {"ok": true, "problems": [], "path": [], "first_beat": c.first_bar_beat, "cached": true}
 	else:
 		fairness = {"ok": false, "problems": []}
-		for attempt in MAX_REROLL_PASSES:
+		for attempt in Rules.reroll_passes():
 			passes += 1
 			plan = Placement.build(c, rerolls)
 			fairness = Fairness.validate(plan, c)
@@ -351,7 +350,7 @@ func update_tiles(t: float, z_back: float) -> void:
 	if _bar_z0.is_empty():
 		return
 	var lo := bar_at_z(maxf(z_back - 2.0, _bar_z0[0] if not _bar_z0.is_empty() else 0.0))
-	var hi := bar_at_z(minf(z_back + Rules.WINDOW_DEPTH + 8.0, _bar_z1[-1] - 0.01))
+	var hi := bar_at_z(minf(z_back + Rules.window_depth() + 8.0, _bar_z1[-1] - 0.01))
 	if lo == 0 and hi == 0:
 		return
 	if lo == 0:

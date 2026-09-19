@@ -30,7 +30,11 @@ const CAMERA_PITCH_DEG := 54.0
 # covers about 40 % of the screen width, which leaves room for the world background that gets added around it.
 # What lies beyond the window dissolves into the background: see the
 # distance fade in flat_mats.gd (depth fog does not work on web).
-const CAMERA_DISTANCE := 26.0   # 28 until brief 2b, with the 2.2-bar window
+# The distance follows the level's window: 26 at 2.2 bars, 28 at 2.5 bars
+# (2 units per 0.3 bar), so the same share of field is on screen.
+const CAMERA_DISTANCE_AT_2_2 := 26.0
+const CAMERA_DISTANCE_PER_BAR := 6.667
+static var CAMERA_DISTANCE := 26.0
 const FOV := 55.0
 # false: joystick up = down the field regardless of the yaw (world-
 # relative). true: joystick up = away from the camera.
@@ -111,6 +115,7 @@ var _far: Node3D
 
 func _ready() -> void:
 	cam.fov = FOV
+	CAMERA_DISTANCE = CAMERA_DISTANCE_AT_2_2 + (Rules.window_bars() - 2.2) * CAMERA_DISTANCE_PER_BAR
 	_build_backdrop()
 	BeatClock.downbeat.connect(_on_downbeat)
 	set_window(0.0)
@@ -172,7 +177,7 @@ func kick(duration: float, amount: float, fov_punch: float, away: Vector3) -> vo
 
 func set_window(z_back: float) -> void:
 	window_back = z_back
-	position = Vector3(0.0, 0.0, z_back + Rules.WINDOW_DEPTH * 0.5)
+	position = Vector3(0.0, 0.0, z_back + Rules.window_depth() * 0.5)
 	if _far != null:
 		_far.position.z = -0.8 * z_back   # so the silhouettes advance at 20 % of the scroll
 	# The distance fade in flat_mats.gd is measured from the window.

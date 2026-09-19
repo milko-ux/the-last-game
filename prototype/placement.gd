@@ -545,7 +545,7 @@ static func _open_floor(ctx: Ctx, e: Dictionary, bar: int, checkpoints: Array) -
 	entry["density"] = "breather" if density(ctx.clock.bar_energy(bar)) != "rest" else "rest"
 	if int(e.get("checkpoint", -1)) == bar:
 		entry["checkpoint"] = true
-		var lead: float = Rules.WINDOW_DEPTH * 0.45 / ctx.clock.track_speed
+		var lead: float = Rules.window_depth() * 0.45 / ctx.clock.track_speed
 		var t0: float = ctx.clock.bar_start(bar)
 		checkpoints.append({"bar": bar, "t": t0, "resume_t": maxf(ctx.clock.start_offset, t0 - lead), "x": 0.0, "z": ctx.z0 + 1.0})
 

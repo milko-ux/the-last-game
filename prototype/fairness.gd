@@ -84,14 +84,14 @@ static func validate(plan: Dictionary, clock) -> Dictionary:
 		var tp: float = beats[i - 1] if i > 0 else t0 - clock.beat_interval
 		var z_back0: float = clock.z_at(t0)
 		var z_back1: float = clock.z_at(t1)
-		var z_front: float = z_back0 + Rules.WINDOW_DEPTH
+		var z_front: float = z_back0 + Rules.window_depth()
 		var k: int = clock.beat_in_bar_at(t0)
-		if z_back0 > last_bar_end + Rules.WINDOW_DEPTH:
+		if z_back0 > last_bar_end + Rules.window_depth():
 			break
 
 		ctx.specs = []
 		for spec in plan["hazards"]:
-			if absf(float(spec["z"]) - (z_back0 + z_front) * 0.5) > Rules.WINDOW_DEPTH:
+			if absf(float(spec["z"]) - (z_back0 + z_front) * 0.5) > Rules.window_depth():
 				continue
 			ctx.specs.append(spec)
 

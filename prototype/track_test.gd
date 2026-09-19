@@ -177,7 +177,7 @@ func _tick_run(delta: float) -> void:
 	var t := BeatClock.song_time()
 	var ht := BeatClock.hazard_time()
 	var z_back := BeatClock.z_at(t)
-	var z_front := z_back + Rules.WINDOW_DEPTH
+	var z_front := z_back + Rules.window_depth()
 
 	player.move_dir = bot.move_dir(self) if bot != null else _move_input()
 	player.tick(delta, z_back, z_front, field)
