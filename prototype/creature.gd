@@ -71,27 +71,23 @@ const GOAL_HOP_S := 0.32
 const GOAL_HOP_HEIGHT := 1.1
 const GOAL_HOLD_AT_APEX := true        # the last hop freezes at its top, facing the camera
 
-# --- Shadow ring ------------------------------------------------------------
-# A flat dark disc with a faint cyan rim on the floor under the creature,
-# EXACTLY the hit box's footprint (Rules.PLAYER_HALF_W), so the player can
-# see the precise area that dies. Always drawn, on top, never fades, and
-# it stays on the floor while the creature is in the air.
-# The body is wider than the hit box and hides the ring completely when
-# standing, so the ring is drawn OVER the body (RING_ON_TOP above the
-# body's ON_TOP). Set it below 0.92 to put the ring under the body instead.
-const RING_ON_TOP := 0.95
-const RING_ALPHA := 0.4
-const RING_RIM_COLOR := Color(WorldPalette.SAFE, 0.7)
-const RING_RIM_WIDTH := 0.14           # fraction of the radius
+# --- Shadow blob ------------------------------------------------------------
+# A soft dark shadow on the floor under the creature, the size of the hit
+# box's footprint (Rules.PLAYER_HALF_W, which since 2026-09-19 is the
+# body's own footprint). Never fades, stays on the floor during a jump,
+# drawn with a normal depth test (RING_ON_TOP 0 = off: it sits just above
+# the floor and under the body). Set RING_ON_TOP to 0.95 to draw it over
+# everything again.
+const RING_ON_TOP := 0.0
+const RING_ALPHA := 0.6
+const RING_SOFTNESS := 0.45            # fraction of the radius over which it fades out
 const RING_SHADER := """
 shader_type spatial;
 render_mode unshaded, cull_disabled, fog_disabled;
-uniform vec4 fill : source_color = vec4(0.0, 0.0, 0.0, 0.55);
-uniform vec4 rim : source_color = vec4(0.1, 0.83, 0.79, 0.7);
-uniform float rim_width = 0.14;
-uniform float on_top = 0.88;
+uniform vec4 fill : source_color = vec4(0.0, 0.0, 0.0, 0.6);
+uniform float softness = 0.45;
+uniform float on_top = 0.0;
 
-// Same depth squeeze as the body (see RING_ON_TOP for which one wins).
 void vertex() {
 	POSITION = PROJECTION_MATRIX * MODELVIEW_MATRIX * vec4(VERTEX, 1.0);
 	POSITION.z = mix(POSITION.z, POSITION.w, on_top);
@@ -99,11 +95,9 @@ void vertex() {
 
 void fragment() {
 	float r = length(UV - 0.5) * 2.0;
-	float inside = 1.0 - smoothstep(0.97, 1.0, r);
-	float ring = smoothstep(1.0 - rim_width - 0.03, 1.0 - rim_width, r) * inside;
-	vec4 c = mix(fill, rim, ring);
-	ALBEDO = c.rgb;
-	ALPHA = c.a * inside;
+	float a = 1.0 - smoothstep(1.0 - softness, 1.0, r);
+	ALBEDO = fill.rgb;
+	ALPHA = fill.a * a * a;
 }
 """
 
@@ -210,8 +204,7 @@ func _build_ring() -> void:
 	m.shader = sh
 	m.render_priority = 9
 	m.set_shader_parameter("fill", Color(0.0, 0.0, 0.0, RING_ALPHA))
-	m.set_shader_parameter("rim", RING_RIM_COLOR)
-	m.set_shader_parameter("rim_width", RING_RIM_WIDTH)
+	m.set_shader_parameter("softness", RING_SOFTNESS)
 	m.set_shader_parameter("on_top", RING_ON_TOP)
 	_ring.material_override = m
 	_ring.top_level = true             # not scaled, tilted or lifted with the body

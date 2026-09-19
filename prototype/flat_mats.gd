@@ -29,8 +29,11 @@ const FADE_AHEAD_END := 27.0
 const FADE_BEHIND_START := 2.0
 const FADE_BEHIND_END := 10.0
 
-# Tile seam width in world units (brief 2 section 1).
-const SEAM_WIDTH := 0.06
+# Tile seam width in world units (brief 2 section 1; 0.06 -> 0.03 on
+# 2026-09-19: the seams read as a neon grid), and the bright rim along the
+# slab's outer edge, on the top face and the top of the outer side faces.
+const SEAM_WIDTH := 0.03
+const EDGE_WIDTH := 0.1
 
 # Shared: the fade uniforms and the fade amount for this pixel.
 const FADE_HEAD := """
@@ -82,9 +85,12 @@ shader_type spatial;
 render_mode unshaded, fog_disabled;
 uniform vec4 face : source_color;
 uniform vec4 seam : source_color;
+uniform vec4 edge_colour : source_color;
 uniform vec4 side : source_color;
 uniform vec3 half_size;      // the box's half extents (x, y, z)
-uniform float seam_width = 0.06;
+uniform float seam_width = 0.03;
+uniform float edge_width = 0.1;
+uniform vec2 outer;          // 1.0 where this box's -x / +x side is the slab's outer edge
 FADE_HEAD
 varying vec3 local_pos;
 varying vec3 local_normal;
@@ -98,14 +104,20 @@ void vertex() {
 void fragment() {
 	bool top = local_normal.y > 0.5;
 	float edge;
+	float rim = 9.0;   // distance to the slab's outer rim, if this box has one
 	if (top) {
 		edge = min(half_size.x - abs(local_pos.x), half_size.z - abs(local_pos.z));
+		if (outer.x > 0.5) { rim = min(rim, half_size.x + local_pos.x); }
+		if (outer.y > 0.5) { rim = min(rim, half_size.x - local_pos.x); }
 	} else {
 		edge = half_size.y - local_pos.y;   // distance below the top edge
+		bool outer_face = (local_normal.x < -0.5 && outer.x > 0.5) || (local_normal.x > 0.5 && outer.y > 0.5);
+		if (outer_face) { rim = edge; }
 	}
-	float s = 1.0 - smoothstep(seam_width - 0.015, seam_width + 0.015, edge);
+	float s = 1.0 - smoothstep(seam_width - 0.01, seam_width + 0.01, edge);
+	float r = 1.0 - smoothstep(edge_width - 0.015, edge_width + 0.015, rim);
 	vec3 base = top ? face.rgb : side.rgb;
-	ALBEDO = mix(base, seam.rgb, s);
+	ALBEDO = mix(mix(base, seam.rgb, s), edge_colour.rgb, r);
 FADE_APPLY
 }
 """
@@ -211,10 +223,11 @@ static func player(c: Color) -> StandardMaterial3D:
 # ------------------------------------------------------------
 # The floor
 # ------------------------------------------------------------
-# One material per (box size, state). Tiles of one bar all share a size,
-# so a level still uses only a handful.
-static func tile(state: int, half: Vector3) -> Material:
-	var key := "tile_%d_%s" % [state, half]
+# One material per (box size, state, outer edges). Tiles of one bar all
+# share a size, so a level still uses only a handful. `outer` says which of
+# the box's x sides is the slab's outer edge (left, right) and gets the rim.
+static func tile(state: int, half: Vector3, outer: Vector2 = Vector2.ZERO) -> Material:
+	var key := "tile_%d_%s_%s" % [state, half, outer]
 	if not _cache.has(key):
 		var m := ShaderMaterial.new()
 		m.shader = _shader("tile")
@@ -229,7 +242,10 @@ static func tile(state: int, half: Vector3) -> Material:
 				m.set_shader_parameter("face", WorldPalette.TILE)
 				m.set_shader_parameter("seam", WorldPalette.TILE_SEAM)
 		m.set_shader_parameter("side", WorldPalette.TILE_SIDE)
+		m.set_shader_parameter("edge_colour", WorldPalette.TILE_EDGE)
 		m.set_shader_parameter("half_size", half)
 		m.set_shader_parameter("seam_width", SEAM_WIDTH)
+		m.set_shader_parameter("edge_width", EDGE_WIDTH)
+		m.set_shader_parameter("outer", outer)
 		_cache[key] = _with_fade(m)
 	return _cache[key]

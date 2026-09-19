@@ -28,10 +28,24 @@ const HazardMath := preload("res://prototype/hazard_math.gd")
 
 # Bump when the movement model or the rules change: it invalidates the
 # per-device cache of validation verdicts (see Field.build).
-const VERSION := 8  # 8: intro back edge no longer kills (Rules.min_z)
+const VERSION := 10  # 10: hit box 0.83 (the creature's footprint); orbiter margin covers the sample step
 
-# Wider than the runtime's 0.4 so a plan never relies on centimetres.
-const PLAYER_HALF := 0.6
+# Wider than the runtime's box so a plan never relies on centimetres.
+# Two margins since the 0.83 box (2026-09-19): against plates the box is
+# real + 0.1, so a tile next to a live plate (1.0 to its edge) is still a
+# place to stand; against moving hazards it is real + 0.25, because the
+# walk is sampled every 0.08 s and a sweeper moves ~0.7 units in that
+# time — with the old 0.4 box a single 0.2 margin covered both.
+const PLAYER_HALF := Rules.PLAYER_HALF_W + 0.1
+const HAZARD_HALF := Rules.PLAYER_HALF_W + 0.25
+# An orbiter's orb moves 9 units/s (18 at `speed` 2): 0.7-1.5 units between
+# two waiting samples. The check against it is widened by half of that, so
+# a plan can never sit in the orb's path between samples. (With the 0.4
+# box this hid inside the old margin; the 0.83 box exposed it: the
+# validator bot died 11 times on level 6, all orbiters.)
+static func orbiter_sweep(spec: Dictionary) -> float:
+	var per_bar := TAU * HazardMath.ORBIT_R * float(spec.get("speed", 1))
+	return per_bar / (4.0 * BeatClock.beat_interval) * WAIT_DT * 0.5
 const STEP := 0.25          # walk sample spacing (units)
 const WAIT_DT := 0.08       # standing / waiting sample spacing (s)
 const LEAVE_OPTIONS := [0.0, 0.5]
@@ -259,15 +273,17 @@ static func _lethal_at(ctx: Ctx, p: Vector2, t: float) -> bool:
 			if Rules.plate_state(entry, col, row, t) == 2:
 				return true
 	for spec in ctx.specs:
-		var band := 4.5 if String(spec["kind"]) == "orbiter" else 1.8
+		var is_orbiter := String(spec["kind"]) == "orbiter"
+		var band := 6.0 if is_orbiter else 2.3
 		if absf(float(spec["z"]) - p.y) > band:
 			continue
+		var half := HAZARD_HALF + (orbiter_sweep(spec) if is_orbiter else 0.0)
 		for box in HazardMath.boxes_at(spec, t):
 			var bb: AABB = box
 			if bb.position.y > 1.6:
 				continue
-			if p.x + PLAYER_HALF > bb.position.x and p.x - PLAYER_HALF < bb.end.x \
-				and p.y + PLAYER_HALF > bb.position.z and p.y - PLAYER_HALF < bb.end.z:
+			if p.x + half > bb.position.x and p.x - half < bb.end.x \
+				and p.y + half > bb.position.z and p.y - half < bb.end.z:
 				return true
 	return false
 

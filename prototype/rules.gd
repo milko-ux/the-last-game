@@ -209,10 +209,17 @@ static func knobs_line() -> String:
 		l.get("orbiter_pairs", false), l.get("orbiter_period", "bar"), lives(), str(density_curve()),
 		song_offset(), song_tempo(), float(l.get("player_speed", PLAYER_SPEED_FACTOR)), demo_bars_on(), l.get("structure", "mixed")]
 
-# Player hit box (feet at pos, HEIGHT tall).
-const PLAYER_HALF_W := 0.4
+# Player hit box (feet at pos, HEIGHT tall). Since 2026-09-19 it matches
+# the creature's visual footprint (Milko): the body's widest horizontal
+# radius x 0.9. Measured on assets/models/creature.glb: the body ball is
+# 0.75 model units wide at its equator (arms excluded, they reach 0.93),
+# the model is drawn at 2.3 / 1.874 = 1.227x, so 0.75 x 1.227 x 0.9 = 0.83.
+# Was 0.4 (the gray-box capsule). Same in x and z: the box is square.
+# The validator (fairness.gd) and the bots (tools/autoplay.gd) derive
+# their planning margins from this number.
+const PLAYER_HALF_W := 0.83
 const PLAYER_HEIGHT := 1.6
-const PLAYER_HALF_D := 0.4
+const PLAYER_HALF_D := 0.83
 # Hazards further than this in z are not tested against the player.
 const HIT_RANGE_Z := 12.0
 

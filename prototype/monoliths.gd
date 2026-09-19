@@ -37,13 +37,16 @@ const FAR_GAP_MAX := 30.0
 const FAR_WIDTH := Vector2(10.0, 18.0)
 const FAR_HEIGHT := Vector2(40.0, 60.0)
 const FAR_BASE_Y := -30.0
+const TOP_LIGHTER := 0.12        # top faces 12 % lighter than the sides (two-tone)
 
 const SHADER := """
 shader_type spatial;
 render_mode unshaded, fog_disabled;
 uniform vec3 colour : source_color;
 uniform vec3 colour_far : source_color;
+uniform float top_lighter = 0.12;   // top faces this much lighter: a block, not a silhouette
 FADE_HEAD
+varying float is_top;
 
 void vertex() {
 	// Taper: the top half of the box narrows to INSTANCE_CUSTOM.r of its width.
@@ -53,10 +56,11 @@ void vertex() {
 	}
 	world_z = (MODEL_MATRIX * vec4(VERTEX, 1.0)).z;
 	COLOR = INSTANCE_CUSTOM;
+	is_top = NORMAL.y > 0.5 ? 1.0 : 0.0;
 }
 
 void fragment() {
-	ALBEDO = mix(colour, colour_far, COLOR.g);
+	ALBEDO = mix(colour, colour_far, COLOR.g) * (1.0 + top_lighter * is_top);
 FADE_APPLY
 }
 """
@@ -110,6 +114,7 @@ func build(z_from: float, z_to: float) -> void:
 	m.shader = sh
 	m.set_shader_parameter("colour", WorldPalette.MONOLITH)
 	m.set_shader_parameter("colour_far", WorldPalette.MONOLITH_FAR)
+	m.set_shader_parameter("top_lighter", TOP_LIGHTER)
 	m.set_shader_parameter("background", WorldPalette.BG_BOTTOM)
 	m.set_shader_parameter("fade", Quaternion(Mats.FADE_AHEAD_START, Mats.FADE_AHEAD_END, Mats.FADE_BEHIND_START, Mats.FADE_BEHIND_END))
 	material_override = m

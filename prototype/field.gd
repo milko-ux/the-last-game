@@ -206,7 +206,7 @@ func _slab(z_start: float, length: float) -> void:
 	var bm := BoxMesh.new()
 	bm.size = Vector3(Rules.FIELD_WIDTH, THICK, length)
 	mi.mesh = bm
-	mi.material_override = Mats.tile(TileState.SAFE, bm.size * 0.5)
+	mi.material_override = Mats.tile(TileState.SAFE, bm.size * 0.5, Vector2.ONE)
 	mi.position = Vector3(0.0, -THICK * 0.5, z_start + length * 0.5)
 	add_child(mi)
 
@@ -228,12 +228,17 @@ func _bar_tiles(bar: int, z0: float, z1: float) -> void:
 			var bm := BoxMesh.new()
 			bm.size = Vector3(Rules.TILE, THICK, depth)
 			mi.mesh = bm
-			mi.material_override = Mats.tile(TileState.SAFE, bm.size * 0.5)
+			mi.material_override = Mats.tile(TileState.SAFE, bm.size * 0.5, _outer(col))
 			mi.position = Vector3(Rules.col_x(col), -THICK * 0.5, z0 + (row + 0.5) * depth)
 			add_child(mi)
 			arr[idx] = mi
 	_tiles[bar] = arr
 	_tile_state[bar] = states
+
+
+# Which x sides of a tile in this column are the slab's outer rim.
+static func _outer(col: int) -> Vector2:
+	return Vector2(1.0 if col == 0 else 0.0, 1.0 if col == Rules.COLS - 1 else 0.0)
 
 
 func _gate_mesh(z: float) -> void:
@@ -337,7 +342,7 @@ func update_tiles(t: float, z_back: float) -> void:
 				var s := _state_for(bar, col, row, t)
 				if s != states[idx]:
 					states[idx] = s
-					mi.material_override = Mats.tile(s, mi.mesh.size * 0.5)
+					mi.material_override = Mats.tile(s, mi.mesh.size * 0.5, _outer(col))
 		_tile_state[bar] = states
 
 

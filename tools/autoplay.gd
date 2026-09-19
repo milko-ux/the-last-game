@@ -38,11 +38,13 @@ var rng := RandomNumberGenerator.new()
 # Human bot knobs: see the HUMAN BOT section at the bottom.
 const HUMAN_DELAY := 0.2       # notices a state change this late
 const HUMAN_COMFORT := 4.0     # wants to stay this far ahead of the death line
-const HUMAN_MARGIN := 0.55     # plans against walls / orbs with this half-width (real: 0.4)
-const HUMAN_MARGIN_GO := 0.42  # ...but a walk already under way is only abandoned below this
+# Margins are the real hit box (Rules.PLAYER_HALF_W, 0.83 since 2026-09-19)
+# plus a little; the offsets are the ones tuned on the old 0.4 box.
+const HUMAN_MARGIN := 0.83 + 0.15     # plans against walls / orbs with this half-width
+const HUMAN_MARGIN_GO := 0.83 + 0.02  # ...but a walk already under way is only abandoned below this
 const HUMAN_FOOT := 0.15       # plate checks: the centre point plus this much slack
 const HUMAN_WALL_LOOK := 16.0  # heads for a wall this far ahead and waits for the gap
-const HUMAN_MARGIN_WALL := 0.45 # half-width used against a wall while crossing it (real: 0.4)
+const HUMAN_MARGIN_WALL := 0.83 + 0.05 # half-width used against a wall while crossing it
 const HUMAN_ARMED_PENALTY := 3.0 # a tile that is armed when I land counts this much further away
 var _human_target: Variant = null
 var _near_specs: Array = []
