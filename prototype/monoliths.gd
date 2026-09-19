@@ -45,8 +45,21 @@ render_mode unshaded, fog_disabled;
 uniform vec3 colour : source_color;
 uniform vec3 colour_far : source_color;
 uniform float top_lighter = 0.12;   // top faces this much lighter: a block, not a silhouette
+uniform float grain_amount = 0.08;  // triplanar grain, +-8 % at 1.5 units
+uniform float grain_scale = 1.5;
+uniform float coarse_amount = 0.04; // +-4 % at 5 units so big faces are not flat
+uniform float coarse_scale = 5.0;
+uniform float band_every = 2.5;     // formwork lines: every 2.5 units of height...
+uniform float band_width = 0.05;    // ...0.05 wide...
+uniform float band_dark = 0.02;     // ...2 % darker
+uniform float foot_band = 0.3;      // contact shadow this high above the bottom
+uniform float foot_dark = 0.25;
 FADE_HEAD
 varying float is_top;
+varying vec3 world_pos;
+varying vec3 world_n;
+varying float local_y;              // -0.5 (bottom) .. 0.5 (top) of the unit box
+varying float height;
 
 void vertex() {
 	// Taper: the top half of the box narrows to INSTANCE_CUSTOM.r of its width.
@@ -54,13 +67,33 @@ void vertex() {
 	if (VERTEX.y > 0.0) {
 		VERTEX.xz *= taper;
 	}
-	world_z = (MODEL_MATRIX * vec4(VERTEX, 1.0)).z;
+	vec4 wp = MODEL_MATRIX * vec4(VERTEX, 1.0);
+	world_z = wp.z;
+	world_pos = wp.xyz;
+	world_n = normalize(mat3(MODEL_MATRIX) * NORMAL);
+	local_y = VERTEX.y;
+	height = length(MODEL_MATRIX[1].xyz);
 	COLOR = INSTANCE_CUSTOM;
 	is_top = NORMAL.y > 0.5 ? 1.0 : 0.0;
 }
 
+// Triplanar: blend the noise sampled on the three axis planes by the normal.
+float triplanar(vec3 p, vec3 n, float scale) {
+	vec3 w = abs(n);
+	w /= (w.x + w.y + w.z);
+	return grain(vec3(p.y, p.z, 0.0), scale) * w.x + grain(vec3(p.x, p.z, 1.7), scale) * w.y + grain(vec3(p.x, p.y, 3.1), scale) * w.z;
+}
+
 void fragment() {
-	ALBEDO = mix(colour, colour_far, COLOR.g) * (1.0 + top_lighter * is_top);
+	vec3 c = mix(colour, colour_far, COLOR.g) * (1.0 + top_lighter * is_top);
+	// Concrete: fine triplanar grain, a coarse variation, faint formwork lines.
+	float g = triplanar(world_pos, world_n, grain_scale) * grain_amount + triplanar(world_pos, world_n, coarse_scale) * coarse_amount;
+	float band = 1.0 - smoothstep(band_width * 0.5, band_width, abs(fract(world_pos.y / band_every) - 0.5) * band_every);
+	c *= (1.0 + g) * (1.0 - band_dark * band * (1.0 - is_top));
+	// Contact shadow where the block meets the fog below.
+	float foot = 1.0 - smoothstep(0.0, foot_band, (local_y + 0.5) * height);
+	c *= 1.0 - foot_dark * foot;
+	ALBEDO = c;
 FADE_APPLY
 }
 """
