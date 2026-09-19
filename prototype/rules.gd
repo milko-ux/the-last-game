@@ -9,7 +9,7 @@ const COLS := 9
 const ROWS := 4                      # tile-rows per bar, one per beat
 const TILE := 2.0
 const BAR_LENGTH := 8.0              # z per bar (BeatClock.BAR_UNITS)
-const WINDOW_DEPTH := 2.5 * BAR_LENGTH
+const WINDOW_DEPTH := 2.2 * BAR_LENGTH   # 2.5 until brief 2b (2026-09-20): less field ahead, same scroll reads faster
 # The player outruns the scroll by this factor (2.2 until the 2026-09-17
 # phone playtest). A level may override it with its `player_speed` knob:
 # below ~2.1 the player covers less than two tile rows per beat (3.44 of

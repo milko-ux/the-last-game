@@ -21,14 +21,14 @@ signal beat(index: int)
 signal downbeat(bar: int)
 signal section_changed(section_id: int)
 
-# The song exists at three tempos (the level's `song_tempo` knob): the
-# original, and time-stretched 0.95 and 0.90 versions for the first
-# levels. Each has its OWN beatmap, already scaled: nothing here ever
-# rescales beat times. set_tempo() picks the pair.
-const BEATMAP_BASE := "res://assets/audio/fuffens_beatmap"
+# ONE beatmap (fuffens_beatmap.json, analysed at the original tempo). The
+# level's `song_tempo` knob picks a time-stretched mp3 (_105, _110: the
+# only extra audio files) and set_tempo() divides every beatmap time by
+# the tempo, which is exactly what a time-stretch does to them.
+const BEATMAP_PATH := "res://assets/audio/fuffens_beatmap.json"
 const MUSIC_BASE := "res://assets/audio/fuffens_instrumental_vers"
 var tempo := 1.0
-var beatmap_path := BEATMAP_BASE + ".json"
+var beatmap_path := BEATMAP_PATH   # (read by the verdict cache key)
 
 # Hazards run this much BEHIND the audio clock so the visual hit lands
 # with the transient you actually hear (audio output tends to be later
@@ -77,19 +77,18 @@ func _ready() -> void:
 	_load()
 
 
-# "" for 1.0, "_95" for 0.95, "_90" for 0.90.
+# "" for 1.0, "_105" for 1.05, "_110" for 1.10.
 static func tempo_suffix(t: float) -> String:
 	var pct := roundi(t * 100.0)
 	return "" if pct == 100 else "_%d" % pct
 
 
-# Called by the scene (and the tools) before the field is built.
+# Called by the scene (and the tools) before the field is built: reloads
+# the one beatmap with its times divided by the tempo.
 func set_tempo(t: float) -> void:
-	var path := BEATMAP_BASE + tempo_suffix(t) + ".json"
-	tempo = t
-	if path == beatmap_path and loaded:
+	if is_equal_approx(t, tempo) and loaded:
 		return
-	beatmap_path = path
+	tempo = t
 	loaded = false
 	_load()
 
@@ -107,13 +106,30 @@ func _load() -> void:
 	if typeof(data) != TYPE_DICTIONARY:
 		push_error("BeatClock: %s is not valid JSON" % beatmap_path)
 		return
-	bpm = float(data.get("bpm", 120.0))
-	beat_interval = float(data.get("beat_interval_s", 60.0 / bpm))
-	duration = float(data.get("duration_s", 0.0))
+	# Every time in the file is at the original tempo: divide by `tempo`.
+	var k := 1.0 / maxf(tempo, 0.01)
+	bpm = float(data.get("bpm", 120.0)) * tempo
+	beat_interval = float(data.get("beat_interval_s", 60.0 / float(data.get("bpm", 120.0)))) * k
+	duration = float(data.get("duration_s", 0.0)) * k
 	beats = PackedFloat64Array(data.get("beats_s", []))
 	downbeats = PackedFloat64Array(data.get("downbeats_s", []))
-	bars = data.get("bars", [])
-	sections = data.get("sections", [])
+	for i in beats.size():
+		beats[i] *= k
+	for i in downbeats.size():
+		downbeats[i] *= k
+	bars = []
+	for b in data.get("bars", []):
+		var bb: Dictionary = b.duplicate()
+		bb["t"] = float(bb["t"]) * k
+		bars.append(bb)
+	sections = []
+	for sec in data.get("sections", []):
+		var ss: Dictionary = sec.duplicate()
+		if ss.has("start_s"):
+			ss["start_s"] = float(ss["start_s"]) * k
+		if ss.has("end_s"):
+			ss["end_s"] = float(ss["end_s"]) * k
+		sections.append(ss)
 	if bars.size() >= 2:
 		mean_bar_s = (float(bars[-1]["t"]) - float(bars[0]["t"])) / float(bars.size() - 1)
 	else:

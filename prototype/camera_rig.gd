@@ -23,13 +23,14 @@ const Rules := preload("res://prototype/rules.gd")
 const CAMERA_YAW_DEG := 24.0
 const CAMERA_PITCH_DEG := 54.0
 # Camera v2: wider and further back than v1 (26 / FOV 48, near-right
-# corner off screen). 32 felt far on the phone; 28 since 2026-09-17. By
+# corner off screen). 32 felt far on the phone; 28 from 2026-09-17, 26 with
+# the shorter window from 2026-09-20. At 28 by
 # projection at 2400x1080 the window's corners land at x 686-1608,
 # y 238-1064 (the near-right corner is only just on screen): the field
 # covers about 40 % of the screen width, which leaves room for the world background that gets added around it.
 # What lies beyond the window dissolves into the background: see the
 # distance fade in flat_mats.gd (depth fog does not work on web).
-const CAMERA_DISTANCE := 28.0
+const CAMERA_DISTANCE := 26.0   # 28 until brief 2b, with the 2.2-bar window
 const FOV := 55.0
 # false: joystick up = down the field regardless of the yaw (world-
 # relative). true: joystick up = away from the camera.
