@@ -2,19 +2,19 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://1yf6i6r47h5x"
-path="res://.godot/imported/orbiter_pillar_0.png-798fe389679cac0a38d10c7a3c689aab.ctex"
+uid="uid://dmg4aixqsq6fq"
+path="res://.godot/imported/orbiter_pillar_0.jpg-c404ab038d25fb709c4fc233f2fb0e06.ctex"
 metadata={
 "vram_texture": false
 }
 generator_parameters={
-"md5": "a22c041845b95c1c6c70d3e31b6c77a9"
+"md5": "88f0a853b1694f5b66341560ccbd1252"
 }
 
 [deps]
 
-source_file="res://assets/models/lod/orbiter_pillar_0.png"
-dest_files=["res://.godot/imported/orbiter_pillar_0.png-798fe389679cac0a38d10c7a3c689aab.ctex"]
+source_file="res://assets/models/orbiter_pillar_0.jpg"
+dest_files=["res://.godot/imported/orbiter_pillar_0.jpg-c404ab038d25fb709c4fc233f2fb0e06.ctex"]
 
 [params]
 

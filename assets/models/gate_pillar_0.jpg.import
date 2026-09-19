@@ -2,19 +2,19 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://dhk84cfalyn1f"
-path="res://.godot/imported/volley_emitter_0.png-2186fc8de93b84421af829cf58d46df0.ctex"
+uid="uid://brjt1uownlksr"
+path="res://.godot/imported/gate_pillar_0.jpg-614f312c8b4c6f599bf37129a32af107.ctex"
 metadata={
 "vram_texture": false
 }
 generator_parameters={
-"md5": "cc7b33c16c1110686b2e7408ec00c14d"
+"md5": "99aa1d2b2ded8907ee974a3b550e26a9"
 }
 
 [deps]
 
-source_file="res://assets/models/lod/volley_emitter_0.png"
-dest_files=["res://.godot/imported/volley_emitter_0.png-2186fc8de93b84421af829cf58d46df0.ctex"]
+source_file="res://assets/models/gate_pillar_0.jpg"
+dest_files=["res://.godot/imported/gate_pillar_0.jpg-614f312c8b4c6f599bf37129a32af107.ctex"]
 
 [params]
 

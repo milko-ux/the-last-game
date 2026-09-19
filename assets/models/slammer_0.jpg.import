@@ -2,19 +2,19 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://wp3j8rugi7rc"
-path="res://.godot/imported/gate_pillar_0.png-cb81cdeb4c3842c5c670a1ea45ce80a6.ctex"
+uid="uid://cavbdk5q071ok"
+path="res://.godot/imported/slammer_0.jpg-c6a658fd47d18f5d4151f33dc888fd35.ctex"
 metadata={
 "vram_texture": false
 }
 generator_parameters={
-"md5": "c87b185f5ca49deffd76f1f936bffba6"
+"md5": "879ebbd7c8ca1be1acffdfab6227ddc2"
 }
 
 [deps]
 
-source_file="res://assets/models/lod/gate_pillar_0.png"
-dest_files=["res://.godot/imported/gate_pillar_0.png-cb81cdeb4c3842c5c670a1ea45ce80a6.ctex"]
+source_file="res://assets/models/slammer_0.jpg"
+dest_files=["res://.godot/imported/slammer_0.jpg-c6a658fd47d18f5d4151f33dc888fd35.ctex"]
 
 [params]
 

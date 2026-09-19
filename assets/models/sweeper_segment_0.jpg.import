@@ -2,19 +2,19 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://b32agq0554b7m"
-path="res://.godot/imported/building_tall_0.png-2b14c6a5dfc63249b91660f32dfffb74.ctex"
+uid="uid://bim0nat1vkdkt"
+path="res://.godot/imported/sweeper_segment_0.jpg-dc238b1ec6daa34a6073c82d26335b8c.ctex"
 metadata={
 "vram_texture": false
 }
 generator_parameters={
-"md5": "45cf45a6ea6943d9cb7d3d94ca0ec677"
+"md5": "2f85d2f769ec83319311fd40f0f3e149"
 }
 
 [deps]
 
-source_file="res://assets/models/lod/building_tall_0.png"
-dest_files=["res://.godot/imported/building_tall_0.png-2b14c6a5dfc63249b91660f32dfffb74.ctex"]
+source_file="res://assets/models/sweeper_segment_0.jpg"
+dest_files=["res://.godot/imported/sweeper_segment_0.jpg-dc238b1ec6daa34a6073c82d26335b8c.ctex"]
 
 [params]
 

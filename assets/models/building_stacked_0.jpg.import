@@ -2,19 +2,19 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://b7n8oewrn130b"
-path="res://.godot/imported/slammer_0.png-255ccb2b73748ad40b41c99b7669ddfb.ctex"
+uid="uid://doeag0yvccesi"
+path="res://.godot/imported/building_stacked_0.jpg-a30bc69530c52e5bcea4480e11d0d587.ctex"
 metadata={
 "vram_texture": false
 }
 generator_parameters={
-"md5": "71af8c077be057d114ca7ff6ab483f4a"
+"md5": "5bbc1c54019d584420b341679481a44f"
 }
 
 [deps]
 
-source_file="res://assets/models/lod/slammer_0.png"
-dest_files=["res://.godot/imported/slammer_0.png-255ccb2b73748ad40b41c99b7669ddfb.ctex"]
+source_file="res://assets/models/building_stacked_0.jpg"
+dest_files=["res://.godot/imported/building_stacked_0.jpg-a30bc69530c52e5bcea4480e11d0d587.ctex"]
 
 [params]
 
