@@ -1,5 +1,20 @@
 # Phase R prototype — "an album you survive"
 
+## Where we are (2026-09-20, 01:40)
+
+**Done, on `phase-r-prototype`:** Phase R (the gameplay model, levels 1-6 playable, bots, validator) · Phase A brief 1 creature · brief 2 world + colour pass · brief 3 motion · brief 2b materials (procedural stone / concrete / hot glass / gloss, fog, one beatmap scaled by `song_tempo`, pace: tempo 1.0/1.05/1.10, player 2.2/2.3x) · seams as dark grooves · window depth per level (2.5 bars on level 1, 2.2 after; camera 28/26) · level 6 validates with `reroll_passes` 40.
+
+**Asked for, not done yet:**
+- Brief 4 (props): in progress — models measured (all seven are ~30k triangles each; decimation with UVs kept is being set up), nothing placed yet.
+- Level-1 human bot at the current pace (2.5-bar window): validator is 0 deaths on 1-5; the 20-seed human batch is 14/20 in and running (so far 9 1 1 1 0 5 0 9 0 9 3 7 7 9 — on the line); numbers go into the table when it ends.
+- Level 6 first-play cost: its layout takes 35 validation passes (64 s on the Mac, minutes on a phone) once per device. Shipping the found re-rolls with the game (`levels/verdicts.json`) would remove that — offered, not started.
+- Phone frame time has never been measured from here; every brief's "within 1 ms" is unverified.
+
+**LAN build:** `https://172.20.10.2:8443` (phone hotspot; accept the certificate once; `tools/serve.py tls build/phase-r` restarts it). Current export = brief 2b + seam fix + window knob (before brief 4).
+
+**Models in `assets/models/`:** placed — `creature.glb` (the hero). Not placed yet — `gate_pillar.glb`, `sweeper_segment.glb`, `slammer.glb`, `orbiter_pillar.glb`, `volley_emitter.glb`, `building_tall.glb`, `building_stacked.glb` (brief 4; hazards and monoliths are still boxes / spheres).
+
+
 ## Phase A report — brief 2b, materials and pace (2026-09-20)
 
 **`rules.gd`: one change, the one the brief asks for — `WINDOW_DEPTH` 2.5 → 2.2 bars (§7). Nothing else in it, nor in `fairness.gd` / `hazard_math.gd` / `placement.gd`.**
