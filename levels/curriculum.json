@@ -190,6 +190,7 @@
   {
    "level": 6,
    "window_bars": 2.2,
+   "reroll_passes": 40,
    "song_tempo": 1.1,
    "player_speed": 2.3,
    "hazard_rate": "beat",
