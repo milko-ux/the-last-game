@@ -49,6 +49,8 @@ enum State { WAIT, STARTING, RUN, DEAD, WON, GAMEOVER }
 @onready var score_label: Label = $UI/Score
 @onready var debug: Label = $UI/Debug
 @onready var hud: Node2D = $UI/Hud
+# Brief 3: everything on the beat and the weight of the moments; presentation only.
+var motion: Node = null
 
 var state := State.WAIT
 var lives := 0
@@ -64,6 +66,7 @@ var _start_delay := 0.0
 var _run_started_ms := 0
 var _fair_warning := ""
 var _prev_ht := 0.0
+var _death_z := 0.0
 # Optional autoplayer (tools/autoplay.gd). When set, its move_dir(scene)
 # replaces the joystick. Never set in normal play.
 var bot: Object = null
@@ -84,6 +87,10 @@ func _ready() -> void:
 	lives = Rules.lives()
 	furthest_t = BeatClock.start_offset
 	print(Rules.knobs_line())
+	motion = load("res://prototype/motion.gd").new()
+	motion.name = "Motion"
+	add_child(motion)
+	rig.motion = motion
 	field.build()
 	if not field.fairness["ok"]:
 		_fair_warning = "FAIRNESS CHECK FAILED (%d) — see log" % field.fairness["problems"].size()
@@ -107,6 +114,8 @@ func _ready() -> void:
 	score_label.text = ""
 	_update_world(BeatClock.hazard_time(), 0.0)
 	rig.set_window(0.0)
+	motion.set_window(0.0)
+	score_label.pivot_offset = score_label.size * 0.5
 
 
 func _input(event: InputEvent) -> void:
@@ -148,6 +157,7 @@ func _process(delta: float) -> void:
 			if _start_delay <= 0.0:
 				BeatClock.start(music)
 				_run_started_ms = Time.get_ticks_msec()
+				motion.on_level_start()
 				state = State.RUN
 		State.RUN:
 			_tick_run(delta)
@@ -158,6 +168,8 @@ func _process(delta: float) -> void:
 		State.WON, State.GAMEOVER:
 			_end_shown += delta
 	ui.set_status(0, 1, lives, deaths, state == State.DEAD and Rules.lives_enabled())
+	if state != State.DEAD:
+		motion.animate_notes(field.notes, player.position)
 	_update_hud()
 
 
@@ -170,14 +182,19 @@ func _tick_run(delta: float) -> void:
 	player.move_dir = bot.move_dir(self) if bot != null else _move_input()
 	player.tick(delta, z_back, z_front, field)
 	rig.set_window(z_back)
+	motion.set_window(z_back)
 	_update_world(ht, z_back)
 	_update_progress(t)
 	_update_demo(ht)
+	field.widen_goal(clampf((player.position.z - (field.goal_z - BeatClock.BAR_UNITS)) / BeatClock.BAR_UNITS, 0.0, 1.0))
 
 	for i in field.checkpoints.size():
 		if i > checkpoint and t >= float(field.checkpoints[i]["t"]):
 			checkpoint = i
 			field.mark_checkpoint(i)
+			motion.on_checkpoint(float(field.checkpoints[i]["z"]))
+			hud.lit = i + 1
+			player.creature.play_glance()
 			Input.vibrate_handheld(HAPTIC_COIN_MS)
 
 	for n in field.notes:
@@ -185,10 +202,10 @@ func _tick_run(delta: float) -> void:
 			continue
 		if Vector2(n["x"] - player.position.x, n["z"] - player.position.z).length() < NOTE_RADIUS:
 			n["taken"] = true
-			n["node"].visible = false
 			streak += 1
 			notes += 1
 			combo_max = maxi(combo_max, mini(streak, COMBO_CAP))
+			motion.on_pickup(n["node"], player, streak)
 			Input.vibrate_handheld(HAPTIC_COIN_MS)
 
 	# --- death: ONE rules query (rules.gd decides; meshes are visual only)
@@ -198,6 +215,7 @@ func _tick_run(delta: float) -> void:
 	if not cause.is_empty():
 		_log_death(cause, t, ht, z_back)
 		_die()
+		motion.on_death(_killer_node(cause), cause["pos"], player.position)
 		return
 
 	player.look_at_danger(_demo_target(ht) if _in_demo_bar(ht) else _nearest_danger(ht))
@@ -208,7 +226,7 @@ func _tick_run(delta: float) -> void:
 
 func _update_progress(t: float) -> void:
 	furthest_t = maxf(furthest_t, t)
-	hud.fill = BeatClock.progress_of(t)
+	hud.fill = motion.progress_fill(BeatClock.progress_of(t))
 	if t > Progress.best_for(Rules.LEVEL):
 		hud.best = BeatClock.progress_of(t)
 		if t - _best_saved > 2.0:
@@ -344,6 +362,54 @@ func _log_death(cause: Dictionary, t: float, ht: float, z_back: float) -> void:
 		"none" if between.is_empty() else ",".join(between)])
 
 
+# tools/shot.gd only: walk into the nearest lethal hazard so the next tick
+# is a death (for the death-flash screenshot). Not reachable from play.
+func debug_walk_into_danger() -> bool:
+	var best: Variant = null
+	var best_d := 1e9
+	for h in field.hazards:
+		if h.kind == "gate":
+			continue   # a gate only kills on a crossing, standing in it does nothing
+		for b in h.boxes():
+			var bb: AABB = b
+			var c := bb.get_center()
+			if c.z < player.position.z - 0.5 or c.z > player.position.z + 8.0:
+				continue   # behind us (a back-edge death) or too far ahead (a gate crossing)
+			var d := Vector2(c.x - player.position.x, c.z - player.position.z).length()
+			if d < best_d:
+				best_d = d
+				best = Vector3(c.x, 0.0, c.z)
+	if best == null:
+		return false
+	player.position = best
+	player.prev_position = best
+	return true
+
+
+# The node that killed us, for the death flash (visual only): the hazard
+# whose lethal box is nearest the cause's position, or the plate tile.
+func _killer_node(cause: Dictionary) -> Node:
+	var kp: Vector3 = cause["pos"]
+	match String(cause["kind"]):
+		"plate":
+			return field.tile_node_at(kp.x, kp.z)
+		"back_edge", "fall":
+			return null
+	var best: Node = null
+	var best_d := 1e9
+	for h in field.hazards:
+		if h.kind != String(cause["kind"]):
+			continue
+		var d: float = (h.position - Vector3(h.position.x, 0.0, kp.z)).length()
+		for b in h.boxes():
+			var bb: AABB = b
+			d = minf(d, (bb.get_center() - kp).length())
+		if d < best_d:
+			best_d = d
+			best = h
+	return best
+
+
 func start_now() -> void:
 	if state == State.WAIT:
 		state = State.STARTING
@@ -360,8 +426,10 @@ func _die() -> void:
 	player.dead = true
 	player.move_dir = Vector2.ZERO
 	Input.vibrate_handheld(HAPTIC_DEATH_MS)
-	BeatClock.pause()
-	rig.shake()
+	# Brief 3 hit-stop: the clock and the music keep running; the world's
+	# visuals hold because nothing samples time in State.DEAD and
+	# motion.frozen stops the beat visuals. (Was BeatClock.pause().)
+	_death_z = player.position.z
 	_freeze = DEATH_FREEZE_LIVES_S if Rules.lives_enabled() else DEATH_FREEZE_S
 	player.creature.play_death(_freeze)
 	Progress.record_best(Rules.LEVEL, BeatClock.song_time())
@@ -393,6 +461,7 @@ func _rewind() -> void:
 	player.reset_to(x, z)
 	player.dead = false
 	player.creature.play_respawn()
+	motion.on_rewind(_death_z, z)
 	BeatClock.seek(t)
 	var z_back := BeatClock.z_at(t)
 	rig.set_window(z_back)
@@ -405,6 +474,7 @@ func _win() -> void:
 	_end_shown = 0.0
 	player.move_dir = Vector2.ZERO
 	player.creature.play_goal()
+	motion.on_goal()
 	Input.vibrate_handheld(HAPTIC_WIN_MS)
 	hud.fill = 1.0
 	furthest_t = BeatClock.duration
@@ -425,6 +495,9 @@ func _update_hud() -> void:
 		score_label.text = "♪ %d   x%d   ·   lives %d   ·   %d" % [notes, mini(maxi(streak, 1), COMBO_CAP), lives, current_score()]
 	else:
 		score_label.text = "♪ %d   x%d   ·   %d" % [notes, mini(maxi(streak, 1), COMBO_CAP), current_score()]
+	var pop: float = maxf(motion.counter_scale, motion.combo_scale)
+	score_label.scale = Vector2.ONE * pop
+	score_label.modulate.a = lerpf(0.45, 1.0, motion.combo_alpha)
 	var line := "bar %d / %d   ·   %.1f s   ·   sync %+d ms" % [
 		BeatClock.current_bar(), BeatClock.bar_count(), BeatClock.song_time(),
 		int(round(BeatClock.SYNC_OFFSET_S * 1000.0))]

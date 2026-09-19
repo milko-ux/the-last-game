@@ -1,5 +1,20 @@
 # Phase R prototype — "an album you survive"
 
+## Phase A report — brief 3, motion (2026-09-20)
+
+**`rules.gd` was not touched. Neither were `fairness.gd`, `hazard_math.gd`, `placement.gd`, hit boxes or freeze times.** Motion is presentation: `prototype/motion.gd` listens to the BeatClock signals the game already fires, sets six global shader uniforms once per frame (`pr_rim_pulse`, `pr_seam_pulse`, `pr_armed_pulse`, `pr_rim_amber`, `pr_ripple`, `pr_build_front`, declared in `project.godot`) and drives a handful of nodes. No per-tile scripts; every number is a constant at the top of `motion.gd`.
+
+In:
+- **1. The world on the beat:** rim +40 % on the downbeat / +15 % on other beats, decaying over a beat; seams +20 % on the downbeat, decaying over half a beat; armed hazards (walls, orbs, slammers, armed plates) breathe 25 % toward `LETHAL_LIVE` on each beat of the level's rate, growing toward the firing beat (tile shader and flat shader `armed` materials); gate openings slide over 120 ms after the rules jump (`hazard_gate.gd`, snaps on a rewind); notes bob ±0.15 at the beat rate, turn once per bar, the nearest within two tiles pulses on the beat; monoliths still.
+- **2. Death:** hit-stop — nothing samples time in `State.DEAD` and `motion.frozen` holds the beat visuals, while BeatClock and the music keep running (the old `BeatClock.pause()` on death is gone: no audio stutter; the rewind seek is unchanged); camera kick 0.25 s / 0.35 units biased away from the killer + 4 % FOV punch (`camera_rig.kick`); the killer flashes white for 2 frames (`Mats.white_flat`, restored after); on rewind a rim ripple runs from the death bar back to the checkpoint over 200 ms (`pr_ripple`). Level 1 stays lives-free; no added delay.
+- **3. Pickup and combo:** the note collapses onto the player over 80 ms, then 8 amber CPU particles burst (one shared emitter); the HUD counter pops 30 % (150 ms settle); combo step-up pops 50 % and the rim pulses amber for that beat; combo break drops the label to 45 % over 300 ms.
+- **4. Checkpoint and goal:** a rim ripple forward over two bars (200 ms), the creature glances at the camera (`play_glance`), the progress-bar tick lights; the goal gate's posts widen 1.5 units over the last bar (`field.widen_goal`); on crossing the rim goes amber and pulses on the beat for 2 bars during the three hops.
+- **5. Level start:** tiles rise from 0.5 below as they enter fade range (vertex shader on `pr_build_front`, row by row as the front advances), from the first frame of the run-up and for the rest of the level; monoliths do not; the progress bar fills over the first second.
+- **6. Camera:** 2 % downbeat FOV punch kept; a 1.5° forward nod on the downbeat decaying over the bar; death kick as above; nothing on jumps.
+
+Not in / not measured: the 4-second recording and the death-flash still were skipped on Milko's call (motion is judged on the phone). Frame time on the phone not measured from here; particle peak is 12 (death) + 8 per pickup, one emitter each, so well under the 200 budget. Bots: a headless run through deaths and rewinds had no script errors; the human-bot batches from the 0.83 hit box are the ones reported above (motion does not affect them).
+
+
 ## Phase A report — brief 2, the world (2026-09-19)
 
 **Colour and readability pass (Milko's screenshot review, 2026-09-19 evening):**

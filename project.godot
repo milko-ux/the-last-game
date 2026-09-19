@@ -56,3 +56,27 @@ pr_window_back={
 "type": "float",
 "value": 0.0
 }
+pr_rim_pulse={
+"type": "float",
+"value": 0.0
+}
+pr_seam_pulse={
+"type": "float",
+"value": 0.0
+}
+pr_armed_pulse={
+"type": "float",
+"value": 0.0
+}
+pr_rim_amber={
+"type": "float",
+"value": 0.0
+}
+pr_ripple={
+"type": "vec4",
+"value": Vector4(0, 0, 0, 0)
+}
+pr_build_front={
+"type": "float",
+"value": -1000000000.0
+}

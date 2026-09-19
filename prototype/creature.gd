@@ -281,6 +281,15 @@ func play_respawn() -> void:
 	_model.visible = true
 
 
+# Checkpoint (brief 3): a quick glance at the camera and back, GLANCE_S long.
+const GLANCE_S := 0.6
+var _glance_t := 99.0
+
+
+func play_glance() -> void:
+	_glance_t = 0.0
+
+
 func play_goal() -> void:
 	mode = Mode.GOAL
 	_mode_t = 0.0
@@ -356,6 +365,11 @@ func _process(delta: float) -> void:
 		brace = Vector2(d.x, d.z).length() <= ALARM_RANGE
 	elif mode == Mode.DYING or mode == Mode.GOAL:
 		look_to = _toward_camera()
+		look_rate = DEATH_LOOK_LERP
+	_glance_t += delta
+	if _glance_t < GLANCE_S and mode == Mode.ALIVE:
+		var g := sin(PI * _glance_t / GLANCE_S)
+		look_to = _toward_camera() * g + look_to * (1.0 - g)
 		look_rate = DEATH_LOOK_LERP
 	_look.x = lerp_angle(_look.x, look_to.x, _rate(look_rate, k60))
 	_look.y = lerpf(_look.y, look_to.y, _rate(look_rate, k60))

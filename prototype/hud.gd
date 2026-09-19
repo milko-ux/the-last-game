@@ -17,6 +17,7 @@ const MARGIN := 18.0
 var fill := 0.0             # 0..1
 var best := 0.0             # 0..1
 var ticks: Array = []       # 0..1 positions
+var lit := 0                # brief 3: the first `lit` ticks have been reached
 var word := ""
 var word_alpha := 0.0
 
@@ -55,11 +56,12 @@ func _draw() -> void:
 		draw_rect(Rect2(rect.position, Vector2(fw, BAR_H)), Color(Palette.EDGE.r, Palette.EDGE.g, Palette.EDGE.b, 0.55), true)
 		draw_line(rect.position + Vector2(fw, -1), rect.position + Vector2(fw, BAR_H + 1), Palette.EDGE, 1.5)
 
-	# checkpoint ticks (amber)
-	for tpos in ticks:
-		var tx := x0 + w * float(tpos)
-		draw_line(Vector2(tx, BAR_Y - 3), Vector2(tx, BAR_Y + BAR_H + 3),
-			Color(Palette.GOAL.r, Palette.GOAL.g, Palette.GOAL.b, 0.85), 1.5)
+	# checkpoint ticks (amber; a reached one is lit: wider and full)
+	for i in ticks.size():
+		var tx := x0 + w * float(ticks[i])
+		var on := i < lit
+		draw_line(Vector2(tx, BAR_Y - (5 if on else 3)), Vector2(tx, BAR_Y + BAR_H + (5 if on else 3)),
+			Color(Palette.GOAL.r, Palette.GOAL.g, Palette.GOAL.b, 1.0 if on else 0.6), 3.0 if on else 1.5)
 
 	# best marker (white)
 	if best > 0.001:

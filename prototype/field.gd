@@ -31,6 +31,11 @@ enum TileState { SAFE, ARMED, LETHAL }
 const THICK := 2.0
 const PLAIN_LEN := 8.0
 const MAX_REROLL_PASSES := 10
+const GOAL_WIDEN := 1.5     # brief 3: each goal post moves out this far over the last bar
+
+var _goal_posts: Array = []
+var _goal_top: MeshInstance3D
+var _goal_u := -1.0
 
 var plan := {}
 var fairness := {"ok": true, "problems": []}
@@ -250,6 +255,7 @@ func _gate_mesh(z: float) -> void:
 		post.material_override = Mats.amber()
 		post.position = Vector3(x, 1.6, z)
 		add_child(post)
+		_goal_posts.append(post)
 	var top := MeshInstance3D.new()
 	var tb := BoxMesh.new()
 	tb.size = Vector3(Rules.FIELD_WIDTH + 0.8, 0.4, 0.4)
@@ -257,6 +263,7 @@ func _gate_mesh(z: float) -> void:
 	top.material_override = Mats.amber()
 	top.position = Vector3(0.0, 3.4, z)
 	add_child(top)
+	_goal_top = top
 
 
 # ------------------------------------------------------------
@@ -289,6 +296,27 @@ func tile_at(bar: int, x: float, z: float) -> Vector2i:
 	var depth := (_bar_z1[bar - 1] - _bar_z0[bar - 1]) / Rules.ROWS
 	var row := clampi(int(floor((z - _bar_z0[bar - 1]) / depth)), 0, Rules.ROWS - 1)
 	return Vector2i(col, row)
+
+
+# The tile mesh under (x, z), for the death flash. null over a pit / slab.
+func tile_node_at(x: float, z: float) -> Node:
+	var bar := bar_at_z(z)
+	if bar == 0:
+		return null
+	var tile := tile_at(bar, x, z)
+	return _tiles[bar][tile.x * Rules.ROWS + tile.y]
+
+
+# Brief 3: the goal gate's posts move outward as the player closes in
+# over the last bar (u 0..1). Visual only; the goal line is field.goal_z.
+func widen_goal(u: float) -> void:
+	if _goal_posts.is_empty() or u == _goal_u:
+		return
+	_goal_u = u
+	var e := u * u * (3.0 - 2.0 * u) * GOAL_WIDEN
+	_goal_posts[0].position.x = -Rules.half_width() - 0.2 - e
+	_goal_posts[1].position.x = Rules.half_width() + 0.2 + e
+	_goal_top.scale.x = (Rules.FIELD_WIDTH + 0.8 + 2.0 * e) / (Rules.FIELD_WIDTH + 0.8)
 
 
 func tile_centre_at(x: float, z: float) -> Vector3:

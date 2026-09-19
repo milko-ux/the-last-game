@@ -5,6 +5,8 @@ extends SceneTree
 #
 #   godot --path . --resolution 2400x1080 -s tools/shot.gd -- out=docs/screenshots/x.png bar=1 level=1
 #   ... jump=1      (jump at that moment, shoot when the creature's eye faces the camera)
+#   ... kill=1      (walk into the nearest hazard there; shoot the frame the killer flashes)
+#   ... seq=8 step=0.5   (eight frames half a second apart, out-01.png .. out-08.png)
 #
 # Opens the run scene, starts it, waits until the song reaches the
 # given bar (plus `after` seconds), saves the frame and quits. Audio
@@ -24,6 +26,12 @@ var bot: Object = null
 var _frames_after := -1
 var jump := false            # jump=1: capture mid-jump with the eye toward the camera
 var _jumped := false
+var kill := false            # kill=1: walk into the nearest hazard at the bar, shoot the death frame
+var _killed := false
+var seq := 1                 # seq=N step=S: N frames S seconds apart from the bar (out-01.png ...)
+var step := 0.5
+var _seq_taken := 0
+var _seq_next_t := 0.0
 
 
 var _args_read := false
@@ -56,13 +64,36 @@ func _process(_delta: float) -> bool:
 		_frames_after += 1
 		if _frames_after >= 3:
 			var img := root.get_viewport().get_texture().get_image()
+			if seq > 1:
+				# A sequence: out-01.png, out-02.png, ... every `step` seconds.
+				_seq_taken += 1
+				var name := out.get_basename() + "-%02d." % _seq_taken + out.get_extension()
+				print("SHOT saved=%s err=%d t=%.2f bar=%d" % [name, img.save_png(name), clock.song_time(), clock.current_bar()])
+				if _seq_taken >= seq:
+					return true
+				_seq_next_t = clock.song_time() + step
+				_frames_after = -1
+				return false
 			var err := img.save_png(out)
 			print("SHOT saved=%s err=%d size=%dx%d t=%.2f bar=%d" % [out, err, img.get_width(), img.get_height(), clock.song_time(), clock.current_bar()])
 			return true
 		return false
 	var t: float = clock.song_time()
+	if _seq_taken > 0:
+		if t >= _seq_next_t:
+			_frames_after = 0
+		return false
+	if kill and test.state == test.State.DEAD:
+		# The last rendered frame is the death frame, with the killer white.
+		var img := root.get_viewport().get_texture().get_image()
+		print("SHOT saved=%s err=%d size=%dx%d t=%.2f bar=%d (death frame)" % [out, img.save_png(out), img.get_width(), img.get_height(), clock.song_time(), clock.current_bar()])
+		return true
 	if clock.current_bar() >= bar and t >= clock.bar_start(bar) + after:
-		if not jump:
+		if kill:
+			# Walk into the nearest lethal box once something is lethal.
+			if not _killed:
+				_killed = test.debug_walk_into_danger()
+		elif not jump:
 			_frames_after = 0
 		elif not _jumped:
 			# jump=1: jump, then shoot when the spin shows the eye to the camera.
@@ -85,6 +116,9 @@ func _setup_args() -> void:
 			"level": level = int(kv[1])
 			"scene": scene_kind = kv[1]
 			"jump": jump = kv[1] == "1"
+			"kill": kill = kv[1] == "1"
+			"seq": seq = int(kv[1])
+			"step": step = float(kv[1])
 
 
 func _setup() -> void:
@@ -101,7 +135,7 @@ func _setup() -> void:
 	var scene: PackedScene = load("res://prototype/track_test.tscn")
 	test = scene.instantiate()
 	root.add_child(test)
-	if bar > 1:
+	if bar > 1 or seq > 1 or kill:
 		# Let the validator bot carry the player to the requested bar alive.
 		var ap: Object = load("res://tools/autoplay.gd").new()   # a SceneTree script, not a Node
 		bot = ap

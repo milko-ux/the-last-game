@@ -42,6 +42,14 @@ const SHAKE_AMOUNT := 0.15
 var _punch := 0.0
 var _shake_t := 0.0
 var window_back := 0.0
+# Brief 3: the death kick (a directional, decaying shake plus an outward
+# FOV punch) and the downbeat nod, read from the scene's Motion node.
+var motion: Node = null
+var _kick_t := 0.0
+var _kick_s := 0.25
+var _kick_amount := 0.0
+var _kick_fov := 0.0
+var _kick_dir := Vector3.ZERO
 
 @onready var cam: Camera3D = $Camera3D
 
@@ -98,6 +106,16 @@ func shake() -> void:
 	_shake_t = SHAKE_S
 
 
+# Death kick: `away` is the direction from the killer to the player on
+# the ground plane; the shake is biased that way.
+func kick(duration: float, amount: float, fov_punch: float, away: Vector3) -> void:
+	_kick_t = duration
+	_kick_s = duration
+	_kick_amount = amount
+	_kick_fov = fov_punch
+	_kick_dir = away
+
+
 func set_window(z_back: float) -> void:
 	window_back = z_back
 	position = Vector3(0.0, 0.0, z_back + Rules.WINDOW_DEPTH * 0.5)
@@ -128,12 +146,22 @@ static func screen_to_world_dir(v: Vector2) -> Vector2:
 func _process(delta: float) -> void:
 	if _punch > 0.0:
 		_punch = maxf(0.0, _punch - delta / BeatClock.beat_interval)
-	cam.fov = FOV * (1.0 + PUNCH * _punch)
+	var kick_u := 0.0
+	if _kick_t > 0.0:
+		_kick_t -= delta
+		kick_u = maxf(_kick_t, 0.0) / _kick_s
+	cam.fov = FOV * (1.0 + PUNCH * _punch + _kick_fov * kick_u)
 
 	var off := Vector3.ZERO
 	if _shake_t > 0.0:
 		_shake_t -= delta
 		var s := SHAKE_AMOUNT * (_shake_t / SHAKE_S)
 		off = Vector3(randf_range(-s, s), randf_range(-s, s), 0.0)
+	if kick_u > 0.0:
+		var k := _kick_amount * kick_u
+		off += _kick_dir * k * 0.6 + Vector3(randf_range(-k, k), randf_range(-k, k) * 0.5, randf_range(-k, k)) * 0.6
 	cam.position = camera_offset() + off
 	cam.look_at(global_position, Vector3.UP)
+	if motion != null:
+		# The nod: a forward tilt on the downbeat, decaying over the bar.
+		cam.rotate_object_local(Vector3.RIGHT, -motion.nod())

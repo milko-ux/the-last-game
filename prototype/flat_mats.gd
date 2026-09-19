@@ -35,12 +35,25 @@ const FADE_BEHIND_END := 10.0
 const SEAM_WIDTH := 0.03
 const EDGE_WIDTH := 0.1
 
-# Shared: the fade uniforms and the fade amount for this pixel.
+# Shared: the fade uniforms and the fade amount for this pixel, plus the
+# beat uniforms motion.gd sets once per frame (brief 3).
 const FADE_HEAD := """
 uniform vec3 background : source_color;
 uniform vec4 fade;   // ahead start, ahead end, behind start, behind end
 global uniform float pr_window_back;
+global uniform float pr_rim_pulse;
+global uniform float pr_seam_pulse;
+global uniform float pr_armed_pulse;
+global uniform float pr_rim_amber;
+global uniform vec4 pr_ripple;      // z centre, half width, strength
+global uniform float pr_build_front;
 varying float world_z;
+
+// A band of light travelling along the slab (rewind, checkpoint).
+float ripple_here() {
+	if (pr_ripple.y <= 0.0) { return 0.0; }
+	return (1.0 - smoothstep(0.0, pr_ripple.y, abs(world_z - pr_ripple.x))) * pr_ripple.z;
+}
 
 float fade_amount() {
 	float d = world_z - pr_window_back;
@@ -62,6 +75,8 @@ const FLAT_SHADER := """
 shader_type spatial;
 render_mode unshaded, fog_disabled CULL;
 uniform vec4 albedo : source_color;
+uniform vec4 live : source_color;   // what an ARMED material breathes toward
+uniform float armed = 0.0;          // 1 on the armed materials
 FADE_HEAD
 
 void vertex() {
@@ -69,7 +84,7 @@ void vertex() {
 }
 
 void fragment() {
-	ALBEDO = albedo.rgb;
+	ALBEDO = mix(albedo.rgb, live.rgb, armed * pr_armed_pulse);
 FADE_APPLY
 	ALPHA_LINE
 }
@@ -91,6 +106,11 @@ uniform vec3 half_size;      // the box's half extents (x, y, z)
 uniform float seam_width = 0.03;
 uniform float edge_width = 0.1;
 uniform vec2 outer;          // 1.0 where this box's -x / +x side is the slab's outer edge
+uniform vec4 live : source_color;
+uniform float armed = 0.0;   // 1 on the armed tile material: the face breathes toward `live`
+uniform vec4 amber : source_color;
+uniform float build_depth = 0.5;    // tiles rise from this far below as they enter fade range
+uniform float build_length = 1.6;   // over this many units behind the build front
 FADE_HEAD
 varying vec3 local_pos;
 varying vec3 local_normal;
@@ -99,6 +119,11 @@ void vertex() {
 	world_z = (MODEL_MATRIX * vec4(VERTEX, 1.0)).z;
 	local_pos = VERTEX;
 	local_normal = NORMAL;
+	// Level start (brief 3 section 5): the field is built just ahead of
+	// the player. Tiles beyond the build front sit sunk; they rise as the
+	// front passes, row by row, since the front moves with the window.
+	float up = 1.0 - smoothstep(pr_build_front - build_length, pr_build_front, world_z);
+	VERTEX.y -= build_depth * up;
 }
 
 void fragment() {
@@ -116,8 +141,11 @@ void fragment() {
 	}
 	float s = 1.0 - smoothstep(seam_width - 0.01, seam_width + 0.01, edge);
 	float r = 1.0 - smoothstep(edge_width - 0.015, edge_width + 0.015, rim);
-	vec3 base = top ? face.rgb : side.rgb;
-	ALBEDO = mix(mix(base, seam.rgb, s), edge_colour.rgb, r);
+	vec3 base = mix(top ? face.rgb : side.rgb, live.rgb, armed * pr_armed_pulse);
+	float rip = ripple_here();
+	vec3 rim_c = mix(edge_colour.rgb, amber.rgb, pr_rim_amber) * (1.0 + pr_rim_pulse + rip);
+	vec3 seam_c = seam.rgb * (1.0 + pr_seam_pulse + rip * 0.6);
+	ALBEDO = mix(mix(base, seam_c, s), rim_c, r);
 FADE_APPLY
 }
 """
@@ -147,10 +175,12 @@ static func _with_fade(m: ShaderMaterial) -> ShaderMaterial:
 	return m
 
 
-static func _fading(c: Color, see_through: bool) -> ShaderMaterial:
+static func _fading(c: Color, see_through: bool, armed: bool = false) -> ShaderMaterial:
 	var m := ShaderMaterial.new()
 	m.shader = _shader("wall" if see_through else "flat")
 	m.set_shader_parameter("albedo", c)
+	m.set_shader_parameter("live", Color(WorldPalette.LETHAL_LIVE, c.a))
+	m.set_shader_parameter("armed", 1.0 if armed else 0.0)
 	return _with_fade(m)
 
 
@@ -168,9 +198,12 @@ static func magenta() -> Material:
 	return flat(WorldPalette.LETHAL_LIVE)
 
 
-# Dormant hazard state: still clearly magenta, clearly "not yet".
+# Dormant hazard state: still clearly magenta, clearly "not yet". It
+# breathes toward LETHAL_LIVE on each beat of its rate (motion.gd).
 static func magenta_dim() -> Material:
-	return flat(WorldPalette.LETHAL_ARMED)
+	if not _cache.has("armed"):
+		_cache["armed"] = _fading(WorldPalette.LETHAL_ARMED, false, true)
+	return _cache["armed"]
 
 
 # Anything safe that stands on the field: pillars, checkpoint marker.
@@ -186,12 +219,12 @@ static func magenta_wall() -> Material:
 
 # Demo (non-lethal) wall: the warning colour.
 static func magenta_wall_dim() -> Material:
-	return _wall("wall_dim", WorldPalette.LETHAL_ARMED, 0.6)
+	return _wall("wall_dim", WorldPalette.LETHAL_ARMED, 0.6, true)
 
 
-static func _wall(key: String, c: Color, a: float) -> Material:
+static func _wall(key: String, c: Color, a: float, armed: bool = false) -> Material:
 	if not _cache.has(key):
-		_cache[key] = _fading(Color(c.r, c.g, c.b, a), true)
+		_cache[key] = _fading(Color(c.r, c.g, c.b, a), true, armed)
 	return _cache[key]
 
 
@@ -205,6 +238,16 @@ static func amber_dim() -> Material:
 
 static func white() -> Material:
 	return flat(Color.WHITE)
+
+
+# Pure white, no fade: the death flash on the killer (motion.gd).
+static func white_flat() -> StandardMaterial3D:
+	if not _cache.has("white_flat"):
+		var m := StandardMaterial3D.new()
+		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		m.albedo_color = Color.WHITE
+		_cache["white_flat"] = m
+	return _cache["white_flat"]
 
 
 # The player draws on top of everything: you can always see yourself.
@@ -243,6 +286,9 @@ static func tile(state: int, half: Vector3, outer: Vector2 = Vector2.ZERO) -> Ma
 				m.set_shader_parameter("seam", WorldPalette.TILE_SEAM)
 		m.set_shader_parameter("side", WorldPalette.TILE_SIDE)
 		m.set_shader_parameter("edge_colour", WorldPalette.TILE_EDGE)
+		m.set_shader_parameter("live", WorldPalette.LETHAL_LIVE)
+		m.set_shader_parameter("armed", 1.0 if state == 1 else 0.0)
+		m.set_shader_parameter("amber", WorldPalette.GOAL)
 		m.set_shader_parameter("half_size", half)
 		m.set_shader_parameter("seam_width", SEAM_WIDTH)
 		m.set_shader_parameter("edge_width", EDGE_WIDTH)
