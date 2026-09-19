@@ -1,5 +1,22 @@
 # Phase R prototype — "an album you survive"
 
+## Phase A report — brief 2b, materials and pace (2026-09-20)
+
+**`rules.gd`: one change, the one the brief asks for — `WINDOW_DEPTH` 2.5 → 2.2 bars (§7). Nothing else in it, nor in `fairness.gd` / `hazard_math.gd` / `placement.gd`.**
+
+Everything is procedural in the shaders (`flat_mats.gd`, `monoliths.gd`, `camera_rig.gd`, `creature.gd`): 2-octave value noise from world position, no texture lookups, no generated images. Per-frame uniforms are still the six from brief 3 plus `TIME`.
+- **§1 Tiles:** `TILE` face with ±6 % grain at 0.6 units (`GRAIN`, `GRAIN_SCALE`), ±3 % per-tile shade from a hash of the tile's origin (`TILE_VARIATION`), 18 % occlusion within 0.12 of every seam (`AO_*`); seams unchanged; armed plates keep the grain under the wine tint, live plates wash out flat to `LETHAL_LIVE` + bright seam (the 80 ms pre-fire wash is not timed per tile — the armed breathing from brief 3 grows toward the firing beat instead); sides: same shader, `TILE_SIDE`, grain scale 1.2.
+- **§2 Monoliths:** triplanar grain ±8 % at 1.5 units + ±4 % at 5 units, formwork bands every 2.5 units (0.05 wide, 2 % darker), top faces still 12 % lighter, a 0.3-unit contact shadow at the foot. Still one draw call.
+- **§3 Hazards:** walls, gates, sweepers, slammers, the volley muzzle = hot glass (`GLASS_SHADER`): 55 % / 70 % body armed / live, fresnel rim toward `LETHAL_SEAM` at 0.6 / 1.0 (+0.4 with the beat's armed pulse), base-to-top inner glow 30 %, heat shimmer drifting 0.15 units/s at 4 %, never on the rim. Orbiter and volley orbs = gloss (`GLOSS_SHADER`, LIT by the creature's light): dark magenta body, specular highlight, soft rim, faint inner glow. Pillars and checkpoint markers = the tile's stone shader in `SAFE` tint with the bright rim on every edge. The death line stays the bright bar it was (it is the rim).
+- **§4 Notes and goal:** notes = the gloss shader in amber; goal gate = hot glass in `GOAL`, rim 1.0.
+- **§5 Background:** the gradient quad carries two noise layers (40-unit / 6 % at 0.05 u/s, 12-unit / 3 % at 0.12 u/s) in a plane that scrolls at 20 % of the window; three huge silhouettes (`FAR_SILHOUETTES`) at 4 % above the background ride the rig at 20 % parallax.
+- **§6 Creature:** against the textured world it read a touch flat, so its clay got the same 4 % grain and specular 0.3 → 0.4 (`clay_grain`, `specular` in `creature.gd`).
+- **§7 Pace:** ONE beatmap. `BeatClock.set_tempo()` divides every time in `fuffens_beatmap.json` by `song_tempo` and picks the `_105` / `_110` mp3 (the only extra audio files; the `_90`/`_95` files and the per-tempo beatmap code are gone). `song_tempo` 1.0 / 1.05 / 1.10 (levels 1 / 2 / 3+), `player_speed` 2.2 / 2.3, `WINDOW_DEPTH` 2.2 bars, camera distance 26. Layouts 1-5 validate (1-8 passes); **level 6 still does not** (bars 41, 67, 71 unfair after 10 passes at the 0.83 box) — Milko's call remains open. The gate-7 rerun of level 1 from the previous pass was superseded by this pace and stopped.
+- **Screenshots (web renderer, stills only):** `docs/screenshots/a-materials-bar1.png`, `a-materials-wave3.png`, `a-materials-vs-concept.png`.
+- **Frame time:** not measurable from here (no phone); the cost is fragment-shader noise — 2 octaves per tile pixel, 6 per monolith pixel (triplanar), 1 per glass pixel — and no new draw calls. If the phone drops, the fallback the brief names (bake the noise to one 512² tileable PNG from a script in `tools/`) is the next step.
+- **Bots:** see below (filled in when the batch ends).
+
+
 ## Phase A report — brief 3, motion (2026-09-20)
 
 **`rules.gd` was not touched. Neither were `fairness.gd`, `hazard_math.gd`, `placement.gd`, hit boxes or freeze times.** Motion is presentation: `prototype/motion.gd` listens to the BeatClock signals the game already fires, sets six global shader uniforms once per frame (`pr_rim_pulse`, `pr_seam_pulse`, `pr_armed_pulse`, `pr_rim_amber`, `pr_ripple`, `pr_build_front`, declared in `project.godot`) and drives a handful of nodes. No per-tile scripts; every number is a constant at the top of `motion.gd`.

@@ -117,17 +117,35 @@ uniform sampler2D skin : source_color, filter_linear_mipmap;
 uniform vec4 base_tint : source_color = vec4(1.0);
 uniform float on_top = 0.92;
 uniform float ambient = 0.38;
+uniform float clay_grain = 0.04;     // brief 2b section 6: the same fine grain the world got
+uniform float specular = 0.4;
+varying vec3 model_pos;
+
+float chash(vec3 p) {
+	p = fract(p * 0.3183099 + vec3(0.1, 0.2, 0.3));
+	p *= 17.0;
+	return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
+}
+float cnoise(vec3 p) {
+	vec3 i = floor(p);
+	vec3 f = fract(p);
+	f = f * f * (3.0 - 2.0 * f);
+	return mix(mix(mix(chash(i), chash(i + vec3(1, 0, 0)), f.x), mix(chash(i + vec3(0, 1, 0)), chash(i + vec3(1, 1, 0)), f.x), f.y),
+		mix(mix(chash(i + vec3(0, 0, 1)), chash(i + vec3(1, 0, 1)), f.x), mix(chash(i + vec3(0, 1, 1)), chash(i + vec3(1, 1, 1)), f.x), f.y), f.z);
+}
 
 void vertex() {
+	model_pos = VERTEX;
 	POSITION = PROJECTION_MATRIX * MODELVIEW_MATRIX * vec4(VERTEX, 1.0);
 	POSITION.z = mix(POSITION.z, POSITION.w, on_top);
 }
 
 void fragment() {
 	vec3 c = texture(skin, UV).rgb * base_tint.rgb;
+	c *= 1.0 + (cnoise(model_pos * 14.0) * 2.0 - 1.0) * clay_grain;
 	ALBEDO = c;
 	ROUGHNESS = 0.8;
-	SPECULAR = 0.3;
+	SPECULAR = specular;
 	EMISSION = c * ambient;
 }
 """
