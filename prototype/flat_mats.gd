@@ -115,6 +115,93 @@ FADE_APPLY
 }
 """
 
+# Hot glass (brief 2b section 3): walls, gates, sweepers, slammers, the
+# goal gate. A translucent body, a fresnel rim toward `rim_colour` that
+# reads as a bright outline at phone size, an inner glow brighter at the
+# base, and a slow heat shimmer inside the body (never on the rim). The
+# armed state breathes toward `live` on pr_armed_pulse (brief 3), which
+# now also drives the rim strength.
+const GLASS_SHADER := """
+shader_type spatial;
+render_mode unshaded, fog_disabled, cull_disabled, depth_draw_opaque;
+uniform vec4 albedo : source_color;
+uniform vec4 live : source_color;
+uniform vec4 rim_colour : source_color;
+uniform float armed = 0.0;
+uniform float rim_strength = 0.6;
+uniform float glow_range = 0.3;       // base-to-top inner glow, this much brighter at the floor
+uniform float shimmer_speed = 0.15;   // units / s of vertical drift
+uniform float shimmer_contrast = 0.04;
+uniform float half_height = 1.5;
+FADE_HEAD
+varying vec3 world_pos;
+varying vec3 world_n;
+varying float local_y;
+
+void vertex() {
+	vec4 wp = MODEL_MATRIX * vec4(VERTEX, 1.0);
+	world_z = wp.z;
+	world_pos = wp.xyz;
+	world_n = normalize(mat3(MODEL_MATRIX) * NORMAL);
+	local_y = VERTEX.y;
+}
+
+void fragment() {
+	float pulse = armed * pr_armed_pulse;
+	vec4 body = mix(albedo, live, pulse);
+	// Inner glow: brighter at the base.
+	float base_t = clamp(0.5 - local_y / (2.0 * half_height), 0.0, 1.0);
+	vec3 c = body.rgb * (1.0 + glow_range * base_t);
+	// Heat shimmer: 1-octave noise drifting upward inside the body.
+	float sh = vnoise(vec3(world_pos.x * 0.8, world_pos.y * 0.8 - TIME * shimmer_speed, world_pos.z * 0.8)) * 2.0 - 1.0;
+	c *= 1.0 + shimmer_contrast * sh;
+	// Fresnel rim: edges facing away from the camera brighten toward the rim colour.
+	vec3 v = normalize(CAMERA_POSITION_WORLD - world_pos);
+	float fr = pow(1.0 - abs(dot(normalize(world_n), v)), 2.5);
+	float strength = (rim_strength + 0.4 * pulse) * fr;
+	ALBEDO = mix(c, rim_colour.rgb, clamp(strength, 0.0, 1.0));
+	ALPHA = clamp(body.a + strength * 0.5, 0.0, 1.0);
+FADE_APPLY
+}
+"""
+
+# Gloss (brief 2b sections 3-4): orbiter and volley orbs, and the notes.
+# LIT, like the creature's eye: a dark body, a sharp specular highlight
+# from the scene's directional light, a soft rim, and a faint inner glow.
+const GLOSS_SHADER := """
+shader_type spatial;
+render_mode fog_disabled, specular_schlick_ggx;
+uniform vec4 albedo : source_color;
+uniform vec4 rim_colour : source_color;
+uniform float roughness = 0.22;
+uniform float inner_glow = 0.25;
+uniform float rim_amount = 0.5;
+FADE_HEAD
+varying vec3 world_pos;
+varying vec3 world_n;
+
+void vertex() {
+	vec4 wp = MODEL_MATRIX * vec4(VERTEX, 1.0);
+	world_z = wp.z;
+	world_pos = wp.xyz;
+	world_n = normalize(mat3(MODEL_MATRIX) * NORMAL);
+}
+
+void fragment() {
+	vec3 v = normalize(CAMERA_POSITION_WORLD - world_pos);
+	float fr = pow(1.0 - abs(dot(normalize(world_n), v)), 3.0);
+	float f = fade_amount();
+	if (f > 0.97) {
+		discard;
+	}
+	ALBEDO = mix(albedo.rgb, background, f);
+	ROUGHNESS = roughness;
+	METALLIC = 0.0;
+	SPECULAR = 0.7;
+	EMISSION = (albedo.rgb * inner_glow + rim_colour.rgb * fr * rim_amount) * (1.0 - f);
+}
+"""
+
 # The floor. A box per tile (or per plain slab): the top face is `face`
 # with a `seam`-coloured line SEAM_WIDTH in from every edge (drawn from
 # the vertex's position inside the box, not from extra geometry); the
@@ -205,6 +292,10 @@ static func _shader(kind: String) -> Shader:
 				sh.code = FLAT_SHADER.replace("CULL", ", cull_disabled").replace("ALPHA_LINE", "ALPHA = albedo.a;")
 			"tile":
 				sh.code = TILE_SHADER
+			"glass":
+				sh.code = GLASS_SHADER
+			"gloss":
+				sh.code = GLOSS_SHADER
 		sh.code = sh.code.replace("FADE_HEAD", FADE_HEAD).replace("FADE_APPLY", FADE_APPLY)
 		_shaders[kind] = sh
 	return _shaders[kind]
@@ -233,44 +324,118 @@ static func flat(c: Color) -> Material:
 
 
 # ------------------------------------------------------------
-# Hazards and markers
+# Hazards and markers (brief 2b: hot glass for the boxes, gloss for the orbs)
 # ------------------------------------------------------------
-static func magenta() -> Material:
-	return flat(WorldPalette.LETHAL_LIVE)
-
-
-# Dormant hazard state: still clearly magenta, clearly "not yet". It
-# breathes toward LETHAL_LIVE on each beat of its rate (motion.gd).
-static func magenta_dim() -> Material:
-	if not _cache.has("armed"):
-		_cache["armed"] = _fading(WorldPalette.LETHAL_ARMED, false, true)
-	return _cache["armed"]
-
-
-# Anything safe that stands on the field: pillars, checkpoint marker.
-static func cyan() -> Material:
-	return flat(WorldPalette.SAFE)
-
-
-# Walls (sweepers, gates): see-through so a wall between the camera and
-# the player can never hide the player or the floor behind it.
-static func magenta_wall() -> Material:
-	return _wall("wall", WorldPalette.LETHAL_LIVE, 0.55)
-
-
-# Demo (non-lethal) wall: the warning colour.
-static func magenta_wall_dim() -> Material:
-	return _wall("wall_dim", WorldPalette.LETHAL_ARMED, 0.6, true)
-
-
-static func _wall(key: String, c: Color, a: float, armed: bool = false) -> Material:
+# Hot glass. `live` = lethal now (70 % body, rim 1.0); otherwise armed
+# (55 %, rim 0.6, breathing toward live on the beat). `half_height` sets
+# where the base glow sits.
+static func glass(live: bool, half_height: float, key_extra: String = "") -> Material:
+	var key := "glass_%s_%.2f%s" % [live, half_height, key_extra]
 	if not _cache.has(key):
-		_cache[key] = _fading(Color(c.r, c.g, c.b, a), true, armed)
+		var m := ShaderMaterial.new()
+		m.shader = _shader("glass")
+		var c := WorldPalette.LETHAL_LIVE if live else WorldPalette.LETHAL_ARMED
+		m.set_shader_parameter("albedo", Color(c, 0.70 if live else 0.55))
+		m.set_shader_parameter("live", Color(WorldPalette.LETHAL_LIVE, 0.70))
+		m.set_shader_parameter("rim_colour", WorldPalette.LETHAL_SEAM)
+		m.set_shader_parameter("armed", 0.0 if live else 1.0)
+		m.set_shader_parameter("rim_strength", 1.0 if live else 0.6)
+		m.set_shader_parameter("half_height", half_height)
+		_cache[key] = _with_fade(m)
 	return _cache[key]
 
 
+# The goal gate: hot glass in GOAL, rim 1.0, no breathing.
+static func goal_glass() -> Material:
+	if not _cache.has("goal_glass"):
+		var m := ShaderMaterial.new()
+		m.shader = _shader("glass")
+		m.set_shader_parameter("albedo", Color(WorldPalette.GOAL, 0.70))
+		m.set_shader_parameter("live", Color(WorldPalette.GOAL, 0.70))
+		m.set_shader_parameter("rim_colour", Color(1.0, 0.92, 0.75))
+		m.set_shader_parameter("armed", 0.0)
+		m.set_shader_parameter("rim_strength", 1.0)
+		m.set_shader_parameter("half_height", 1.6)
+		_cache["goal_glass"] = _with_fade(m)
+	return _cache["goal_glass"]
+
+
+# Gloss: orbs (magenta) and notes (amber), lit by the creature's light.
+static func gloss(c: Color, rim: Color, key: String) -> Material:
+	var k := "gloss_" + key
+	if not _cache.has(k):
+		var m := ShaderMaterial.new()
+		m.shader = _shader("gloss")
+		m.set_shader_parameter("albedo", c)
+		m.set_shader_parameter("rim_colour", rim)
+		_cache[k] = _with_fade(m)
+	return _cache[k]
+
+
+static func orb(live: bool) -> Material:
+	return gloss(WorldPalette.LETHAL_LIVE.darkened(0.35) if live else WorldPalette.LETHAL_ARMED,
+		WorldPalette.LETHAL_SEAM, "orb_live" if live else "orb_armed")
+
+
+static func note() -> Material:
+	return gloss(WorldPalette.GOAL.darkened(0.15), Color(1.0, 0.9, 0.6), "note")
+
+
+# Boxes that kill: slammers and the volley's muzzle. Glass.
+static func magenta() -> Material:
+	return glass(true, 1.0)
+
+
+static func magenta_dim() -> Material:
+	return glass(false, 1.0)
+
+
+# Anything safe that stands on the field (pillars, checkpoint marker):
+# stone in the SAFE tint with the slab edge's bright rim on every edge.
+static func cyan() -> Material:
+	return stone(WorldPalette.SAFE.darkened(0.55), Vector3(0.5, 1.5, 0.5))
+
+
+static func stone(c: Color, half: Vector3) -> Material:
+	var key := "stone_%s_%s" % [c.to_html(), half]
+	if not _cache.has(key):
+		var m := ShaderMaterial.new()
+		m.shader = _shader("tile")
+		m.set_shader_parameter("face", c)
+		m.set_shader_parameter("seam", WorldPalette.TILE_EDGE)
+		m.set_shader_parameter("side", c.darkened(0.3))
+		m.set_shader_parameter("edge_colour", WorldPalette.TILE_EDGE)
+		m.set_shader_parameter("half_size", half)
+		m.set_shader_parameter("seam_width", EDGE_WIDTH * 0.6)
+		m.set_shader_parameter("edge_width", EDGE_WIDTH * 0.6)
+		m.set_shader_parameter("outer", Vector2.ONE)
+		m.set_shader_parameter("live", c)
+		m.set_shader_parameter("armed", 0.0)
+		m.set_shader_parameter("amber", WorldPalette.GOAL)
+		m.set_shader_parameter("grain_amount", GRAIN)
+		m.set_shader_parameter("grain_scale", GRAIN_SCALE)
+		m.set_shader_parameter("side_grain_scale", GRAIN_SCALE)
+		m.set_shader_parameter("tile_variation", 0.0)
+		m.set_shader_parameter("ao_width", AO_WIDTH)
+		m.set_shader_parameter("ao_amount", AO_AMOUNT)
+		m.set_shader_parameter("build_depth", 0.0)
+		_cache[key] = _with_fade(m)
+	return _cache[key]
+
+
+# Walls (sweepers, gates): hot glass, see-through so a wall between the
+# camera and the player can never hide the player or the floor behind it.
+static func magenta_wall() -> Material:
+	return glass(true, 1.5, "_wall")
+
+
+# Demo / armed wall: the warning colour, breathing.
+static func magenta_wall_dim() -> Material:
+	return glass(false, 1.5, "_wall")
+
+
 static func amber() -> Material:
-	return flat(WorldPalette.GOAL)
+	return goal_glass()
 
 
 static func amber_dim() -> Material:

@@ -148,7 +148,7 @@ func build() -> void:
 		sm.radial_segments = 12
 		sm.rings = 6
 		mi.mesh = sm
-		mi.material_override = Mats.amber()
+		mi.material_override = Mats.note()
 		mi.position = Vector3(float(n["x"]), 1.0, float(n["z"]))
 		add_child(mi)
 		notes.append({"x": float(n["x"]), "z": float(n["z"]), "node": mi, "taken": false})
@@ -158,7 +158,7 @@ func build() -> void:
 		var bm := BoxMesh.new()
 		bm.size = Vector3(Rules.FIELD_WIDTH, 0.06, 0.3)
 		mi.mesh = bm
-		mi.material_override = Mats.cyan()
+		mi.material_override = Mats.stone(WorldPalette.SAFE.darkened(0.45), bm.size * 0.5)
 		mi.position = Vector3(0.0, 0.03, c.z_at(float(cp["t"])))
 		add_child(mi)
 		var entry: Dictionary = cp.duplicate()
@@ -405,7 +405,7 @@ func mark_checkpoint(i: int) -> void:
 
 func reset_run() -> void:
 	for cp in checkpoints:
-		cp["node"].material_override = Mats.cyan()
+		cp["node"].material_override = Mats.stone(WorldPalette.SAFE.darkened(0.45), cp["node"].mesh.size * 0.5)
 	for n in notes:
 		n["taken"] = false
 		n["node"].visible = true

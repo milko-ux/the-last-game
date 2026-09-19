@@ -23,7 +23,7 @@ func _build() -> void:
 	sm.radial_segments = 14
 	sm.rings = 7
 	_orb.mesh = sm
-	_orb.material_override = Mats.magenta_dim() if demo else Mats.magenta()
+	_orb.material_override = Mats.orb(not demo)
 	_orb.visible = false
 	add_child(_orb)
 

@@ -16,7 +16,7 @@ func _build() -> void:
 	cm.height = 3.0
 	cm.radial_segments = 12
 	pillar.mesh = cm
-	pillar.material_override = Mats.cyan()   # safe, and visible against the floor
+	pillar.material_override = Mats.stone(WorldPalette.SAFE.darkened(0.55), Vector3(HazardMath.PILLAR_R, 1.5, HazardMath.PILLAR_R))   # safe: the floor's stone
 	pillar.position.y = 1.5
 	add_child(pillar)
 
@@ -27,7 +27,7 @@ func _build() -> void:
 	sm.radial_segments = 12
 	sm.rings = 6
 	_orb.mesh = sm
-	_orb.material_override = Mats.magenta_dim() if bool(spec.get("demo", false)) else Mats.magenta()
+	_orb.material_override = Mats.orb(not bool(spec.get("demo", false)))
 	add_child(_orb)
 
 
