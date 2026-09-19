@@ -34,6 +34,12 @@ const FADE_BEHIND_END := 10.0
 # slab's outer edge, on the top face and the top of the outer side faces.
 const SEAM_WIDTH := 0.03
 const EDGE_WIDTH := 0.1
+# Brief 2b, the stone: grain, per-tile shade, occlusion at the seams.
+const GRAIN := 0.06
+const GRAIN_SCALE := 0.6
+const TILE_VARIATION := 0.03
+const AO_WIDTH := 0.12
+const AO_AMOUNT := 0.18
 
 # Shared: the fade uniforms and the fade amount for this pixel, plus the
 # beat uniforms motion.gd sets once per frame (brief 3).
@@ -48,6 +54,25 @@ global uniform float pr_rim_amber;
 global uniform vec4 pr_ripple;      // z centre, half width, strength
 global uniform float pr_build_front;
 varying float world_z;
+
+// Brief 2b: procedural surface. 2-octave value noise from world position,
+// no texture lookups. hash -> [0,1); vnoise -> [0,1); grain -> [-1,1].
+float hash3(vec3 p) {
+	p = fract(p * 0.3183099 + vec3(0.1, 0.2, 0.3));
+	p *= 17.0;
+	return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
+}
+float vnoise(vec3 p) {
+	vec3 i = floor(p);
+	vec3 f = fract(p);
+	f = f * f * (3.0 - 2.0 * f);
+	return mix(mix(mix(hash3(i), hash3(i + vec3(1, 0, 0)), f.x), mix(hash3(i + vec3(0, 1, 0)), hash3(i + vec3(1, 1, 0)), f.x), f.y),
+		mix(mix(hash3(i + vec3(0, 0, 1)), hash3(i + vec3(1, 0, 1)), f.x), mix(hash3(i + vec3(0, 1, 1)), hash3(i + vec3(1, 1, 1)), f.x), f.y), f.z);
+}
+float grain(vec3 p, float scale) {
+	float n = vnoise(p / scale) * 0.65 + vnoise(p / scale * 2.3 + 7.1) * 0.35;
+	return n * 2.0 - 1.0;
+}
 
 // A band of light travelling along the slab (rewind, checkpoint).
 float ripple_here() {
@@ -111,12 +136,23 @@ uniform float armed = 0.0;   // 1 on the armed tile material: the face breathes 
 uniform vec4 amber : source_color;
 uniform float build_depth = 0.5;    // tiles rise from this far below as they enter fade range
 uniform float build_length = 1.6;   // over this many units behind the build front
+uniform float grain_amount = 0.06;  // +-6 % luminance grain on the face (0 on a live plate: it washes out)
+uniform float grain_scale = 0.6;
+uniform float side_grain_scale = 1.2;
+uniform float tile_variation = 0.03; // +-3 % per tile from a hash of its position
+uniform float ao_width = 0.12;      // fake occlusion this far in from every seam...
+uniform float ao_amount = 0.18;     // ...this much darker
 FADE_HEAD
 varying vec3 local_pos;
 varying vec3 local_normal;
+varying vec3 world_pos;
+varying vec3 tile_origin;
 
 void vertex() {
-	world_z = (MODEL_MATRIX * vec4(VERTEX, 1.0)).z;
+	vec4 wp = MODEL_MATRIX * vec4(VERTEX, 1.0);
+	world_z = wp.z;
+	world_pos = wp.xyz;
+	tile_origin = MODEL_MATRIX[3].xyz;
 	local_pos = VERTEX;
 	local_normal = NORMAL;
 	// Level start (brief 3 section 5): the field is built just ahead of
@@ -141,7 +177,12 @@ void fragment() {
 	}
 	float s = 1.0 - smoothstep(seam_width - 0.01, seam_width + 0.01, edge);
 	float r = 1.0 - smoothstep(edge_width - 0.015, edge_width + 0.015, rim);
-	vec3 base = mix(top ? face.rgb : side.rgb, live.rgb, armed * pr_armed_pulse);
+	// Stone: grain in the face and sides, a per-tile shade, occlusion at the seams.
+	float g = grain(world_pos, top ? grain_scale : side_grain_scale) * grain_amount;
+	float v = (hash3(floor(tile_origin * 4.0)) * 2.0 - 1.0) * tile_variation;
+	vec3 stone = (top ? face.rgb : side.rgb) * (1.0 + g + v);
+	stone *= 1.0 - ao_amount * (1.0 - smoothstep(0.0, ao_width, edge));
+	vec3 base = mix(stone, live.rgb, armed * pr_armed_pulse);
 	float rip = ripple_here();
 	vec3 rim_c = mix(edge_colour.rgb, amber.rgb, pr_rim_amber) * (1.0 + pr_rim_pulse + rip);
 	vec3 seam_c = seam.rgb * (1.0 + pr_seam_pulse + rip * 0.6);
@@ -289,6 +330,12 @@ static func tile(state: int, half: Vector3, outer: Vector2 = Vector2.ZERO) -> Ma
 		m.set_shader_parameter("live", WorldPalette.LETHAL_LIVE)
 		m.set_shader_parameter("armed", 1.0 if state == 1 else 0.0)
 		m.set_shader_parameter("amber", WorldPalette.GOAL)
+		m.set_shader_parameter("grain_amount", 0.0 if state == 2 else GRAIN)
+		m.set_shader_parameter("grain_scale", GRAIN_SCALE)
+		m.set_shader_parameter("side_grain_scale", GRAIN_SCALE * 2.0)
+		m.set_shader_parameter("tile_variation", TILE_VARIATION)
+		m.set_shader_parameter("ao_width", AO_WIDTH)
+		m.set_shader_parameter("ao_amount", AO_AMOUNT)
 		m.set_shader_parameter("half_size", half)
 		m.set_shader_parameter("seam_width", SEAM_WIDTH)
 		m.set_shader_parameter("edge_width", EDGE_WIDTH)
