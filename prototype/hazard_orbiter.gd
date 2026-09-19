@@ -8,16 +8,17 @@ extends "res://prototype/hazard3d.gd"
 var _orb: MeshInstance3D
 
 
+const Props := preload("res://prototype/props/props.gd")
+# Brief 4: the squat clay pillar; its groove ring sits 55 % up the model
+# (measured on the GLB), so the pillar is scaled until the groove is at
+# the orb's orbit height. The pillar is safe and never lethal.
+const GROOVE_AT := 0.55
+
+
 func _build() -> void:
-	var pillar := MeshInstance3D.new()
-	var cm := CylinderMesh.new()
-	cm.top_radius = HazardMath.PILLAR_R
-	cm.bottom_radius = HazardMath.PILLAR_R
-	cm.height = 3.0
-	cm.radial_segments = 12
-	pillar.mesh = cm
-	pillar.material_override = Mats.stone(WorldPalette.SAFE.darkened(0.55), Vector3(HazardMath.PILLAR_R, 1.5, HazardMath.PILLAR_R))   # safe: the floor's stone
-	pillar.position.y = 1.5
+	var ms := Props.size_of("orbiter_pillar")
+	var k := HazardMath.ORB_Y / (ms.y * GROOVE_AT)
+	var pillar := Props.make("orbiter_pillar", ms * k, "base", Props.clay_safe())
 	add_child(pillar)
 
 	_orb = MeshInstance3D.new()

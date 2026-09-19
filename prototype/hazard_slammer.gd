@@ -7,21 +7,31 @@ extends "res://prototype/hazard3d.gd"
 # Low when down, so a jump clears it. A `low`-band accent.
 # ============================================================
 
-var _mesh: MeshInstance3D
+const Props := preload("res://prototype/props/props.gd")
+
+var _mesh: Node3D
 var _hot := false
 
 
+# Brief 4: the plump clay block, scaled uniformly to the hit box's width
+# (1.9); its flat underside sits exactly on the box's bottom plane. The
+# block is taller than the 0.6-unit box — the extra is above, where
+# nothing can be, so the lethal face is where it looks.
 func _build() -> void:
-	_mesh = _box_mesh(Vector3(HazardMath.SLAM_W, HazardMath.SLAM_H, HazardMath.SLAM_D), Mats.magenta_dim())
-	_mesh.position.y = HazardMath.SLAM_HOVER + HazardMath.SLAM_H * 0.5
+	var ms := Props.size_of("slammer")
+	var k := HazardMath.SLAM_W / ms.x
+	_mesh = Props.make("slammer", ms * k, "base", Props.clay(false))
+	_mesh.position.y = HazardMath.SLAM_HOVER
+	add_child(_mesh)
 
 
 func _pose(t: float) -> void:
 	var bottom := HazardMath.slammer_bottom(spec, t)
-	_mesh.position.y = bottom + HazardMath.SLAM_H * 0.5
+	_mesh.position.y = bottom
 	# Bright for the whole period before the drop until it is back up.
 	var hot: bool = HazardMath.slammer_hot(spec, t) and BeatClock.hazards_armed_at(t) \
 		and not bool(spec.get("demo", false))
 	if hot != _hot:
 		_hot = hot
-		_mesh.material_override = Mats.magenta() if hot else Mats.magenta_dim()
+		for mi in _mesh.find_children("*", "MeshInstance3D", true, false):
+			mi.material_override = Props.clay(hot)

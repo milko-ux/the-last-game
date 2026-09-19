@@ -10,8 +10,15 @@ extends "res://prototype/hazard3d.gd"
 const Rules := preload("res://prototype/rules.gd")
 
 var _orb: MeshInstance3D
+const Props := preload("res://prototype/props/props.gd")
+
 var _line: MeshInstance3D
-var _muzzle: MeshInstance3D
+var _muzzle: Node3D
+var _had_orb := false
+var _squash_t := 99.0
+const SQUASH := 0.15
+const SQUASH_IN_S := 0.1
+const SQUASH_OUT_S := 0.2
 
 
 func _build() -> void:
@@ -31,16 +38,33 @@ func _build() -> void:
 	_line.position = Vector3(0.0, 0.02, 0.0)
 	_line.visible = false
 
+	# Brief 4: the half-buried clay egg at the field edge, its open eye
+	# looking across the field (the model's eye faces +z; +90 deg turns
+	# it to +x). Fitted to the old muzzle box's height (1.4).
 	var d := float(spec.get("dir", 1))
-	_muzzle = _box_mesh(Vector3(0.8, 1.2, 1.4), Mats.magenta_dim())
-	_muzzle.position = Vector3(-d * (Rules.half_width() + 0.6), 0.6, 0.0)
+	var ms := Props.size_of("volley_emitter")
+	var k := 1.4 / ms.y
+	_muzzle = Props.make("volley_emitter", ms * k, "base", Props.clay(false), 90.0 * d)
+	_muzzle.position = Vector3(-d * (Rules.half_width() + 0.6), -0.3, 0.0)
+	add_child(_muzzle)
 
 
 func _pose(t: float) -> void:
 	var warn := HazardMath.volley_warning(spec, t)
 	_line.visible = warn
-	_muzzle.visible = warn or HazardMath.volley_orb_x(spec, t) != null
 	var vx: Variant = HazardMath.volley_orb_x(spec, t)
 	_orb.visible = vx != null
+	# On fire: the emitter squashes 15 % and springs back (brief 4).
+	if vx != null and not _had_orb:
+		_squash_t = 0.0
+	_had_orb = vx != null
+	_squash_t += get_process_delta_time()
+	var sq := 0.0
+	if _squash_t < SQUASH_IN_S:
+		sq = _squash_t / SQUASH_IN_S
+	elif _squash_t < SQUASH_IN_S + SQUASH_OUT_S:
+		var u := (_squash_t - SQUASH_IN_S) / SQUASH_OUT_S
+		sq = cos(u * PI * 1.5) * (1.0 - u)
+	_muzzle.scale = Vector3(1.0 + sq * SQUASH * 0.5, 1.0 - sq * SQUASH, 1.0 + sq * SQUASH * 0.5)
 	if vx != null:
 		_orb.position = Vector3(float(vx) - float(spec["x"]), HazardMath.VOLLEY_R, 0.0)
