@@ -6,7 +6,7 @@
 
 **Asked for, not done yet:**
 - Brief 4 (props): in progress — models measured (all seven are ~30k triangles each; decimation with UVs kept is being set up), nothing placed yet.
-- Level-1 human bot at the current pace (2.5-bar window): validator is 0 deaths on 1-5; the 20-seed human batch is 14/20 in and running (so far 9 1 1 1 0 5 0 9 0 9 3 7 7 9 — on the line); numbers go into the table when it ends.
+- Level-1 human bot at the current pace (2.5-bar window): validator 0 deaths on 1-5; human bot **median 6, 12/20 — FAIL**, 82 of 100 deaths are orbiters (bars 46-54). Tempo is off the table (Milko); the lever that fits the data is the orbiter wave on level 1 (fewer orbiters, or `orbiter_pairs`/density there) — not applied, Milko's call.
 - Level 6 first-play cost: its layout takes 35 validation passes (64 s on the Mac, minutes on a phone) once per device. Shipping the found re-rolls with the game (`levels/verdicts.json`) would remove that — offered, not started.
 - Phone frame time has never been measured from here; every brief's "within 1 ms" is unverified.
 
@@ -145,6 +145,7 @@ Human bot, 20 seeds each, bots play without lives (rewind to checkpoint on every
 | 1 after the tuning pass (tempo 0.90, player 1.8x, gap 4), cap 9 | **3** | 3.3 | 18/20 | **18/20 (90 %)** | back edge 49, sweeper 13, volley 4 (66 deaths) | PASS — on the line: median 2 → 3, 36 of the 49 back-edge deaths at bar 32 (the sweeper demo), the slower player staging late at the first wall |
 | 1 at the 2026-09-19 pace (tempo 0.95, player 2.0x), cap 9 | **2** | 2.05 | 20/20 | **20/20 (100 %)** | back edge 28, sweeper 13 (41 deaths) | PASS — bars 52 and 39 take 35 of the 41 |
 | 1 with the 0.83 hit box (sweeper_gap 7, gate 5), cap 9 | **5.5** | 5.8 | 11/20 | 11/20 (55 %) | back edge 59, volley 35, orbiter 21 (115 deaths) | FAIL — bars 52 and 46 (orbiter wave) and 12; gate openings → 7 per Milko's rule, rerun below |
+| 1 at brief 2b pace + 2.5-bar window (tempo 1.0, 2.2x, gate 7, 0.83 box), cap 9 | **6** | 5.0 | 12/20 | 12/20 (60 %) | orbiter 82, volley 18 (100 deaths) | FAIL — bimodal: 9 seeds ≤ 2 deaths, 9 seeds at the cap; all at the orbiter wave (bars 46-54): orb 0.6 + box 0.83 = a 1.43 kill radius on a 3-unit orbit |
 
 Per-seed deaths, level 1: 3 3 0 2 3 2 1 2 2 0 2 3 0 2 4 0 0 1 6 1; after the tuning pass: 0 3 2 2 6 1 6 3 9 6 0 9 3 1 5 4 3 1 1 1; at the 2026-09-19 pace: 2 1 1 5 3 2 4 3 1 0 0 3 0 4 4 3 2 2 0 1. Level 3: 3 4 2 2 3 2 11 8 4 3 13 13 6 13 0 7 6 4 3 1.
 
