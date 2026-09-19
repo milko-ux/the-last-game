@@ -8,8 +8,8 @@
   "(level 1 starts at 1 and reaches types_per_bar_final in wave 5). orbiter_pairs: opposite-spin pair allowed",
   "(level 1: only from orbiter_pairs_from_wave). orbiter_period: bar | half_bar (the fast variant, levels 4+).",
   "lives: 0 = no lives (level 1), 3 from level 2. density_curve: multiplier per wave on hazards per bar.",
-  "song_tempo: 0.90 | 0.95 | 1.0 - which time-stretched version of the song (and its own pre-scaled beatmap) plays: 0.90 level 1, 0.95 level 2, 1.0 from level 3.",
-  "player_speed: the player's speed as a multiple of the scroll speed. 1.8 on levels 1-2 (Milko, phone playtest 2026-09-17); 2.1 from level 3, the lowest value at which the fairness validator still finds fair layouts there.",
+  "song_tempo: 0.90 | 0.95 | 1.0 - which time-stretched version of the song (and its own pre-scaled beatmap) plays: 0.95 level 1, 1.0 from level 2 (2026-09-19 playtest: 0.90/0.95 was too easy).",
+  "player_speed: the player's speed as a multiple of the scroll speed. 2.0 on levels 1-2 (Milko, phone playtests 2026-09-17/19); 2.1 from level 3, the lowest value at which the fairness validator still finds fair layouts there.",
   "song_offset_s: playback starts this far into the track (8 s level 1, 10 s later levels); written for tempo 1.0, divided by song_tempo at load.",
   "demo_bars: true = every new type/pattern gets a demo bar; false from level 7 (everything mixed).",
   "structure: curriculum = level 1's fixed wave order (addendum 3 section 3); mixed = types mix from the start."
@@ -39,8 +39,8 @@
  "levels": [
   {
    "level": 1,
-   "song_tempo": 0.9,
-   "player_speed": 1.8,
+   "song_tempo": 0.95,
+   "player_speed": 2.0,
    "hazard_rate": "bar",
    "plate_coverage": 0.12,
    "plate_patterns": [
@@ -68,8 +68,8 @@
   },
   {
    "level": 2,
-   "song_tempo": 0.95,
-   "player_speed": 1.8,
+   "song_tempo": 1.0,
+   "player_speed": 2.0,
    "hazard_rate": "half_bar",
    "plate_coverage": 0.2,
    "plate_patterns": [

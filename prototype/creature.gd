@@ -23,7 +23,7 @@ const MODEL_REST_YAW_DEG := 0.0
 const MODEL_HEIGHT := 1.874            # GLB bounds, y -0.938 .. 0.936
 const MODEL_FEET_Y := -0.938
 const MODEL_BODY_CENTRE_Z := 0.15      # the tail drags the bounds back; the body sits forward of 0
-const HEIGHT := 3.0                    # 1.5 tiles, feet to top (the gray-box capsule was 1.6)
+const HEIGHT := 2.3                    # 1.15 tiles, feet to top (3.0 was too big on the phone, 2026-09-19; the gray-box capsule was 1.6)
 
 # --- 1. Idle breathing ----------------------------------------------------
 const BREATH_AMOUNT := 0.02
@@ -71,6 +71,42 @@ const GOAL_HOP_S := 0.32
 const GOAL_HOP_HEIGHT := 1.1
 const GOAL_HOLD_AT_APEX := true        # the last hop freezes at its top, facing the camera
 
+# --- Shadow ring ------------------------------------------------------------
+# A flat dark disc with a faint cyan rim on the floor under the creature,
+# EXACTLY the hit box's footprint (Rules.PLAYER_HALF_W), so the player can
+# see the precise area that dies. Always drawn, on top, never fades, and
+# it stays on the floor while the creature is in the air.
+# The body is wider than the hit box and hides the ring completely when
+# standing, so the ring is drawn OVER the body (RING_ON_TOP above the
+# body's ON_TOP). Set it below 0.92 to put the ring under the body instead.
+const RING_ON_TOP := 0.95
+const RING_ALPHA := 0.4
+const RING_RIM_COLOR := Color(0.1, 0.83, 0.79, 0.7)
+const RING_RIM_WIDTH := 0.14           # fraction of the radius
+const RING_SHADER := """
+shader_type spatial;
+render_mode unshaded, cull_disabled, fog_disabled;
+uniform vec4 fill : source_color = vec4(0.0, 0.0, 0.0, 0.55);
+uniform vec4 rim : source_color = vec4(0.1, 0.83, 0.79, 0.7);
+uniform float rim_width = 0.14;
+uniform float on_top = 0.88;
+
+// Same depth squeeze as the body (see RING_ON_TOP for which one wins).
+void vertex() {
+	POSITION = PROJECTION_MATRIX * MODELVIEW_MATRIX * vec4(VERTEX, 1.0);
+	POSITION.z = mix(POSITION.z, POSITION.w, on_top);
+}
+
+void fragment() {
+	float r = length(UV - 0.5) * 2.0;
+	float inside = 1.0 - smoothstep(0.97, 1.0, r);
+	float ring = smoothstep(1.0 - rim_width - 0.03, 1.0 - rim_width, r) * inside;
+	vec4 c = mix(fill, rim, ring);
+	ALBEDO = c.rgb;
+	ALPHA = c.a * inside;
+}
+"""
+
 # --- Material ---------------------------------------------------------------
 # Lit (the one lit thing in the scene), never distance-faded, and drawn on
 # top of the world. "On top" is done by squeezing the creature's depth
@@ -102,6 +138,8 @@ void fragment() {
 }
 """
 
+const Rules := preload("res://prototype/rules.gd")
+
 enum Mode { ALIVE, DYING, GONE, RESPAWN, GOAL }
 
 var mode := Mode.ALIVE
@@ -111,6 +149,7 @@ var spin_tilt := 0.0
 var _player: Node3D                    # player3d.gd: move_dir, on_ground
 var _model: Node3D
 var _burst: CPUParticles3D
+var _ring: MeshInstance3D
 var _t := 0.0
 var _pulse_t := 99.0
 var _lean := Vector2.ZERO              # x: roll, y: pitch (radians)
@@ -137,6 +176,7 @@ func _ready() -> void:
 	_model.position = _model.basis * Vector3(0.0, -MODEL_FEET_Y, -MODEL_BODY_CENTRE_Z)
 	_apply_material(_model)
 	_build_burst()
+	_build_ring()
 	BeatClock.downbeat.connect(func(_bar: int) -> void: _pulse_t = 0.0)
 
 
@@ -156,6 +196,26 @@ func _apply_material(n: Node) -> void:
 		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	for c in n.get_children():
 		_apply_material(c)
+
+
+func _build_ring() -> void:
+	_ring = MeshInstance3D.new()
+	var quad := QuadMesh.new()
+	quad.size = Vector2.ONE * (2.0 * Rules.PLAYER_HALF_W)
+	quad.orientation = PlaneMesh.FACE_Y
+	_ring.mesh = quad
+	var sh := Shader.new()
+	sh.code = RING_SHADER
+	var m := ShaderMaterial.new()
+	m.shader = sh
+	m.render_priority = 9
+	m.set_shader_parameter("fill", Color(0.0, 0.0, 0.0, RING_ALPHA))
+	m.set_shader_parameter("rim", RING_RIM_COLOR)
+	m.set_shader_parameter("rim_width", RING_RIM_WIDTH)
+	m.set_shader_parameter("on_top", RING_ON_TOP)
+	_ring.material_override = m
+	_ring.top_level = true             # not scaled, tilted or lifted with the body
+	add_child(_ring)
 
 
 # CPU particles: twelve of them, and GPU particles are the usual thing to
@@ -347,6 +407,10 @@ func _process(delta: float) -> void:
 	b = b * Basis(Vector3.UP, spin_angle + _look.x) * Basis(Vector3.RIGHT, _look.y + spin_tilt)
 	b = b.scaled_local(Vector3(scale_xz, scale_y, scale_xz) * maxf(uniform, 0.001))
 	transform = Transform3D(b, Vector3(0.0, lift, 0.0))
+	if _player != null:
+		var feet: Vector3 = _player.global_position
+		_ring.global_position = Vector3(feet.x, minf(feet.y, 0.0) + 0.02, feet.z)
+		_ring.visible = mode != Mode.GONE
 
 
 # (yaw, pitch) that turn the eye to the active camera.
