@@ -33,6 +33,7 @@ const FADE_BEHIND_END := 10.0
 # 2026-09-19: the seams read as a neon grid), and the bright rim along the
 # slab's outer edge, on the top face and the top of the outer side faces.
 const SEAM_WIDTH := 0.03
+const SEAM_DARK := 0.12      # the seam groove: this much darker than the face
 const EDGE_WIDTH := 0.1
 # Brief 2b, the stone: grain, per-tile shade, occlusion at the seams.
 const GRAIN := 0.06
@@ -480,16 +481,17 @@ static func tile(state: int, half: Vector3, outer: Vector2 = Vector2.ZERO) -> Ma
 	if not _cache.has(key):
 		var m := ShaderMaterial.new()
 		m.shader = _shader("tile")
+		# Seams are a shallow groove, SEAM_DARK darker than the face, never
+		# coloured (2026-09-20): the slab's bright rim is the only line on
+		# the field.
+		var face_c := WorldPalette.TILE
 		match state:
-			2:   # lethal now: the face turns live and the seam lights up
-				m.set_shader_parameter("face", WorldPalette.LETHAL_LIVE)
-				m.set_shader_parameter("seam", WorldPalette.LETHAL_SEAM)
+			2:   # lethal now: the face turns live (the grain washes out)
+				face_c = WorldPalette.LETHAL_LIVE
 			1:   # armed: the face tints toward the warning colour
-				m.set_shader_parameter("face", WorldPalette.LETHAL_ARMED)
-				m.set_shader_parameter("seam", WorldPalette.TILE_SEAM)
-			_:
-				m.set_shader_parameter("face", WorldPalette.TILE)
-				m.set_shader_parameter("seam", WorldPalette.TILE_SEAM)
+				face_c = WorldPalette.LETHAL_ARMED
+		m.set_shader_parameter("face", face_c)
+		m.set_shader_parameter("seam", face_c.darkened(SEAM_DARK))
 		m.set_shader_parameter("side", WorldPalette.TILE_SIDE)
 		m.set_shader_parameter("edge_colour", WorldPalette.TILE_EDGE)
 		m.set_shader_parameter("live", WorldPalette.LETHAL_LIVE)
