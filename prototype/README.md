@@ -5,7 +5,7 @@
 **Done, on `phase-r-prototype`:** Phase R (the gameplay model, levels 1-6 playable, bots, validator) · Phase A brief 1 creature · brief 2 world + colour pass · brief 3 motion · brief 2b materials (procedural stone / concrete / hot glass / gloss, fog, one beatmap scaled by `song_tempo`, pace: tempo 1.0/1.05/1.10, player 2.2/2.3x) · seams as dark grooves · window depth per level (2.5 bars on level 1, 2.2 after; camera 28/26) · level 6 validates with `reroll_passes` 40.
 
 **Asked for, not done yet:**
-- Brief 4 (props): built — see the report below; validator rerun on 1-5 pending at the time of writing.
+- Brief 4 (props): done — validator 0 deaths on 1-5 with the models in; see the report below.
 - Level-1 human bot at the current pace (2.5-bar window): validator 0 deaths on 1-5; human bot **median 6, 12/20 — FAIL**, 82 of 100 deaths are orbiters (bars 46-54). Tempo is off the table (Milko); the lever that fits the data is the orbiter wave on level 1 (fewer orbiters, or `orbiter_pairs`/density there) — not applied, Milko's call.
 - Level 6 first-play cost: its layout takes 35 validation passes (64 s on the Mac, minutes on a phone) once per device. Shipping the found re-rolls with the game (`levels/verdicts.json`) would remove that — offered, not started.
 - Phone frame time has never been measured from here; every brief's "within 1 ms" is unverified.
@@ -28,7 +28,7 @@
 - **Volley:** the egg at the field edge, eye across the field (+90° per `dir`), fitted to the old muzzle's 1.4 height, always visible; 15 % squash on fire.
 - **Buildings:** the seeded placer picks tall (60 %) or stacked; far huge ones are tall. One MultiMesh per model per 4-bar chunk, chunks switched off outside the fade range (`Monoliths.set_window`), so ~6 draw calls of buildings per frame instead of the whole level. Gotcha: with `use_colors` off the web renderer multiplied the mesh's vertex colours by zero — instances carry a white colour.
 - **Triangles per screenshot** (`RenderingServer` primitives in frame, whole scene incl. tiles and creature): `a-props-bar1.png` **72 662** · `a-props-wave2.png` **37 650** · `a-props-wave3.png` **98 626** · `a-props-wave4.png` **46 406**. All under 150k.
-- **Validator:** see the line below (rerun on 1-5 after the change).
+- **Validator (rerun with the props in):** levels 1, 2, 3, 4, 5 — **0 deaths, goal reached**. The hit boxes did not move.
 
 ## Phase A report — brief 2b, materials and pace (2026-09-20)
 
