@@ -47,7 +47,7 @@
     "row",
     "block"
    ],
-   "gate_opening": 5.0,
+   "gate_opening": 7.0,
    "sweeper_gap": 7.0,
    "types_per_bar": 1,
    "types_per_bar_final": 2,
