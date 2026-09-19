@@ -5,15 +5,30 @@
 **Done, on `phase-r-prototype`:** Phase R (the gameplay model, levels 1-6 playable, bots, validator) · Phase A brief 1 creature · brief 2 world + colour pass · brief 3 motion · brief 2b materials (procedural stone / concrete / hot glass / gloss, fog, one beatmap scaled by `song_tempo`, pace: tempo 1.0/1.05/1.10, player 2.2/2.3x) · seams as dark grooves · window depth per level (2.5 bars on level 1, 2.2 after; camera 28/26) · level 6 validates with `reroll_passes` 40.
 
 **Asked for, not done yet:**
-- Brief 4 (props): in progress — models measured (all seven are ~30k triangles each; decimation with UVs kept is being set up), nothing placed yet.
+- Brief 4 (props): built — see the report below; validator rerun on 1-5 pending at the time of writing.
 - Level-1 human bot at the current pace (2.5-bar window): validator 0 deaths on 1-5; human bot **median 6, 12/20 — FAIL**, 82 of 100 deaths are orbiters (bars 46-54). Tempo is off the table (Milko); the lever that fits the data is the orbiter wave on level 1 (fewer orbiters, or `orbiter_pairs`/density there) — not applied, Milko's call.
 - Level 6 first-play cost: its layout takes 35 validation passes (64 s on the Mac, minutes on a phone) once per device. Shipping the found re-rolls with the game (`levels/verdicts.json`) would remove that — offered, not started.
 - Phone frame time has never been measured from here; every brief's "within 1 ms" is unverified.
 
-**LAN build:** `https://172.20.10.2:8443` (phone hotspot; accept the certificate once; `tools/serve.py tls build/phase-r` restarts it). Current export = brief 2b + seam fix + window knob (before brief 4).
+**LAN build:** `https://172.20.10.2:8443` (phone hotspot; accept the certificate once; `tools/serve.py tls build/phase-r` restarts it). Current export = brief 4.
 
-**Models in `assets/models/`:** placed — `creature.glb` (the hero). Not placed yet — `gate_pillar.glb`, `sweeper_segment.glb`, `slammer.glb`, `orbiter_pillar.glb`, `volley_emitter.glb`, `building_tall.glb`, `building_stacked.glb` (brief 4; hazards and monoliths are still boxes / spheres).
+**Models in `assets/models/`:** all placed — `creature.glb` (the hero), and via their light copies in `assets/models/lod/`: `gate_pillar`, `sweeper_segment`, `slammer`, `orbiter_pillar`, `volley_emitter`, `building_tall`, `building_stacked` (brief 4). Orbs and notes stay the shader spheres.
 
+
+## Phase A report — brief 4, the props (2026-09-20)
+
+**`rules.gd` untouched. So are `hazard_math.gd`, `fairness.gd`, `placement.gd`: every hit box, timing and position is what it was; only what is drawn there changed.**
+
+- **Light copies:** the seven GLBs are ~30k triangles each (image-to-3D bakes with hundreds of UV islands). `tools/decimate_models.py` makes `assets/models/lod/*.glb`: vertices welded (decimating the split bake opened a crack at every island), quadric decimation to 1.5-4k triangles, and the bake's colour sampled at each new vertex as a vertex colour (re-projected UVs shattered; the texture-aware decimator stopped at 3-4x). 40-100 KB each, no textures. The originals are untouched and still in the repo. Godot's importer has no base-mesh simplification (only LODs), which is why this is a script.
+- **Props helper** (`prototype/props/props.gd`): rest yaw per model (all seven arrive eye-to-+z, so 0), base-centre pivot, model size from the bounds, `make(name, size, pivot, material, yaw, mirror)`. Clay shader: LIT like the creature, vertex colour with the armed (wine, 55 %) or live (magenta, 75 %) tint scaled by the clay's own luminance so the eye recesses stay dark; breathes toward live on `pr_armed_pulse`; fresnel rim when live; the brief 3 white flash still works (it swaps `material_override`). Building shader: unlit, vertex colour, the concrete grain on top (at 1.5k triangles the bake alone is flat), contact shadow, distance fade.
+- **Gate:** clay pillars from each edge of the opening out to the field edge (the whole span kills, so the whole span is drawn), the right side mirrored on x. The pillar model's x-bounds are symmetric (±0.56) and each side's root sits at gx ± gap/2, so the inner faces ARE the rules' opening to the unit — 0.0 error by construction, not eyeballed. The brief 3 slide moves both sides.
+- **Sweeper:** 2-unit loaf segments, two rows high (a loaf is 1.2 tall, the wall's hit box 3.0 — one row would read as jumpable), rounded ends at the gap, whole segments only so the outer end can overhang the field edge by < 2 units (not lethal there: off the field). The train's inner ends sit exactly on the gap's edges.
+- **Slammer:** scaled uniformly to the box's width (1.9); the flat underside sits on the box's bottom plane; the block is taller than the 0.6 box — above it, where nothing can be.
+- **Orbiter:** the groove ring is 55 % up the model (measured), so the pillar is scaled until the groove is at `ORB_Y`; the orb is unchanged. The pillar is safe (no tint).
+- **Volley:** the egg at the field edge, eye across the field (+90° per `dir`), fitted to the old muzzle's 1.4 height, always visible; 15 % squash on fire.
+- **Buildings:** the seeded placer picks tall (60 %) or stacked; far huge ones are tall. One MultiMesh per model per 4-bar chunk, chunks switched off outside the fade range (`Monoliths.set_window`), so ~6 draw calls of buildings per frame instead of the whole level. Gotcha: with `use_colors` off the web renderer multiplied the mesh's vertex colours by zero — instances carry a white colour.
+- **Triangles per screenshot** (`RenderingServer` primitives in frame, whole scene incl. tiles and creature): `a-props-bar1.png` **72 662** · `a-props-wave2.png` **37 650** · `a-props-wave3.png` **98 626** · `a-props-wave4.png` **46 406**. All under 150k.
+- **Validator:** see the line below (rerun on 1-5 after the change).
 
 ## Phase A report — brief 2b, materials and pace (2026-09-20)
 

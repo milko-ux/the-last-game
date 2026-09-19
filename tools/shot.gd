@@ -75,7 +75,9 @@ func _process(_delta: float) -> bool:
 				_frames_after = -1
 				return false
 			var err := img.save_png(out)
-			print("SHOT saved=%s err=%d size=%dx%d t=%.2f bar=%d" % [out, err, img.get_width(), img.get_height(), clock.song_time(), clock.current_bar()])
+			print("SHOT saved=%s err=%d size=%dx%d t=%.2f bar=%d triangles=%d draw_calls=%d" % [out, err, img.get_width(), img.get_height(), clock.song_time(), clock.current_bar(),
+				RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_PRIMITIVES_IN_FRAME),
+				RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME)])
 			return true
 		return false
 	var t: float = clock.song_time()

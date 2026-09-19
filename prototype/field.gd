@@ -37,6 +37,7 @@ var _goal_top: MeshInstance3D
 var _goal_u := -1.0
 
 var plan := {}
+var monoliths: Node3D
 var fairness := {"ok": true, "problems": []}
 var hazards: Array = []
 var notes: Array = []          # {x, z, node, taken}
@@ -118,9 +119,10 @@ func build() -> void:
 	_gate_mesh(goal_z)
 
 	# Brief 2: the monoliths around the field, one draw call for the level.
-	var mono := Monoliths.new()
-	add_child(mono)
-	mono.build(runup_z0 - 2.0 * PLAIN_LEN, outro_z1 + 3.0 * PLAIN_LEN)
+	monoliths = Monoliths.new()
+	add_child(monoliths)
+	monoliths.build(runup_z0 - 2.0 * PLAIN_LEN, outro_z1 + 3.0 * PLAIN_LEN)
+	monoliths.set_window(0.0)
 
 	for spec in plan["hazards"]:
 		var h: Node3D
@@ -347,6 +349,8 @@ func _state_for(bar: int, col: int, row: int, t: float) -> int:
 # Repaint the tiles of the bars near the window. Only changed tiles touch
 # their material, so this is cheap.
 func update_tiles(t: float, z_back: float) -> void:
+	if monoliths != null:
+		monoliths.set_window(z_back)
 	if _bar_z0.is_empty():
 		return
 	var lo := bar_at_z(maxf(z_back - 2.0, _bar_z0[0] if not _bar_z0.is_empty() else 0.0))

@@ -1,4 +1,4 @@
-extends MultiMeshInstance3D
+extends Node3D
 # ============================================================
 # MONOLITHS — brutalist slabs around the field (brief 2 section 3).
 # Silhouettes only: one BoxMesh drawn many times through a MultiMesh,
@@ -16,6 +16,16 @@ extends MultiMeshInstance3D
 
 const Mats := preload("res://prototype/flat_mats.gd")
 const Rules := preload("res://prototype/rules.gd")
+const Props := preload("res://prototype/props/props.gd")
+
+# Brief 4: the boxes became the two building models (tall 60 %, stacked
+# 40 %; the far, huge ones are always the tall one), one MultiMesh per
+# model = two draw calls for the level. Same seeded placement, scale,
+# tilt and taper as before; the unit box became a 1.9-tall model, so
+# the instance scale divides by the model's size.
+const TALL_SHARE := 0.6
+const CHUNK_BARS := 4
+var _chunks: Array = []
 
 # Placement (all in world units; a bar is 8 long, the field 18 wide).
 const PER_SIDE_MIN := 1
@@ -100,11 +110,13 @@ FADE_APPLY
 
 var _xforms: Array[Transform3D] = []
 var _customs: Array[Color] = []
+var _kinds: Array[String] = []
 
 
 func build(z_from: float, z_to: float) -> void:
 	_xforms.clear()
 	_customs.clear()
+	_kinds.clear()
 	var rng := RandomNumberGenerator.new()
 	var bar := 0
 	var z := z_from
@@ -130,29 +142,56 @@ func build(z_from: float, z_to: float) -> void:
 		z += BeatClock.BAR_UNITS
 		bar += 1
 
-	var mm := MultiMesh.new()
-	mm.transform_format = MultiMesh.TRANSFORM_3D
-	mm.use_custom_data = true
-	var box := BoxMesh.new()
-	box.size = Vector3.ONE
-	mm.mesh = box
-	mm.instance_count = _xforms.size()
-	for i in _xforms.size():
-		mm.set_instance_transform(i, _xforms[i])
-		mm.set_instance_custom_data(i, _customs[i])
-	multimesh = mm
-	var sh := Shader.new()
-	sh.code = SHADER.replace("FADE_HEAD", Mats.FADE_HEAD).replace("FADE_APPLY", Mats.FADE_APPLY)
-	var m := ShaderMaterial.new()
-	m.shader = sh
-	m.set_shader_parameter("colour", WorldPalette.MONOLITH)
-	m.set_shader_parameter("colour_far", WorldPalette.MONOLITH_FAR)
-	m.set_shader_parameter("top_lighter", TOP_LIGHTER)
-	m.set_shader_parameter("background", WorldPalette.BG_BOTTOM)
-	m.set_shader_parameter("fade", Quaternion(Mats.FADE_AHEAD_START, Mats.FADE_AHEAD_END, Mats.FADE_BEHIND_START, Mats.FADE_BEHIND_END))
-	material_override = m
-	# Never frustum-culled away as one unit: its box spans the whole level.
-	extra_cull_margin = 16384.0
+	# Chunks of CHUNK_BARS bars, one MultiMesh per model per chunk, switched
+	# on only near the window (brief 4's budget: the whole level's ~330
+	# buildings must not be submitted every frame).
+	var n_chunks := ceili((z_to - z_from) / (CHUNK_BARS * BeatClock.BAR_UNITS))
+	for c in n_chunks:
+		var c_z0 := z_from + c * CHUNK_BARS * BeatClock.BAR_UNITS
+		var c_z1 := c_z0 + CHUNK_BARS * BeatClock.BAR_UNITS
+		var holder := Node3D.new()
+		holder.set_meta("z0", c_z0)
+		holder.set_meta("z1", c_z1)
+		for kind in ["building_tall", "building_stacked"]:
+			var idx := []
+			for i in _xforms.size():
+				if _kinds[i] == kind and _xforms[i].origin.z >= c_z0 and _xforms[i].origin.z < c_z1:
+					idx.append(i)
+			if idx.is_empty():
+				continue
+			var mm := MultiMesh.new()
+			mm.transform_format = MultiMesh.TRANSFORM_3D
+			mm.use_custom_data = true
+			# With use_colors off the per-instance colour multiplies the mesh's
+			# vertex colour by ZERO in the web renderer; on, and white, it passes.
+			mm.use_colors = true
+			mm.mesh = Props.mesh_of(kind)
+			mm.instance_count = idx.size()
+			var msize: Vector3 = Props.size_of(kind)
+			for j in idx.size():
+				var x: Transform3D = _xforms[idx[j]]
+				# The transform was built for a unit box: divide by the model's size.
+				x.basis = x.basis.scaled_local(Vector3(1.0 / msize.x, 1.0 / msize.y, 1.0 / msize.z))
+				mm.set_instance_transform(j, x)
+				mm.set_instance_color(j, Color.WHITE)
+				mm.set_instance_custom_data(j, _customs[idx[j]])
+			var mmi := MultiMeshInstance3D.new()
+			mmi.multimesh = mm
+			mmi.material_override = Props.building()
+			mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			mmi.extra_cull_margin = 256.0
+			holder.add_child(mmi)
+		add_child(holder)
+		_chunks.append(holder)
+
+
+# Called with the window's back edge every frame: only the chunks within
+# the fade range (plus a margin) are drawn.
+func set_window(z_back: float) -> void:
+	var lo := z_back - Mats.FADE_BEHIND_END - 4.0
+	var hi := z_back + Mats.FADE_AHEAD_END + 8.0
+	for h in _chunks:
+		h.visible = float(h.get_meta("z1")) >= lo and float(h.get_meta("z0")) <= hi
 
 
 # One slab (plus, sometimes, a second one stacked on it with an offset).
@@ -168,9 +207,11 @@ func _add(rng: RandomNumberGenerator, base: Vector3, size: Vector3, far: bool) -
 	var centre := base + Vector3(0.0, size.y * 0.5, 0.0)
 	_xforms.append(Transform3D(b, centre))
 	_customs.append(Color(taper, 1.0 if far else 0.0, 0.0, 1.0))
+	_kinds.append("building_tall" if far or rng.randf() < TALL_SHARE else "building_stacked")
 	if not far and rng.randf() < STACK_CHANCE:
 		var top_size := Vector3(size.x * rng.randf_range(0.5, 0.8), rng.randf_range(4.0, 12.0), size.z * rng.randf_range(0.5, 0.8))
 		var off := Vector3(rng.randf_range(-0.2, 0.2) * size.x, 0.0, rng.randf_range(-0.2, 0.2) * size.z)
 		var tb := Basis(Vector3.UP, yaw + rng.randf_range(-0.2, 0.2)).scaled_local(top_size)
 		_xforms.append(Transform3D(tb, base + off + Vector3(0.0, size.y * taper + top_size.y * 0.5 - 0.3, 0.0)))
 		_customs.append(Color(1.0, 0.0, 0.0, 1.0))
+		_kinds.append("building_stacked")
