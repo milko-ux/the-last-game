@@ -20,6 +20,16 @@
 **Models in `assets/models/`:** unchanged (creature; the five hazard props with vertex colours from the bake; the two buildings + `_hi` copies, geometry only).
 
 
+## GPU + load instrument job (2026-09-20, night — IN PROGRESS, waiting for Milko's bar-11 reading)
+
+iPhone, build c1fe875, level 1 bar 11 (~22 gate pillars + big near monoliths): **frame 28.7 avg / 36 worst ms with cpu 2.5 ms; quiet moments 16.7 / 18, cpu 0.3-1.3. GPU-bound.** Steps, ONE at a time, each read at the same spot: `https://172.20.10.2:8443/?level=1` (dev switch: straight into level 1), bar 11.
+
+- **1a — DONE, exported (`543a8fa`): 3D render scale 0.75 on web / mobile** (`track_test.RENDER_SCALE_MOBILE`, `viewport.scaling_3d_scale`). The web (Compatibility) renderer supports it — checked with a 0.3 test: the 3D went blocky, 2D text stayed sharp. It has NO canvas pixel-ratio cap (Godot's web export only knows hi-DPI on / off), and a cap would blur the glass controls; 3D scale leaves HUD + controls at full resolution. The phone's canvas is 3 device pixels per point; 0.75 = 56 % of the 3D pixels. `?scale=1` = the old number, `?scale=0.6` = harsher. The load line ends with `3D 0.75 of W x H`. Visual cost: slightly rougher silhouettes at a 1:1 crop (`docs/screenshots/g1a-bar11-scale-1.0.png` / `-0.75.png`), not visible at phone size in my judgement — Milko's eyes decide.
+- **1b — measured, NOT built (waits for the 1a number):** triangles in frame at bar 11 by kind (`tools/shot.gd` now prints `BUDGET` lines): **gate pillars 37 meshes = 148 000** · monoliths 19 = 69 880 · creature 30 040 · tiles 2 880. Plan if needed: a light pillar copy (~600-1 000 triangles) for every pillar but the two next to the opening.
+- **1c — not started:** monolith shader (fewer noise octaves, or the baked 512 px noise tile).
+- **2 — DONE (`e66adf3`): the load instrument.** Reset on every load; three spans on the gold line: `page` (page opened → first painted frame; the browser's clock, so it covers download + engine start) · `tap` (tap → first PAINTED frame of the loading label) · `load` (that label → TAP TO START, steps in brackets). What was wrong before: a RETRY / reload never reset the log (so "scene 72.9 s" was play time and the line appended), and the label was shown but the blocking scene change could start before the browser had painted it. Now the level select waits for `frame_post_draw` (label drawn + one more frame) before it changes scene, and the run scene does nothing heavy in `_ready`: the level path's validation + field build runs after ITS label has been painted. The page itself now shows `LOADING 43 %` → `STARTING` while it downloads (head_include script reading the engine's progress element). **Which span is the long one: Milko's phone has to say** — my expectation: `page` on a first visit (42 MB), and on the dev level path `load [validate NOT cached]`.
+
+
 ## Phase E report — brief 1, the endless run (Stage 1 done, 2026-09-20)
 
 ### Section 1 — knobs per lap, not per game (done)

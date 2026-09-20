@@ -87,6 +87,7 @@ func _process(_delta: float) -> bool:
 				RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_PRIMITIVES_IN_FRAME),
 				RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME)])
 			print("SHOT monoliths=%s" % [test.field.monolith_counts()])
+			_print_triangle_budget()
 			return true
 		return false
 	var t: float = clock.song_time()
@@ -196,3 +197,60 @@ func _give_bot_its_path() -> void:
 		fair = load("res://prototype/fairness.gd").validate(test.field.plan, clock, test.knobs)
 	ap.path = fair["path"]
 	ap.first_beat = int(fair["first_beat"])
+
+
+# Who puts the triangles in the frame: every visible MeshInstance3D whose
+# bounds are inside the camera's view, grouped by what it is.
+func _print_triangle_budget() -> void:
+	var cam: Camera3D = test.rig.cam
+	var frustum := cam.get_frustum()
+	var groups := {}
+	var stack: Array = [test]
+	while not stack.is_empty():
+		var n: Node = stack.pop_back()
+		for c in n.get_children():
+			stack.append(c)
+		if not (n is MeshInstance3D) or not n.is_visible_in_tree() or n.mesh == null:
+			continue
+		var mi: MeshInstance3D = n
+		var box: AABB = mi.global_transform * mi.get_aabb()
+		var inside := true
+		for plane in frustum:
+			# (Godot's frustum planes point outward.)
+			var all_out := true
+			for k in 8:
+				if not plane.is_point_over(box.get_endpoint(k)):
+					all_out = false
+					break
+			if all_out:
+				inside = false
+				break
+		if not inside:
+			continue
+		var tris := 0
+		for si in mi.mesh.get_surface_count():
+			var arr: Array = mi.mesh.surface_get_arrays(si)
+			var idx = arr[Mesh.ARRAY_INDEX]
+			tris += (idx.size() if idx != null and idx.size() > 0 else arr[Mesh.ARRAY_VERTEX].size()) / 3
+		var what := "other"
+		var p: Node = mi
+		while p != null and p != test:
+			var nm := String(p.name)
+			for key in ["gate_pillar", "sweeper_segment", "slammer", "orbiter_pillar", "volley_emitter"]:
+				if nm.begins_with(key):
+					what = key
+			if p.get_script() != null and String(p.get_script().resource_path).ends_with("monoliths.gd"):
+				what = "monolith"
+			if p.get_script() != null and String(p.get_script().resource_path).ends_with("creature.gd"):
+				what = "creature"
+			p = p.get_parent()
+		if what == "other" and mi.mesh is BoxMesh:
+			what = "tiles / boxes"
+		var g: Array = groups.get(what, [0, 0])
+		g[0] += 1
+		g[1] += tris
+		groups[what] = g
+	var keys := groups.keys()
+	keys.sort_custom(func(a, b): return groups[a][1] > groups[b][1])
+	for k in keys:
+		print("BUDGET %-16s %4d meshes  %7d triangles" % [k, groups[k][0], groups[k][1]])
