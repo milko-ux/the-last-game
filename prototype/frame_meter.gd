@@ -18,9 +18,21 @@ class_name FrameMeter
 # number sees is the GPU: a frame time above the cap with a low cpu
 # means the GPU (pixels, shaders) is the limit.
 #
-# Under it, for LOAD_SHOW_S seconds after a run starts, the LOAD LINE:
-# how long each step between tapping a level and TAP TO START took
-# (see load_begin / load_mark). The phone has no console.
+# Under it, for LOAD_SHOW_S seconds after a run starts, the LOAD LINE.
+# THREE SPANS, each measured on its own, reset on EVERY load (2026-09-20:
+# the first version kept counting through a retry, so "scene 72.9 s"
+# included the play time, and a second load appended to the first):
+#   page    the page was opened -> the first painted frame of the game
+#           (on the web: the browser's own clock since navigation; it
+#           covers the download and the engine start)
+#   tap     a level / the run was tapped -> the first PAINTED frame of
+#           the loading label (the label is drawn, a frame is waited for,
+#           and only then does any blocking work start)
+#   load    that painted label -> TAP TO START, with its steps in
+#           brackets (scene file, validation, nodes, prewarm)
+# A load that did not start with a tap (the page opens straight into the
+# run; a RETRY) shows "tap -". The phone has no console: it is all on
+# screen.
 # Whenever ONE frame takes longer than SPIKE_MS it also prints a line
 # to the console with the bar / beat and everything that spawned or
 # fired during that frame, so a hitch can be pinned on its cause:
@@ -60,8 +72,12 @@ static var _window_back := 0.0
 # shown only by a live meter. [name, seconds, note, always_show]
 static var load_log: Array = []
 static var load_info := ""          # a fixed note at the end of the load line (the render size)
-static var _load_t0 := 0
 static var _load_last := 0
+static var _armed := false          # load_begin() was called and no scene has claimed it yet
+static var _t_tap := -1             # msec; -1 = this load did not start with a tap
+static var _t_label := -1           # msec; the loading label's first painted frame
+static var _t_ready := -1           # msec; TAP TO START
+static var page_s := -1.0           # the page span, measured once per page
 
 var _ms := PackedFloat32Array()
 var _cpu := PackedFloat32Array()
@@ -100,18 +116,60 @@ static func note_at(what: String, z: float) -> void:
 		note(what if seen else what + " (off-screen)")
 
 
-# The moment a level was picked: the load clock starts.
+# The FIRST painted frame of the game since the page was opened (whichever
+# scene that is calls this once, after a frame_post_draw).
+static func first_frame_painted() -> void:
+	if page_s >= 0.0:
+		return
+	if OS.has_feature("web"):
+		page_s = float(JavaScriptBridge.eval("performance.now()")) / 1000.0
+	else:
+		page_s = float(Time.get_ticks_msec()) / 1000.0
+
+
+# A level / the run was TAPPED: a new load begins (everything is reset).
 static func load_begin() -> void:
+	_reset()
+	_t_tap = Time.get_ticks_msec()
+	_load_last = _t_tap
+	_armed = true
+
+
+static func _reset() -> void:
 	load_log.clear()
-	_load_t0 = Time.get_ticks_msec()
-	_load_last = _load_t0
+	_t_tap = -1
+	_t_label = -1
+	_t_ready = -1
+	_load_last = Time.get_ticks_msec()
+
+
+# The run scene's _ready: claims the load a tap began, or — a page that
+# opens straight into the run, a RETRY, a reload — starts a fresh one.
+static func load_scene_started() -> void:
+	if _armed:
+		_armed = false
+		load_mark("scene")
+	else:
+		_reset()
+
+
+# The loading label has been PAINTED (a frame was drawn with it). Only the
+# first call of a load counts: the level select paints its own label before
+# it changes scene, the run scene paints another one.
+static func load_label_painted() -> void:
+	if _t_label < 0:
+		_t_label = Time.get_ticks_msec()
+		_load_last = _t_label
+
+
+# TAP TO START is on screen.
+static func load_done() -> void:
+	_t_ready = Time.get_ticks_msec()
 
 
 # A load step just ended: it took the time since the previous mark.
 # `always` keeps it in the line even when it was quick.
 static func load_mark(step: String, note: String = "", always: bool = false) -> void:
-	if _load_last == 0:
-		load_begin()
 	var now := Time.get_ticks_msec()
 	load_log.append([step, float(now - _load_last) / 1000.0, note, always])
 	_load_last = now
@@ -122,9 +180,14 @@ static func load_line() -> String:
 	for e in load_log:
 		if float(e[1]) >= LOAD_MIN_S or bool(e[3]):
 			parts.append("%s %.1f%s" % [e[0], e[1], "" if String(e[2]).is_empty() else " (%s)" % e[2]])
+	var page := "page %.1f s" % page_s if page_s >= 0.0 else "page -"
+	var tap := "tap %.2f s" % (float(_t_label - _t_tap) / 1000.0) if _t_tap >= 0 and _t_label >= 0 else "tap -"
+	var end := _t_ready if _t_ready >= 0 else Time.get_ticks_msec()
+	var load := "load %.1f s" % (float(end - _t_label) / 1000.0) if _t_label >= 0 else "load -"
+	var line := "%s   ·   %s   ·   %s  [%s]" % [page, tap, load, "  ·  ".join(parts)]
 	if load_info != "":
-		parts.append(load_info)
-	return "load %.1f s:  %s" % [float(_load_last - _load_t0) / 1000.0, "  ·  ".join(parts)]
+		line += "   ·   " + load_info
+	return line
 
 
 # Called by the run scene when the run starts: the load line goes away
@@ -157,8 +220,8 @@ func _ready() -> void:
 	note("scene start")
 	_load_label = Label.new()
 	_load_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_load_label.position = Vector2(-380.0, 20.0)
-	_load_label.size = Vector2(900.0, 60.0)
+	_load_label.position = Vector2(622.0 - 430.0, 20.0)      # right-aligned under the readout, clear of the centre HUD
+	_load_label.size = Vector2(430.0, 90.0)
 	_load_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_load_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_load_label.add_theme_font_size_override("font_size", 12)
@@ -241,7 +304,7 @@ func _update_text() -> void:
 			# Audio vs clock (ms, - = audio behind) and how much has been slewed to follow it.
 			text += "     audio %+.0f (%+.0f)" % [BeatClock.audio_drift_ms(), BeatClock.drift_corrected_ms]
 	# Only when a step was added: laying out a wrapped label is not free.
-	if _load_label.visible and load_log.size() != _load_shown:
+	if _load_label.visible and (load_log.size() != _load_shown or _t_ready < 0):
 		_load_shown = load_log.size()
 		_load_label.text = load_line()
 

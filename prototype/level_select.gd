@@ -28,15 +28,28 @@ var _loading_frames := 0
 
 func _ready() -> void:
 	queue_redraw()
+	RenderingServer.frame_post_draw.connect(_on_frame_drawn)
+
+
+# Counts PAINTED frames. The first one of the page is the end of the "page"
+# span; while the LOADING label is up, the scene only changes (a blocking
+# step: the scene file, then the level) after the label has really been
+# drawn and one more frame has gone by, so the browser has shown it.
+func _on_frame_drawn() -> void:
+	FrameMeter.first_frame_painted()
+	if _loading_level == 0:
+		return
+	_loading_frames += 1
+	if _loading_frames == 2:
+		FrameMeter.load_label_painted()
+	elif _loading_frames >= 3:
+		RenderingServer.frame_post_draw.disconnect(_on_frame_drawn)
+		get_tree().change_scene_to_file.call_deferred(RUN_SCENE)
 
 
 func _process(delta: float) -> void:
 	if _flash > 0.0:
 		_flash -= delta
-	if _loading_level != 0:
-		_loading_frames += 1
-		if _loading_frames >= 3:
-			get_tree().change_scene_to_file(RUN_SCENE)
 	queue_redraw()
 
 

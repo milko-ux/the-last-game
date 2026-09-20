@@ -157,7 +157,8 @@ var _shield_burst: CPUParticles3D
 
 
 func _ready() -> void:
-	FrameMeter.load_mark("scene")
+	FrameMeter.load_scene_started()
+	RenderingServer.frame_post_draw.connect(_on_frame_drawn)
 	_dev_url_switches()
 	_apply_render_scale()
 	endless = Rules.ENDLESS
@@ -183,10 +184,8 @@ func _ready() -> void:
 	motion.knobs = knobs
 	rig.motion = motion
 	rig.configure(knobs)
-	if not endless:
-		field.build(knobs)
-		if not field.fairness["ok"]:
-			_fair_warning = "FAIRNESS CHECK FAILED (%d) — see log" % field.fairness["problems"].size()
+	# (The level path's blocking build — validation + the whole field — waits
+	# until the LOADING label has been painted: _build_level in _tick_loading.)
 	player.reset_to(0.0, _start_z)
 	ui.level_count = 1
 	ui.show_hud = false
@@ -198,10 +197,6 @@ func _ready() -> void:
 	_edge_line.material_override = Mats.player(WorldPalette.SAFE)
 	add_child(_edge_line)
 	hud.ticks = []
-	if not endless:
-		for cp in field.checkpoints:
-			hud.ticks.append(BeatClock.progress_of(float(cp["t"])))
-		hud.best = BeatClock.progress_of(Progress.best_for(Rules.LEVEL))
 	ui.jump_pressed.connect(_on_jump)
 	status.text = "TAP TO START"
 	debug.text = _fair_warning
@@ -334,9 +329,11 @@ func _begin_loading() -> void:
 	if _shield_burst != null:
 		bursts.append(_shield_burst)
 	_warm.prepare(bursts)
-	_load_phase = 0 if endless else 2
+	_load_phase = -1
 	if DisplayServer.get_name() == "headless":
-		# Nothing is drawn, so there is nothing to warm: just make the first lap.
+		# Nothing is drawn, so there is nothing to warm: just make the level / the first lap.
+		if not endless:
+			_build_level()
 		if endless:
 			LapGen.step(_job, -1)
 			_take_lap()
@@ -362,8 +359,39 @@ func _begin_loading() -> void:
 	$UI.add_child(_bar_back)
 
 
+# Painted frames (RenderingServer.frame_post_draw): the first one of the
+# page ends the "page" span; the LOADING label counts as shown once it has
+# been drawn and one more frame has gone by.
+var _painted := 0
+
+func _on_frame_drawn() -> void:
+	FrameMeter.first_frame_painted()
+	_painted += 1
+
+
+# The level path's blocking step: generate + validate + build the level.
+func _build_level() -> void:
+	field.build(knobs)
+	if not field.fairness["ok"]:
+		_fair_warning = "FAIRNESS CHECK FAILED (%d) — see log" % field.fairness["problems"].size()
+		debug.text = _fair_warning
+	for cp in field.checkpoints:
+		hud.ticks.append(BeatClock.progress_of(float(cp["t"])))
+	hud.best = BeatClock.progress_of(Progress.best_for(Rules.LEVEL))
+	_update_world(BeatClock.hazard_time(), BeatClock.z_at(BeatClock.start_offset))
+
+
 func _tick_loading() -> void:
 	_load_frames += 1
+	# Nothing heavy before the LOADING label has really been painted.
+	if _load_phase == -1:
+		if _painted < 2:
+			return
+		FrameMeter.load_label_painted()
+		if not endless:
+			_build_level()
+		_load_phase = 0 if endless else 2
+		return
 	# The endless run first makes its first lap: generate (+ validate when no
 	# verdict is stored), then build the nodes, LOAD_BUDGET_USEC per frame.
 	if _load_phase == 0:
@@ -397,6 +425,7 @@ func _tick_loading() -> void:
 
 func _end_loading() -> void:
 	FrameMeter.load_mark("prewarm", "%d items, %d frames" % [_warm.item_count(), _load_frames], true)
+	FrameMeter.load_done()
 	_warm.queue_free()
 	_warm = null
 	if _bar_back != null:

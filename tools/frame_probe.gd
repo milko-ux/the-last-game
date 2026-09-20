@@ -68,6 +68,8 @@ func _process(_delta: float) -> bool:
 		_setup()
 		return false
 	if test.state == test.State.WAIT:
+		if _pending_bot != null:
+			_give_bot_its_path()
 		test.start_now()
 		return false
 	if test.state != test.State.RUN:
@@ -159,8 +161,18 @@ func _setup() -> void:
 	if endless:
 		ap.attach_endless(test, clock)
 	else:
-		var fair: Dictionary = test.field.fairness
-		if fair.get("cached", false) or fair["path"].is_empty():
-			fair = load("res://prototype/fairness.gd").validate(test.field.plan, clock, test.knobs)
-		ap.path = fair["path"]
-		ap.first_beat = int(fair["first_beat"])
+		_pending_bot = ap      # the level is built in the scene's loading phase: its path is read at WAIT
+
+
+# The windowed scene builds its level behind the loading bar, so the bot's
+# path can only be read once the scene waits for the start.
+var _pending_bot: Object = null
+
+func _give_bot_its_path() -> void:
+	var ap: Object = _pending_bot
+	_pending_bot = null
+	var fair: Dictionary = test.field.fairness
+	if fair.get("cached", false) or fair["path"].is_empty():
+		fair = load("res://prototype/fairness.gd").validate(test.field.plan, clock, test.knobs)
+	ap.path = fair["path"]
+	ap.first_beat = int(fair["first_beat"])
