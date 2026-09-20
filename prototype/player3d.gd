@@ -53,8 +53,10 @@ func tick(delta: float, z_back: float, z_front: float, field: Node3D) -> void:
 	var v := move_dir
 	if v.length() > 1.0:
 		v = v.normalized()
-	position.x += v.x * SCREEN_X * Rules.player_speed() * delta
-	position.z = minf(position.z + v.y * Rules.player_speed() * delta, z_front - HALF_D)
+	# The speed is a knob of the field being run on (its lap / level).
+	var speed: float = Rules.player_speed(field.knobs)
+	position.x += v.x * SCREEN_X * speed * delta
+	position.z = minf(position.z + v.y * speed * delta, z_front - HALF_D)
 	# The intro carry: the window pushes an idle player forward instead of
 	# killing them (Rules.carry_line is -INF once hazards are armed).
 	position.z = maxf(position.z, Rules.carry_line(z_back))

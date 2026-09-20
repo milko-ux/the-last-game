@@ -26,6 +26,7 @@ extends Node
 
 const Mats := preload("res://prototype/flat_mats.gd")
 const Rig := preload("res://prototype/camera_rig.gd")
+const Rules := preload("res://prototype/rules.gd")
 
 # --- 1. The world on the beat ---------------------------------------------
 const RIM_DOWNBEAT := 0.40          # rim brightens this much on a downbeat...
@@ -63,6 +64,7 @@ const PROGRESS_FILL_S := 1.0
 const NOD_DEG := 0.0                # was 1.5: off, see camera_rig.gd's header (the "screen jumps")
 
 var frozen := false
+var knobs := {}                     # the lap / level being played (set by the run scene): its hazard rate paces the armed pulse
 var vis_time := 0.0                 # song time as the visuals see it (holds during hit-stop)
 var combo_scale := 1.0              # read by the scene's HUD labels
 var counter_scale := 1.0
@@ -110,7 +112,7 @@ func _on_beat(index: int) -> void:
 	_rim = maxf(_rim, RIM_BEAT / RIM_DOWNBEAT)
 	# Armed hazards count down on every beat of their rate: the pulse grows
 	# toward the period's last beat, so the wait visibly ends on a beat.
-	var period: int = maxi(BeatClock.period_beats, 1)
+	var period: int = Rules.period_beats(knobs) if not knobs.is_empty() else 4
 	var into := posmod(index - BeatClock.first_bar_beat, period)
 	_armed = (0.5 + 0.5 * float(into + 1) / float(period))
 

@@ -65,7 +65,8 @@ var _shown_lo := 0
 var _shown_hi := 0
 
 
-func build(z_from: float, z_to: float) -> void:
+# `seed_level`: which curriculum row the course belongs to (part of the seed).
+func build(z_from: float, z_to: float, seed_level: int) -> void:
 	for model in ["building_tall", "building_stacked", "building_tall_hi", "building_stacked_hi"]:
 		_meshes[model] = Props.mesh_of(model)
 	var specs := []              # [z, transform, kind, far]
@@ -73,7 +74,7 @@ func build(z_from: float, z_to: float) -> void:
 	var bar := 0
 	var z := z_from
 	while z < z_to:
-		rng.seed = hash("monoliths-%d-%d" % [Rules.LEVEL, bar])
+		rng.seed = hash("monoliths-%d-%d" % [seed_level, bar])
 		for side: float in [-1.0, 1.0]:
 			for i in rng.randi_range(PER_SIDE_MIN, PER_SIDE_MAX):
 				var gap := rng.randf_range(GAP_MIN_RIGHT if side < 0.0 else GAP_MIN, GAP_MAX)

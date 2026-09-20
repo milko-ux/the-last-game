@@ -37,6 +37,10 @@ var _goal_top: MeshInstance3D
 var _goal_u := -1.0
 
 var plan := {}
+# The knob dictionary this field was built with (Rules.level(n), later a
+# lap's band). The death rules, the plates and the hazards of THIS field
+# read it; nothing reads a global level (Phase E section 1).
+var knobs := {}
 var monoliths: Node3D
 var fairness := {"ok": true, "problems": []}
 var hazards: Array = []
@@ -53,7 +57,8 @@ var _tile_state := {}                  # bar -> PackedInt32Array
 var _cache_t := -1.0
 
 
-func build() -> void:
+func build(with_knobs: Dictionary) -> void:
+	knobs = with_knobs
 	var c := BeatClock
 	if not c.loaded:
 		push_error("Field: beatmap not loaded")
@@ -69,14 +74,14 @@ func build() -> void:
 	var rerolls: Dictionary = cached.get("rerolls", {})
 	var passes := 0
 	if cached.get("ok", false):
-		plan = Placement.build(c, rerolls)
+		plan = Placement.build(c, rerolls, knobs)
 		fairness = {"ok": true, "problems": [], "path": [], "first_beat": c.first_bar_beat, "cached": true}
 	else:
 		fairness = {"ok": false, "problems": []}
-		for attempt in Rules.reroll_passes():
+		for attempt in Rules.reroll_passes(knobs):
 			passes += 1
-			plan = Placement.build(c, rerolls)
-			fairness = Fairness.validate(plan, c)
+			plan = Placement.build(c, rerolls, knobs)
+			fairness = Fairness.validate(plan, c, knobs)
 			if fairness["ok"]:
 				break
 			for prob in fairness["problems"]:
@@ -123,7 +128,7 @@ func build() -> void:
 	# Brief 2: the monoliths around the field, one draw call for the level.
 	monoliths = Monoliths.new()
 	add_child(monoliths)
-	monoliths.build(runup_z0 - 2.0 * PLAIN_LEN, outro_z1 + 3.0 * PLAIN_LEN)
+	monoliths.build(runup_z0 - 2.0 * PLAIN_LEN, outro_z1 + 3.0 * PLAIN_LEN, Rules.level_of(knobs))
 	monoliths.set_window(0.0)
 
 	FrameMeter.load_mark("monoliths")
@@ -141,7 +146,7 @@ func build() -> void:
 			_:
 				h = Slammer.new()
 		add_child(h)
-		h.setup(spec)
+		h.setup(spec, knobs)
 		hazards.append(h)
 
 	FrameMeter.load_mark("hazards", "%d" % hazards.size())
@@ -181,7 +186,7 @@ func _verdict_path() -> String:
 	for f in ["res://prototype/placement.gd", "res://prototype/rules.gd", "res://prototype/hazard_math.gd",
 			"res://prototype/fairness.gd", "res://levels/curriculum.json"]:
 		src += FileAccess.get_md5(f)
-	return "user://fairness_v%d_L%d_%s_%s.json" % [Fairness.VERSION, Rules.LEVEL,
+	return "user://fairness_v%d_L%d_%s_%s.json" % [Fairness.VERSION, Rules.level_of(knobs),
 		FileAccess.get_md5(BeatClock.beatmap_path).substr(0, 12), src.md5_text().substr(0, 12)]
 
 
@@ -347,7 +352,7 @@ func tile_state_at(x: float, z: float, t: float) -> int:
 # beat after the period starts; only the warning colour before the first
 # downbeat and on demo bars.
 func _state_for(bar: int, col: int, row: int, t: float) -> int:
-	return Rules.plate_state(plan["bars"][bar], col, row, t)
+	return Rules.plate_state(plan["bars"][bar], col, row, t, knobs)
 
 
 # Repaint the tiles of the bars near the window. Only changed tiles touch
@@ -358,7 +363,7 @@ func update_tiles(t: float, z_back: float) -> void:
 	if _bar_z0.is_empty():
 		return
 	var lo := bar_at_z(maxf(z_back - 2.0, _bar_z0[0] if not _bar_z0.is_empty() else 0.0))
-	var hi := bar_at_z(minf(z_back + Rules.window_depth() + 8.0, _bar_z1[-1] - 0.01))
+	var hi := bar_at_z(minf(z_back + Rules.window_depth(knobs) + 8.0, _bar_z1[-1] - 0.01))
 	if lo == 0 and hi == 0:
 		return
 	if lo == 0:

@@ -26,10 +26,10 @@ func _build() -> void:
 
 
 func _pose(t: float) -> void:
-	var bottom := HazardMath.slammer_bottom(spec, t)
+	var bottom := HazardMath.slammer_bottom(spec, t, knobs)
 	_mesh.position.y = bottom
 	# Bright for the whole period before the drop until it is back up.
-	var hot: bool = HazardMath.slammer_hot(spec, t) and BeatClock.hazards_armed_at(t) \
+	var hot: bool = HazardMath.slammer_hot(spec, t, knobs) and BeatClock.hazards_armed_at(t) \
 		and not bool(spec.get("demo", false))
 	if hot != _hot:
 		_hot = hot

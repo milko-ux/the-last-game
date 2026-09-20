@@ -5,6 +5,9 @@ extends SceneTree
 # check before the real-time bots.
 #
 #   godot --headless --path . -s tools/plan_stats.gd -- levels=1,2,3
+#
+# Prints a HASH line per level: the fingerprint of the generated layout,
+# for proving that a refactor changed nothing.
 # ============================================================
 
 func _initialize() -> void:
@@ -26,19 +29,18 @@ func _initialize() -> void:
 	if not clock.loaded:
 		clock._load()
 	for L in levels:
-		Rules.LEVEL = int(L)
-		clock.set_tempo(Rules.song_tempo())
-		clock.period_beats = Rules.period_beats()
-		clock.start_offset = Rules.song_offset()
-		print(Rules.knobs_line())
+		var knobs: Dictionary = Rules.level(int(L))
+		clock.set_tempo(Rules.song_tempo(knobs))
+		clock.start_offset = Rules.song_offset(knobs)
+		print(Rules.knobs_line(knobs))
 		var rerolls := {}
 		var fair := {}
 		var plan := {}
 		var passes := 0
-		for attempt in Rules.reroll_passes():
+		for attempt in Rules.reroll_passes(knobs):
 			passes += 1
-			plan = Placement.build(clock, rerolls)
-			fair = Fairness.validate(plan, clock)
+			plan = Placement.build(clock, rerolls, knobs)
+			fair = Fairness.validate(plan, clock, knobs)
 			if fair["ok"]:
 				break
 			for prob in fair["problems"]:
@@ -76,6 +78,10 @@ func _initialize() -> void:
 			L, fair["ok"], passes, str(rerolls), total, float(total) / clock.bar_count(), empty,
 			plan["checkpoints"].size(), plan["notes"].size(), str(plan["demo_bars"]),
 			clock.bar_start(1) - clock.start_offset])
+		# The layout's fingerprint: the whole plan (hazards, plates, pits, notes,
+		# checkpoints, words, densities) and the re-rolls it settled on, keys
+		# sorted, floats at full precision. Same hash = the same level, to the bit.
+		print("HASH level=%d %s" % [L, JSON.stringify({"plan": plan, "rerolls": rerolls}, "", true, true).sha256_text()])
 		for p in fair["problems"]:
 			print("  PROBLEM: " + String(p))
 		if OS.get_environment("PLAN_BARS") != "":

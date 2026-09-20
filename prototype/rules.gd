@@ -33,9 +33,17 @@ const FALL_DEATH_Y := -3.0
 # with the addendum-2 camera) and never a surprise.
 const BACK_EDGE_MARGIN := 3.6
 
-# Which level is being played. Level 1 is the taught curriculum: no
-# lives, no death screen. Lives begin at level 2. Set by the level
-# select (prototype/level_select.gd) or by tools/autoplay.gd (level=N).
+# KNOBS ARE AN ARGUMENT (Phase E section 1). Every function below that
+# depends on a level knob takes `k`, the knob dictionary of the lap (or
+# level) being asked about: one row of levels/curriculum.json, from
+# Rules.level(n). Nothing in the game reads "the current level's knobs"
+# from a global any more, because in an endless run two laps with
+# different knobs exist at the same time (the one being played, the next
+# one being generated and validated).
+#
+# LEVEL is only the dev path's PICK: which row the level select (or a
+# tool's level=N) chose. The run scene turns it into a knob dictionary
+# once, in its _ready, and hands that on.
 static var LEVEL := 1
 
 # Level data (addendum 4 section 6): levels/curriculum.json, one entry
@@ -93,13 +101,19 @@ static func level(n: int = LEVEL) -> Dictionary:
 	return _levels.get(n, _levels[1])
 
 
+# Which curriculum row these knobs are (seeds and "is this pattern new
+# here?" depend on it).
+static func level_of(k: Dictionary) -> int:
+	return int(k.get("level", 1))
+
+
 static func level_count() -> int:
 	_load_levels()
 	return _levels.size()
 
 
-static func period_beats() -> int:
-	match String(level()["hazard_rate"]):
+static func period_beats(k: Dictionary) -> int:
+	match String(k["hazard_rate"]):
 		"bar":
 			return 4
 		"half_bar":
@@ -107,12 +121,12 @@ static func period_beats() -> int:
 	return 1
 
 
-static func gate_gap() -> float:
-	return float(level()["gate_opening"])
+static func gate_gap(k: Dictionary) -> float:
+	return float(k["gate_opening"])
 
 
-static func sweep_gap() -> float:
-	return float(level()["sweeper_gap"])
+static func sweep_gap(k: Dictionary) -> float:
+	return float(k["sweeper_gap"])
 
 
 # Bots set this to 0: they measure the level, not the lives system, so a
@@ -121,57 +135,57 @@ static func sweep_gap() -> float:
 static var LIVES_OVERRIDE := -1
 
 
-static func lives() -> int:
+static func lives(k: Dictionary) -> int:
 	if LIVES_OVERRIDE >= 0:
 		return LIVES_OVERRIDE
-	return int(level().get("lives", 0))
+	return int(k.get("lives", 0))
 
 
-static func lives_enabled() -> bool:
-	return lives() > 0
+static func lives_enabled(k: Dictionary) -> bool:
+	return lives(k) > 0
 
 
 # song_offset_s is written for the original tempo; on a slowed level the
 # same musical spot is later in the (longer) file, so it scales with it.
-static func song_offset() -> float:
-	return float(level().get("song_offset_s", 0.0)) / song_tempo()
+static func song_offset(k: Dictionary) -> float:
+	return float(k.get("song_offset_s", 0.0)) / song_tempo(k)
 
 
 # 0.90 / 0.95 / 1.0: which version of the song (and its beatmap) plays.
-static func song_tempo() -> float:
-	return float(level().get("song_tempo", 1.0))
+static func song_tempo(k: Dictionary) -> float:
+	return float(k.get("song_tempo", 1.0))
 
 
-static func demo_bars_on() -> bool:
-	return bool(level().get("demo_bars", true))
+static func demo_bars_on(k: Dictionary) -> bool:
+	return bool(k.get("demo_bars", true))
 
 
-static func density_curve() -> Array:
-	return level().get("density_curve", [1.0])
+static func density_curve(k: Dictionary) -> Array:
+	return k.get("density_curve", [1.0])
 
 
 # Orbiters: 1 = one revolution per period, 2 = two (the half-bar variant).
-static func orbiter_speed() -> int:
-	return 2 if String(level().get("orbiter_period", "bar")) == "half_bar" else 1
+static func orbiter_speed(k: Dictionary) -> int:
+	return 2 if String(k.get("orbiter_period", "bar")) == "half_bar" else 1
 
 
 # Types that may share a bar in the given wave (0-based). Level 1 climbs
 # from types_per_bar to types_per_bar_final in its last wave.
-static func types_per_bar_at(wave_index: int) -> int:
-	var l := level()
+static func types_per_bar_at(k: Dictionary, wave_index: int) -> int:
+	var l := k
 	var base := int(l["types_per_bar"])
 	if l.has("types_per_bar_final") and wave_index >= 4:
 		return int(l["types_per_bar_final"])
 	return base
 
 
-static func types_per_bar_max() -> int:
-	var l := level()
+static func types_per_bar_max(k: Dictionary) -> int:
+	var l := k
 	return maxi(int(l["types_per_bar"]), int(l.get("types_per_bar_final", 0)))
 
 
-static func orbiter_pairs_at(wave_index: int) -> bool:
-	var l := level()
+static func orbiter_pairs_at(k: Dictionary, wave_index: int) -> bool:
+	var l := k
 	if bool(l.get("orbiter_pairs", false)):
 		return true
 	if l.has("orbiter_pairs_from_wave"):
@@ -203,14 +217,14 @@ static func incompatible(a: String, b: String) -> bool:
 	return false
 
 
-static func knobs_line() -> String:
-	var l := level()
+static func knobs_line(k: Dictionary) -> String:
+	var l := k
 	return "LEVEL %d knobs: hazard_rate=%s plate_coverage=%.2f plate_patterns=%s gate_opening=%.1f sweeper_gap=%.1f types_per_bar=%d%s orbiter_pairs=%s orbiter_period=%s lives=%d density_curve=%s song_offset=%.1f song_tempo=%.2f player_speed=%.1fx demo_bars=%s structure=%s" % [
-		LEVEL, l["hazard_rate"], l["plate_coverage"], str(l["plate_patterns"]), l["gate_opening"],
+		level_of(k), l["hazard_rate"], l["plate_coverage"], str(l["plate_patterns"]), l["gate_opening"],
 		l["sweeper_gap"], int(l["types_per_bar"]),
 		("->%d" % int(l["types_per_bar_final"])) if l.has("types_per_bar_final") else "",
-		l.get("orbiter_pairs", false), l.get("orbiter_period", "bar"), lives(), str(density_curve()),
-		song_offset(), song_tempo(), float(l.get("player_speed", PLAYER_SPEED_FACTOR)), demo_bars_on(), l.get("structure", "mixed")]
+		l.get("orbiter_pairs", false), l.get("orbiter_period", "bar"), lives(k), str(density_curve(k)),
+		song_offset(k), song_tempo(k), float(l.get("player_speed", PLAYER_SPEED_FACTOR)), demo_bars_on(k), l.get("structure", "mixed")]
 
 # Player hit box (feet at pos, HEIGHT tall). Since 2026-09-19 it matches
 # the creature's visual footprint (Milko): the body's widest horizontal
@@ -231,24 +245,24 @@ const HazardMath := preload("res://prototype/hazard_math.gd")
 
 # Generate-validate passes the game may take before giving up on a fair
 # layout (`reroll_passes`, default 10; level 6 carries 40).
-static func reroll_passes() -> int:
-	return int(level().get("reroll_passes", 10))
+static func reroll_passes(k: Dictionary) -> int:
+	return int(k.get("reroll_passes", 10))
 
 
-static func window_bars() -> float:
-	return float(level().get("window_bars", WINDOW_BARS_DEFAULT))
+static func window_bars(k: Dictionary) -> float:
+	return float(k.get("window_bars", WINDOW_BARS_DEFAULT))
 
 
-static func window_depth() -> float:
-	return window_bars() * BAR_LENGTH
+static func window_depth(k: Dictionary) -> float:
+	return window_bars(k) * BAR_LENGTH
 
 
 static func scroll_speed() -> float:
 	return BeatClock.track_speed
 
 
-static func player_speed() -> float:
-	return float(level().get("player_speed", PLAYER_SPEED_FACTOR)) * scroll_speed()
+static func player_speed(k: Dictionary) -> float:
+	return float(k.get("player_speed", PLAYER_SPEED_FACTOR)) * scroll_speed()
 
 
 static func half_width() -> float:
@@ -346,16 +360,17 @@ static func pattern_lethal(pattern: String, col: int, row: int, k: int) -> bool:
 #    LETHAL_BEAT_FRACTION of the period, armed the period before.
 # Before the first downbeat, and on a demo bar, plates only ever show
 # the warning colour.
-static func plate_state(entry: Dictionary, col: int, row: int, t: float) -> int:
+static func plate_state(entry: Dictionary, col: int, row: int, t: float, k: Dictionary) -> int:
 	if entry["plain_rows"].has(row):
 		return 0
+	var pb := period_beats(k)
 	var lethal_allowed: bool = BeatClock.hazards_armed_at(t) and not bool(entry.get("demo", false))
 	var tiles: Array = entry.get("plates", [])
 	if not tiles.is_empty():
 		if not tiles.has([col, row]):
 			return 0
-		var idx := BeatClock.period_index_at(t)
-		var firing: bool = idx >= 1 and (t - BeatClock.period_start(idx)) < LETHAL_BEAT_FRACTION * BeatClock.beat_interval
+		var idx := BeatClock.period_index_at(t, pb)
+		var firing: bool = idx >= 1 and (t - BeatClock.period_start(idx, pb)) < LETHAL_BEAT_FRACTION * BeatClock.beat_interval
 		if firing and lethal_allowed:
 			return 2
 		return 1
@@ -365,13 +380,13 @@ static func plate_state(entry: Dictionary, col: int, row: int, t: float) -> int:
 	var band: Array = entry.get("cols", [])
 	if band.size() == 2 and (col < int(band[0]) or col > int(band[1])):
 		return 0
-	var idx := BeatClock.period_index_at(t)
-	var k := posmod(idx - 1, 4)
-	var frac: float = LETHAL_BEAT_FRACTION * BeatClock.beat_interval / BeatClock.period_s()
-	var firing := pattern_lethal(pattern, col, row, k) and BeatClock.period_progress_at(t) < frac
+	var idx := BeatClock.period_index_at(t, pb)
+	var step := posmod(idx - 1, 4)
+	var frac: float = LETHAL_BEAT_FRACTION * BeatClock.beat_interval / BeatClock.period_s(pb)
+	var firing := pattern_lethal(pattern, col, row, step) and BeatClock.period_progress_at(t, pb) < frac
 	if firing:
 		return 2 if lethal_allowed else 1
-	if pattern_lethal(pattern, col, row, (k + 1) % 4):
+	if pattern_lethal(pattern, col, row, (step + 1) % 4):
 		return 1
 	return 0
 
@@ -384,8 +399,8 @@ static func plate_state(entry: Dictionary, col: int, row: int, t: float) -> int:
 
 # How far the player can travel between one beat's safe tile and the
 # next: only the non-lethal part of the beat is usable for the move.
-static func reach_per_beat() -> float:
-	return player_speed() * BeatClock.beat_interval * (1.0 - LETHAL_BEAT_FRACTION) + 0.4
+static func reach_per_beat(k: Dictionary) -> float:
+	return player_speed(k) * BeatClock.beat_interval * (1.0 - LETHAL_BEAT_FRACTION) + 0.4
 
 
 static func player_box(pos: Vector3) -> AABB:
@@ -405,7 +420,7 @@ static func point_lethal(field, pos: Vector3, on_ground: bool, t: float) -> bool
 			continue
 		if String(spec["kind"]) == "gate":
 			continue
-		for b in HazardMath.boxes_at(spec, t):
+		for b in HazardMath.boxes_at(spec, t, field.knobs):
 			var bb: AABB = b
 			if bb.intersects(box):
 				return true
@@ -430,10 +445,10 @@ static func death_cause(field, prev: Vector3, pos: Vector3, on_ground: bool, z_b
 			# A gate is a zero-thickness plane in the rules: you die by
 			# CROSSING it outside the opening, never by "being inside" it,
 			# so the opening jumping can never catch you in the wall.
-			if HazardMath.gate_crossed(spec, prev, pos, PLAYER_HALF_W, t_prev, t):
-				return {"kind": "gate", "pos": Vector3(HazardMath.gate_opening_x(spec, t), 0.0, float(spec["z"]))}
+			if HazardMath.gate_crossed(spec, prev, pos, PLAYER_HALF_W, t_prev, t, field.knobs):
+				return {"kind": "gate", "pos": Vector3(HazardMath.gate_opening_x(spec, t, field.knobs), 0.0, float(spec["z"]))}
 			continue
-		for b in HazardMath.boxes_at(spec, t):
+		for b in HazardMath.boxes_at(spec, t, field.knobs):
 			var bb: AABB = b
 			if bb.intersects(box):
 				return {"kind": String(spec["kind"]), "pos": bb.get_center()}

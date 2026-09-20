@@ -52,6 +52,11 @@ enum State { WAIT, STARTING, RUN, DEAD, WON, GAMEOVER, LOADING }
 @onready var hud: Node2D = $UI/Hud
 # Brief 3: everything on the beat and the weight of the moments; presentation only.
 var motion: Node = null
+# The knobs of what is being played: one curriculum row. Everything that
+# depends on a knob gets this dictionary handed to it; nothing reads a
+# global "current level" (Phase E section 1). Rules.LEVEL is only the pick
+# the level select / a tool made, read once here.
+var knobs := {}
 var meter: FrameMeter = null   # dev only, null in a release
 
 var state := State.WAIT
@@ -90,22 +95,24 @@ var _bar_fill: ColorRect
 
 func _ready() -> void:
 	FrameMeter.load_mark("scene")
+	knobs = Rules.level(Rules.LEVEL)
 	# The level's knobs (addendum 3 / 4): hazards act once per period, the
 	# song starts at the level's offset. Both before the field is built,
 	# since the layout is a function of them.
-	BeatClock.set_tempo(Rules.song_tempo())
+	BeatClock.set_tempo(Rules.song_tempo(knobs))
 	music.stream = load(BeatClock.music_path())
-	BeatClock.period_beats = Rules.period_beats()
-	BeatClock.start_offset = Rules.song_offset()
-	lives = Rules.lives()
+	BeatClock.start_offset = Rules.song_offset(knobs)
+	lives = Rules.lives(knobs)
 	furthest_t = BeatClock.start_offset
-	print(Rules.knobs_line())
+	print(Rules.knobs_line(knobs))
 	FrameMeter.load_mark("music")
 	motion = load("res://prototype/motion.gd").new()
 	motion.name = "Motion"
 	add_child(motion)
+	motion.knobs = knobs
 	rig.motion = motion
-	field.build()
+	rig.configure(knobs)
+	field.build(knobs)
 	if not field.fairness["ok"]:
 		_fair_warning = "FAIRNESS CHECK FAILED (%d) — see log" % field.fairness["problems"].size()
 	player.reset_to(0.0, START_Z)
@@ -253,7 +260,7 @@ func _process(delta: float) -> void:
 				_rewind()
 		State.WON, State.GAMEOVER:
 			_end_shown += delta
-	ui.set_status(0, 1, lives, deaths, state == State.DEAD and Rules.lives_enabled())
+	ui.set_status(0, 1, lives, deaths, state == State.DEAD and Rules.lives_enabled(knobs))
 	if state != State.DEAD:
 		motion.animate_notes(field.notes, player.position)
 	_update_hud()
@@ -263,7 +270,7 @@ func _tick_run(delta: float) -> void:
 	var t := BeatClock.song_time()
 	var ht := BeatClock.hazard_time()
 	var z_back := BeatClock.z_at(t)
-	var z_front := z_back + Rules.window_depth()
+	var z_front := z_back + Rules.window_depth(knobs)
 
 	player.move_dir = bot.move_dir(self) if bot != null else _move_input()
 	player.tick(delta, z_back, z_front, field)
@@ -361,7 +368,7 @@ func _demo_target(ht: float) -> Variant:
 	for h in field.hazards:
 		if int(h.spec["bar"]) != bar:
 			continue
-		for b in HazardMath.shape_boxes_at(h.spec, ht):
+		for b in HazardMath.shape_boxes_at(h.spec, ht, h.knobs):
 			var bb: AABB = b
 			var c := bb.get_center()
 			var d := Vector2(c.x - player.position.x, c.z - player.position.z).length()
@@ -508,7 +515,7 @@ func start_now() -> void:
 
 func _die() -> void:
 	state = State.DEAD
-	if Rules.lives_enabled():
+	if Rules.lives_enabled(knobs):
 		lives -= 1
 	deaths += 1
 	streak = 0
@@ -519,10 +526,10 @@ func _die() -> void:
 	# visuals hold because nothing samples time in State.DEAD and
 	# motion.frozen stops the beat visuals. (Was BeatClock.pause().)
 	_death_z = player.position.z
-	_freeze = DEATH_FREEZE_LIVES_S if Rules.lives_enabled() else DEATH_FREEZE_S
+	_freeze = DEATH_FREEZE_LIVES_S if Rules.lives_enabled(knobs) else DEATH_FREEZE_S
 	player.creature.play_death(_freeze)
 	Progress.record_best(Rules.LEVEL, BeatClock.song_time())
-	if Rules.lives_enabled() and lives <= 0:
+	if Rules.lives_enabled(knobs) and lives <= 0:
 		_game_over()
 
 
@@ -581,7 +588,7 @@ func _win() -> void:
 func _update_hud() -> void:
 	if state == State.WAIT:
 		return
-	if Rules.lives_enabled():
+	if Rules.lives_enabled(knobs):
 		score_label.text = "♪ %d   x%d   ·   lives %d   ·   %d" % [notes, mini(maxi(streak, 1), COMBO_CAP), lives, current_score()]
 	else:
 		score_label.text = "♪ %d   x%d   ·   %d" % [notes, mini(maxi(streak, 1), COMBO_CAP), current_score()]

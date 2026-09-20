@@ -49,7 +49,7 @@ func _pillar(parent: Node3D, side: float, i: int) -> Node3D:
 
 func _pose(t: float) -> void:
 	_set_hot(t)
-	var gx := HazardMath.gate_opening_x(spec, t)
+	var gx := HazardMath.gate_opening_x(spec, t, knobs)
 	if gx != _target_gx:
 		# A rewind (time went backwards) snaps; a period jump slides.
 		_from_gx = _visual_gx() if t >= _last_t and _target_gx != INF else gx
@@ -58,7 +58,7 @@ func _pose(t: float) -> void:
 		_note("jump")
 	_slide_t += get_process_delta_time()
 	_last_t = t
-	_pose_pillars(_visual_gx(), Rules.gate_gap())
+	_pose_pillars(_visual_gx(), Rules.gate_gap(knobs))
 
 
 func _visual_gx() -> float:

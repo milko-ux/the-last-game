@@ -363,16 +363,17 @@ func is_section_start(bar: int) -> bool:
 
 # ------------------------------------------------------------
 # Hazard periods (addendum 3). Hazards act once per PERIOD, which is
-# period_beats beats long: 4 ("bar", level 1), 2 ("half_bar") or 1
-# ("beat"). Period 1 starts on bar 1's downbeat; before that the grid
-# is extrapolated backwards (periods 0, -1, ...) so the intro can
-# rehearse. The scene sets period_beats from the level's knobs.
+# `pb` beats long: 4 ("bar", level 1), 2 ("half_bar") or 1 ("beat").
+# Period 1 starts on bar 1's downbeat; before that the grid is
+# extrapolated backwards (periods 0, -1, ...) so the intro can rehearse.
+#
+# `pb` is an ARGUMENT (Phase E section 1): it comes from the knobs of
+# the lap the asking hazard / plate belongs to (Rules.period_beats(k)).
+# It used to be one global, which cannot work once two laps with
+# different rates exist at the same time.
 # ------------------------------------------------------------
-var period_beats := 4
-
-
-func period_s() -> float:
-	return beat_interval * period_beats
+func period_s(pb: int) -> float:
+	return beat_interval * pb
 
 
 func _anchor() -> float:
@@ -381,34 +382,34 @@ func _anchor() -> float:
 	return beats[0] if not beats.is_empty() else 0.0
 
 
-func period_index_at(t: float) -> int:
+func period_index_at(t: float, pb: int) -> int:
 	var i := beat_at(t)
 	if i < first_bar_beat or downbeats.is_empty():
-		return int(floor((t - _anchor()) / period_s())) + 1
-	return (i - first_bar_beat) / period_beats + 1
+		return int(floor((t - _anchor()) / period_s(pb))) + 1
+	return (i - first_bar_beat) / pb + 1
 
 
-func period_start(idx: int) -> float:
-	var b := first_bar_beat + (idx - 1) * period_beats
+func period_start(idx: int, pb: int) -> float:
+	var b := first_bar_beat + (idx - 1) * pb
 	if idx >= 1 and b < beats.size():
 		return beats[b]
-	return _anchor() + (idx - 1) * period_s()
+	return _anchor() + (idx - 1) * period_s(pb)
 
 
-func period_end(idx: int) -> float:
-	return period_start(idx + 1)
+func period_end(idx: int, pb: int) -> float:
+	return period_start(idx + 1, pb)
 
 
-func period_progress_at(t: float) -> float:
-	var idx := period_index_at(t)
-	var s := period_start(idx)
-	var e := period_end(idx)
+func period_progress_at(t: float, pb: int) -> float:
+	var idx := period_index_at(t, pb)
+	var s := period_start(idx, pb)
+	var e := period_end(idx, pb)
 	return clampf((t - s) / maxf(e - s, 0.001), 0.0, 1.0)
 
 
 # Continuous period count, e.g. 12.37 = 37 % through period 12.
-func period_float_at(t: float) -> float:
-	return float(period_index_at(t)) + period_progress_at(t)
+func period_float_at(t: float, pb: int) -> float:
+	return float(period_index_at(t, pb)) + period_progress_at(t, pb)
 
 
 # Continuous count in units of `beats_per` beats (4 = bars) from the

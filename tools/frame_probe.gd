@@ -145,6 +145,6 @@ func _setup() -> void:
 	ap.HazardMath = load("res://prototype/hazard_math.gd")
 	var fair: Dictionary = test.field.fairness
 	if fair.get("cached", false) or fair["path"].is_empty():
-		fair = load("res://prototype/fairness.gd").validate(test.field.plan, clock)
+		fair = load("res://prototype/fairness.gd").validate(test.field.plan, clock, test.knobs)
 	ap.path = fair["path"]
 	ap.first_beat = int(fair["first_beat"])

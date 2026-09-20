@@ -16,6 +16,25 @@
 **Models in `assets/models/`:** all placed — `creature.glb` (the hero), and via their light copies in `assets/models/lod/`: `gate_pillar`, `sweeper_segment`, `slammer`, `orbiter_pillar`, `volley_emitter` (vertex colours from the bake), `building_tall` / `building_stacked` + their `_hi` copies (geometry only, procedural stone). Orbs and notes stay the shader spheres.
 
 
+## Phase E report — brief 1, the endless run (Stage 1, in progress)
+
+### Section 1 — knobs per lap, not per game (done)
+Nothing reads "the current level's knobs" from a global any more. The knob dictionary (one row of `levels/curriculum.json`, `Rules.level(n)`) is an ARGUMENT everywhere: `Placement.build(clock, rerolls, knobs)`, `Fairness.validate(plan, clock, knobs)`, `Rules.plate_state(entry, col, row, t, k)`, every `Rules.*` knob accessor (`period_beats(k)`, `gate_gap(k)`, `sweep_gap(k)`, `player_speed(k)`, `window_depth(k)`, `reach_per_beat(k)`, `lives(k)`, …), every `HazardMath.*` function (`boxes_at(spec, t, k)` …). `BeatClock.period_beats` is gone: the period functions take the period (`period_index_at(t, pb)` …). A `field` carries the knobs it was built with (`field.knobs`), its hazards get them in `setup(spec, knobs)`, the death rules read `field.knobs`, the player reads its speed from the field it runs on, the camera gets its window in `configure(knobs)`, the bots read `test.knobs`. The plan itself is unchanged (the knobs travel beside it, not inside it), which is what makes the proof below possible. `Rules.LEVEL` survives only as the dev path's pick, read once in `track_test._ready`; the level select → one level path works as before.
+
+**Proof it changed nothing** — `tools/plan_stats.gd` now prints a `HASH` per level: SHA-256 of the whole generated plan + the re-rolls it settled on (keys sorted, floats at full precision). Before the refactor / after it:
+
+| Level | before | after |
+|---|---|---|
+| 1 | `4db8f95bfc951cd4…56f69f13` | `4db8f95bfc951cd4…56f69f13` |
+| 2 | `55a5353726793008…a60ecae6` | `55a5353726793008…a60ecae6` |
+| 3 | `ac3201169bc89ebb…d79d2598` | `ac3201169bc89ebb…d79d2598` |
+| 4 | `5701d3f65f7726b9…acbfa171` | `5701d3f65f7726b9…acbfa171` |
+| 5 | `70ba1a404f2d6cf2…fc2da460` | `70ba1a404f2d6cf2…fc2da460` |
+| 6 | `489da92bba732302…c3be3c0f` | `489da92bba732302…c3be3c0f` |
+
+Identical, as are the validation pass counts (1, 3, 3, 7, 8, 35) and the re-roll tables. Runtime: validator bot **0 deaths, goal reached on levels 1, 3, 5**; a bar-1 frame before / after: same 145 384 triangles, 326 draw calls, 0.06 % of pixels differ (the creature's idle, 10 ms apart).
+
+
 ## Report — frame meter, the "screen jumps", the monoliths (2026-09-20)
 
 **`rules.gd`, `hazard_math.gd`, `fairness.gd`, `placement.gd` untouched.** One thing under the rules did change: the clock they read is smoothed (below). Validator bot after it: **0 deaths, goal reached on levels 1, 2, 3, 4, 5** (one level-5 run died once at bar 2 while the Mac was rendering screenshots next to it, 27 fps; alone it passes — the known starved-bot pattern).

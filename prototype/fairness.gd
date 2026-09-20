@@ -54,22 +54,26 @@ const LEAVE_OPTIONS := [0.0, 0.5]
 class Ctx:
 	var plan: Dictionary
 	var clock
+	var knobs: Dictionary
 	var bar_z0 := {}
 	var bar_depth := {}
 	var specs: Array = []
 
 
-static func validate(plan: Dictionary, clock) -> Dictionary:
+# `knobs`: the knob dictionary the plan was built with (Phase E section
+# 1): the validator assumes THAT lap's player speed, window, period and gaps.
+static func validate(plan: Dictionary, clock, knobs: Dictionary) -> Dictionary:
 	var ctx := Ctx.new()
 	ctx.plan = plan
 	ctx.clock = clock
+	ctx.knobs = knobs
 	for bar in range(1, clock.bar_count() + 1):
 		ctx.bar_z0[bar] = clock.z_at(clock.bar_start(bar))
 		ctx.bar_depth[bar] = clock.z_at(clock.bar_end(bar)) - ctx.bar_z0[bar]
 
 	var problems := []
 	var beats: PackedFloat64Array = clock.beats
-	var speed: float = Rules.player_speed()
+	var speed: float = Rules.player_speed(knobs)
 	var last_bar_end: float = clock.z_at(clock.bar_end(clock.bar_count()))
 	var outro_bar: int = clock.bar_count() + 1
 
@@ -84,14 +88,14 @@ static func validate(plan: Dictionary, clock) -> Dictionary:
 		var tp: float = beats[i - 1] if i > 0 else t0 - clock.beat_interval
 		var z_back0: float = clock.z_at(t0)
 		var z_back1: float = clock.z_at(t1)
-		var z_front: float = z_back0 + Rules.window_depth()
+		var z_front: float = z_back0 + Rules.window_depth(knobs)
 		var k: int = clock.beat_in_bar_at(t0)
-		if z_back0 > last_bar_end + Rules.window_depth():
+		if z_back0 > last_bar_end + Rules.window_depth(knobs):
 			break
 
 		ctx.specs = []
 		for spec in plan["hazards"]:
-			if absf(float(spec["z"]) - (z_back0 + z_front) * 0.5) > Rules.window_depth():
+			if absf(float(spec["z"]) - (z_back0 + z_front) * 0.5) > Rules.window_depth(knobs):
 				continue
 			ctx.specs.append(spec)
 
@@ -270,7 +274,7 @@ static func _lethal_at(ctx: Ctx, p: Vector2, t: float) -> bool:
 			var depth: float = ctx.bar_depth[bar]
 			var row := clampi(int(floor((c.y - ctx.bar_z0[bar]) / (depth / Rules.ROWS))), 0, Rules.ROWS - 1)
 			var col := clampi(Rules.col_at(c.x), 0, Rules.COLS - 1)
-			if Rules.plate_state(entry, col, row, t) == 2:
+			if Rules.plate_state(entry, col, row, t, ctx.knobs) == 2:
 				return true
 	for spec in ctx.specs:
 		var is_orbiter := String(spec["kind"]) == "orbiter"
@@ -278,7 +282,7 @@ static func _lethal_at(ctx: Ctx, p: Vector2, t: float) -> bool:
 		if absf(float(spec["z"]) - p.y) > band:
 			continue
 		var half := HAZARD_HALF + (orbiter_sweep(spec) if is_orbiter else 0.0)
-		for box in HazardMath.boxes_at(spec, t):
+		for box in HazardMath.boxes_at(spec, t, ctx.knobs):
 			var bb: AABB = box
 			if bb.position.y > 1.6:
 				continue

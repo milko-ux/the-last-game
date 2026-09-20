@@ -52,7 +52,7 @@ func _segment(parent: Node3D, side: float, i: int) -> Node3D:
 
 func _pose(t: float) -> void:
 	_set_hot(t)
-	_pose_walls(HazardMath.sweeper_gap_x(spec, t), Rules.sweep_gap())
+	_pose_walls(HazardMath.sweeper_gap_x(spec, t, knobs), Rules.sweep_gap(knobs))
 
 
 # Warning colour while inert (the intro rehearsal) and on a demo; the

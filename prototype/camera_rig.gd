@@ -57,6 +57,9 @@ const SHAKE_AMOUNT := 0.15
 var _punch_age := 99.0
 var _shake_t := 0.0
 var window_back := 0.0
+# The window's depth in units: a knob of the lap / level being played,
+# handed over by the run scene (configure()), never read from a global.
+var _window_depth := Rules.WINDOW_BARS_DEFAULT * Rules.BAR_LENGTH
 # Brief 3: the death kick (a directional, decaying shake plus an outward
 # FOV punch) and the downbeat nod, read from the scene's Motion node.
 var motion: Node = null
@@ -125,7 +128,6 @@ var _far: Node3D
 
 func _ready() -> void:
 	cam.fov = FOV
-	CAMERA_DISTANCE = CAMERA_DISTANCE_AT_2_2 + (Rules.window_bars() - 2.2) * CAMERA_DISTANCE_PER_BAR
 	_build_backdrop()
 	BeatClock.downbeat.connect(_on_downbeat)
 	set_window(0.0)
@@ -167,6 +169,14 @@ func _build_backdrop() -> void:
 		_far.add_child(mi)
 
 
+# Called by the run scene with the knobs of what is being played: the
+# camera distance follows the window (26 at 2.2 bars, 28 at 2.5).
+func configure(k: Dictionary) -> void:
+	_window_depth = Rules.window_depth(k)
+	CAMERA_DISTANCE = CAMERA_DISTANCE_AT_2_2 + (Rules.window_bars(k) - 2.2) * CAMERA_DISTANCE_PER_BAR
+	set_window(window_back)
+
+
 func _on_downbeat(_bar: int) -> void:
 	_punch_age = 0.0
 
@@ -195,7 +205,7 @@ func kick(duration: float, amount: float, fov_punch: float, away: Vector3) -> vo
 
 func set_window(z_back: float) -> void:
 	window_back = z_back
-	position = Vector3(0.0, 0.0, z_back + Rules.window_depth() * 0.5)
+	position = Vector3(0.0, 0.0, z_back + _window_depth * 0.5)
 	if _far != null:
 		_far.position.z = -0.8 * z_back   # so the silhouettes advance at 20 % of the scroll
 	# The distance fade in flat_mats.gd is measured from the window.

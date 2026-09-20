@@ -50,8 +50,8 @@ func _build() -> void:
 
 
 func _pose(t: float) -> void:
-	var warn := HazardMath.volley_warning(spec, t)
-	var vx: Variant = HazardMath.volley_orb_x(spec, t)
+	var warn := HazardMath.volley_warning(spec, t, knobs)
+	var vx: Variant = HazardMath.volley_orb_x(spec, t, knobs)
 	_orb.visible = vx != null
 	# On fire: the emitter squashes 15 % and springs back (brief 4).
 	if vx != null and not _had_orb:

@@ -86,6 +86,7 @@ static func density(energy: float) -> String:
 # Working state for one build.
 class Ctx:
 	var clock
+	var knobs: Dictionary
 	var rng: RandomNumberGenerator
 	var bar: int
 	var z0: float
@@ -135,8 +136,12 @@ static func _mixed_curriculum(bar_count: int) -> Array:
 #          "demo_bars": {bar: type}, "curriculum": [...]}
 # bar entry: density, pattern, cols, plates, plain_rows, pits, checkpoint, demo, word
 # hazard: kind, bar, x, z, dir, phase, seed, beat, col, row, cycle, speed, demo
-static func build(clock, rerolls: Dictionary = {}, curriculum: Array = []) -> Dictionary:
-	var level_data := Rules.level()
+# `knobs` is the lap's (or level's) knob dictionary, Rules.level(n): the
+# layout is a function of the beatmap, the re-rolls and these knobs, and
+# of nothing global (Phase E section 1).
+static func build(clock, rerolls: Dictionary, knobs: Dictionary, curriculum: Array = []) -> Dictionary:
+	var level_data := knobs
+	var level_n := Rules.level_of(knobs)
 	var mixed: bool = String(level_data.get("structure", "mixed")) != "curriculum"
 	if curriculum.is_empty():
 		curriculum = _mixed_curriculum(clock.bar_count()) if mixed else LEVEL1
@@ -149,6 +154,7 @@ static func build(clock, rerolls: Dictionary = {}, curriculum: Array = []) -> Di
 	var acc := 0.0                          # fractional hazard budget carried bar to bar
 	var ctx := Ctx.new()
 	ctx.clock = clock
+	ctx.knobs = knobs
 	ctx.hazards = hazards
 	ctx.notes = notes
 	ctx.shown = []
@@ -161,7 +167,7 @@ static func build(clock, rerolls: Dictionary = {}, curriculum: Array = []) -> Di
 		ctx.shown = KINDS.duplicate()
 		ctx.shown.append("pit")
 		for p in ctx.allowed_patterns:
-			if not Rules.demo_bars_on() or Rules.pattern_first_level(String(p)) < Rules.LEVEL:
+			if not Rules.demo_bars_on(knobs) or Rules.pattern_first_level(String(p)) < level_n:
 				ctx.shown.append(String(p))
 	var gate_in_wave := {}
 	var orbiter_bars := {}                   # wave "from" -> orbiter bars so far
@@ -171,7 +177,7 @@ static func build(clock, rerolls: Dictionary = {}, curriculum: Array = []) -> Di
 		var rng := RandomNumberGenerator.new()
 		# Hashed, not a stride: seeds one stride apart gave correlated first
 		# draws (five pit bars in a row on the first build).
-		rng.seed = hash(Vector3i(bar, int(rerolls.get(bar, 0)), Rules.LEVEL))
+		rng.seed = hash(Vector3i(bar, int(rerolls.get(bar, 0)), level_n))
 		var e := _entry_for(curriculum, bar)
 		var wave := String(e["wave"])
 		var k: int = bar - int(e["from"])
@@ -187,8 +193,8 @@ static func build(clock, rerolls: Dictionary = {}, curriculum: Array = []) -> Di
 		ctx.demo = false
 		ctx.after_gate = after_gate
 		ctx.wave_index = clampi(int(e.get("index", 0)), 0, curve.size() - 1)
-		ctx.types_per_bar = Rules.types_per_bar_at(ctx.wave_index)
-		ctx.pairs_ok = Rules.orbiter_pairs_at(ctx.wave_index)
+		ctx.types_per_bar = Rules.types_per_bar_at(knobs, ctx.wave_index)
+		ctx.pairs_ok = Rules.orbiter_pairs_at(knobs, ctx.wave_index)
 		var mult := float(curve[ctx.wave_index])
 
 		if wave == "breather":
@@ -230,7 +236,7 @@ static func build(clock, rerolls: Dictionary = {}, curriculum: Array = []) -> Di
 					var skip: Array = orbiter_bars.get(wf, [])
 					if skip.is_empty():
 						var r2 := RandomNumberGenerator.new()
-						r2.seed = 4242 + wf + 31 * Rules.LEVEL
+						r2.seed = 4242 + wf + 31 * level_n
 						skip = [2 + r2.randi() % 3, 5 + r2.randi() % 3]
 						orbiter_bars[wf] = skip
 					if skip.has(k) and not gate_in_wave.get(wf, false) and not after_gate:
@@ -268,7 +274,7 @@ static func build(clock, rerolls: Dictionary = {}, curriculum: Array = []) -> Di
 				"mixed":
 					var pool := _mixed_pool(ctx)
 					var first := String(pool[rng.randi() % pool.size()])
-					var demo_first := Rules.demo_bars_on() and not ctx.shown.has(first) and not ctx.demoed.has(first)
+					var demo_first := Rules.demo_bars_on(knobs) and not ctx.shown.has(first) and not ctx.demoed.has(first)
 					_place(ctx, first, demo_first)
 					if not demo_first:
 						_extra(ctx, n - 1, pool)
@@ -317,7 +323,7 @@ static func build(clock, rerolls: Dictionary = {}, curriculum: Array = []) -> Di
 		after_gate = ctx.kinds.has("gate")
 		bars[bar] = entry
 
-	_check(bars, hazards, demo_bars)
+	_check(bars, hazards, demo_bars, knobs)
 	return {"bars": bars, "hazards": hazards, "notes": notes, "checkpoints": checkpoints,
 		"demo_bars": demo_bars, "curriculum": curriculum}
 
@@ -365,20 +371,20 @@ static func _place(ctx: Ctx, kind: String, demo: bool) -> bool:
 				if not e["plain_rows"].has(r):
 					e["plain_rows"].append(r)
 			if not demo:
-				ctx.notes.append(_sweeper_note(ctx.hazards[-1], ctx.clock, ctx.bar))
+				ctx.notes.append(_sweeper_note(ctx.hazards[-1], ctx.clock, ctx.bar, ctx.knobs))
 		"orbiter":
 			var used := []
 			for h in ctx.hazards:
 				if int(h["bar"]) == ctx.bar and String(h["kind"]) == "orbiter":
 					used.append(float(h["x"]))
 			if ctx.pairs_ok and used.is_empty() and (demo or rng.randf() < 0.5):
-				ctx.hazards.append_array(_orbiter_pair(ctx.bar, ctx.zc, demo))
+				ctx.hazards.append_array(_orbiter_pair(ctx.bar, ctx.zc, demo, Rules.orbiter_speed(ctx.knobs)))
 			else:
 				var xs := [-4.0, 0.0, 4.0].filter(func(x): return not used.has(x))
 				if xs.is_empty():
 					return false
 				var x: float = xs[rng.randi() % xs.size()]
-				ctx.hazards.append(_orbiter(ctx.bar, x, ctx.zc, rng, demo))
+				ctx.hazards.append(_orbiter(ctx.bar, x, ctx.zc, rng, demo, Rules.orbiter_speed(ctx.knobs)))
 				if not demo and used.is_empty():
 					ctx.notes.append({"x": x + (2.0 if x <= 0.0 else -2.0), "z": ctx.zc, "bar": ctx.bar})
 		"volley":
@@ -426,7 +432,7 @@ static func _place_plates(ctx: Ctx, pattern: String, demo: bool) -> bool:
 	if pattern in Rules.BEAT_PATTERNS:
 		# A beat-rate pattern covers a column band sized by plate_coverage
 		# (checker fills half its band, so the band is twice the coverage).
-		var width: int = clampi(int(round(float(Rules.level()["plate_coverage"]) * 2.0 * Rules.COLS)), 3, Rules.COLS)
+		var width: int = clampi(int(round(float(ctx.knobs["plate_coverage"]) * 2.0 * Rules.COLS)), 3, Rules.COLS)
 		var c0: int = ctx.rng.randi() % (Rules.COLS - width + 1)
 		e["cols"] = [c0, c0 + width - 1]
 		e["plates"] = []
@@ -498,7 +504,7 @@ static func _mixed_pool(ctx: Ctx) -> Array:
 		for i in int(round(w * 2.0)):
 			out.append(kind)
 	# Patterns new to this level, by name, so their demo bar can happen.
-	if Rules.demo_bars_on():
+	if Rules.demo_bars_on(ctx.knobs):
 		for p in ctx.allowed_patterns:
 			if not ctx.shown.has(String(p)) and not ctx.demoed.has(String(p)):
 				for i in 3:
@@ -545,13 +551,14 @@ static func _open_floor(ctx: Ctx, e: Dictionary, bar: int, checkpoints: Array) -
 	entry["density"] = "breather" if density(ctx.clock.bar_energy(bar)) != "rest" else "rest"
 	if int(e.get("checkpoint", -1)) == bar:
 		entry["checkpoint"] = true
-		var lead: float = Rules.window_depth() * 0.45 / ctx.clock.track_speed
+		var lead: float = Rules.window_depth(ctx.knobs) * 0.45 / ctx.clock.track_speed
 		var t0: float = ctx.clock.bar_start(bar)
 		checkpoints.append({"bar": bar, "t": t0, "resume_t": maxf(ctx.clock.start_offset, t0 - lead), "x": 0.0, "z": ctx.z0 + 1.0})
 
 
 # The hard rules. Any violation is a generator bug and goes to the log.
-static func _check(bars: Dictionary, hazards: Array, demo_bars: Dictionary) -> void:
+static func _check(bars: Dictionary, hazards: Array, demo_bars: Dictionary, knobs: Dictionary) -> void:
+	var level_n := Rules.level_of(knobs)
 	var first_demo := {}
 	for bar in demo_bars:
 		var kind := String(demo_bars[bar])
@@ -560,7 +567,7 @@ static func _check(bars: Dictionary, hazards: Array, demo_bars: Dictionary) -> v
 			key = "plates:" + String(bars[bar]["pattern"])
 		if not first_demo.has(key) or int(bar) < int(first_demo[key]):
 			first_demo[key] = int(bar)
-	var demos_on := Rules.demo_bars_on()
+	var demos_on := Rules.demo_bars_on(knobs)
 	var kinds_in_bar := {}
 	for h in hazards:
 		var b := int(h["bar"])
@@ -569,7 +576,7 @@ static func _check(bars: Dictionary, hazards: Array, demo_bars: Dictionary) -> v
 			kinds_in_bar[b] = []
 		if not kinds_in_bar[b].has(kind):
 			kinds_in_bar[b].append(kind)
-		if demos_on and not h["demo"] and Rules.LEVEL == 1:
+		if demos_on and not h["demo"] and level_n == 1:
 			var intro := int(first_demo.get(kind, 0))
 			if intro == 0 or b <= intro:
 				push_error("CURRICULUM: %s live in bar %d before its demo bar %d" % [kind, b, intro])
@@ -578,12 +585,12 @@ static func _check(bars: Dictionary, hazards: Array, demo_bars: Dictionary) -> v
 		var pattern := String(en["pattern"])
 		if pattern != "none":
 			var key := "plates:" + pattern
-			if demos_on and Rules.pattern_first_level(pattern) == Rules.LEVEL:
+			if demos_on and Rules.pattern_first_level(pattern) == level_n:
 				var intro := int(first_demo.get(key, 0))
 				if not en["demo"] and (intro == 0 or int(bar) <= intro):
 					push_error("CURRICULUM: plates (%s) live in bar %d before their demo bar %d" % [pattern, bar, intro])
-			if not Rules.level()["plate_patterns"].has(pattern):
-				push_error("CURRICULUM: pattern %s in bar %d is not allowed on level %d" % [pattern, bar, Rules.LEVEL])
+			if not knobs["plate_patterns"].has(pattern):
+				push_error("CURRICULUM: pattern %s in bar %d is not allowed on level %d" % [pattern, bar, level_n])
 			if not kinds_in_bar.has(bar):
 				kinds_in_bar[bar] = []
 			kinds_in_bar[bar].append(key)
@@ -592,7 +599,7 @@ static func _check(bars: Dictionary, hazards: Array, demo_bars: Dictionary) -> v
 				push_error("CURRICULUM: pit and plates share row %d in bar %d" % [int(pit[1]), bar])
 	for bar in kinds_in_bar:
 		var ks: Array = kinds_in_bar[bar]
-		var wave_types := Rules.types_per_bar_max()
+		var wave_types := Rules.types_per_bar_max(knobs)
 		if ks.size() > wave_types:
 			push_error("CURRICULUM: %d hazard types in bar %d: %s" % [ks.size(), bar, str(ks)])
 		for i in ks.size():
@@ -643,14 +650,13 @@ static func _gate(bar: int, z: float, rng: RandomNumberGenerator, demo: bool) ->
 		"seed": int(rng.randi() % 100000), "beat": 0, "col": 0, "row": 0, "cycle": 0, "speed": 1, "demo": demo}
 
 
-static func _orbiter(bar: int, x: float, zc: float, rng: RandomNumberGenerator, demo: bool) -> Dictionary:
+static func _orbiter(bar: int, x: float, zc: float, rng: RandomNumberGenerator, demo: bool, sp: int) -> Dictionary:
 	return {"kind": "orbiter", "bar": bar, "x": x, "z": zc, "dir": 1 if rng.randi() % 2 == 0 else -1,
-		"phase": 0.0, "seed": bar, "beat": 0, "col": 0, "row": 0, "cycle": 0, "speed": Rules.orbiter_speed(), "demo": demo}
+		"phase": 0.0, "seed": bar, "beat": 0, "col": 0, "row": 0, "cycle": 0, "speed": sp, "demo": demo}
 
 
 # The classic pair: side by side, opposite spin, orbs opposed.
-static func _orbiter_pair(bar: int, zc: float, demo: bool) -> Array:
-	var sp := Rules.orbiter_speed()
+static func _orbiter_pair(bar: int, zc: float, demo: bool, sp: int) -> Array:
 	return [
 		{"kind": "orbiter", "bar": bar, "x": -4.0, "z": zc, "dir": 1, "phase": 0.0, "seed": bar,
 			"beat": 0, "col": 0, "row": 0, "cycle": 0, "speed": sp, "demo": demo},
@@ -671,9 +677,9 @@ static func _slammer(bar: int, x: float, z: float, cycle: int, demo: bool) -> Di
 
 # The note sits in the wall line where the gap is at mid-bar: you only
 # get it by threading the gap at that moment.
-static func _sweeper_note(spec: Dictionary, clock, bar: int) -> Dictionary:
+static func _sweeper_note(spec: Dictionary, clock, bar: int, knobs: Dictionary) -> Dictionary:
 	var t_mid: float = (clock.bar_start(bar) + clock.bar_end(bar)) * 0.5
-	var gx := HazardMath.sweeper_gap_x(spec, t_mid)
+	var gx := HazardMath.sweeper_gap_x(spec, t_mid, knobs)
 	return {"x": gx, "z": float(spec["z"]), "bar": bar}
 
 

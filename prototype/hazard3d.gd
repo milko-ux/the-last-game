@@ -13,12 +13,14 @@ const Mats := preload("res://prototype/flat_mats.gd")
 const HazardMath := preload("res://prototype/hazard_math.gd")
 
 var spec := {}
+var knobs := {}      # the knob dictionary of the lap / level this hazard belongs to
 var kind := ""
 var _boxes: Array = []
 
 
-func setup(s: Dictionary) -> void:
+func setup(s: Dictionary, k: Dictionary) -> void:
 	spec = s
+	knobs = k
 	kind = String(s["kind"])
 	position = Vector3(float(s["x"]), 0.0, float(s["z"]))
 	_build()
@@ -33,7 +35,7 @@ func _pose(_t: float) -> void:
 
 
 func update_state(t: float) -> void:
-	_boxes = HazardMath.boxes_at(spec, t)
+	_boxes = HazardMath.boxes_at(spec, t, knobs)
 	_pose(t)
 
 
@@ -55,7 +57,7 @@ func boxes() -> Array:
 
 # Boxes at a future time (used by the eye: "lethal within the next beat").
 func boxes_at(t: float) -> Array:
-	return HazardMath.boxes_at(spec, t)
+	return HazardMath.boxes_at(spec, t, knobs)
 
 
 func _box_mesh(size: Vector3, mat: Material) -> MeshInstance3D:
