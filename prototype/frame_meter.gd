@@ -140,7 +140,7 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	offset_left = -520.0
+	offset_left = -640.0
 	offset_right = -18.0
 	offset_top = 22.0
 	offset_bottom = 40.0
@@ -234,6 +234,9 @@ func _update_text() -> void:
 		n += 1
 	if n > 0:
 		text = "frame %.1f avg · %.1f worst     cpu %.1f avg · %.1f worst ms" % [sum / n, worst, cpu_sum / n, cpu_worst]
+		if BeatClock.endless and BeatClock.running():
+			# Audio vs clock (ms, - = audio behind) and how much has been slewed to follow it.
+			text += "     audio %+.0f (%+.0f)" % [BeatClock.audio_drift_ms(), BeatClock.drift_corrected_ms]
 	# Only when a step was added: laying out a wrapped label is not free.
 	if _load_label.visible and load_log.size() != _load_shown:
 		_load_shown = load_log.size()

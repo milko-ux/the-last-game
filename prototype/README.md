@@ -1,22 +1,26 @@
 # Phase R prototype — "an album you survive"
 
-## Where we are (2026-09-20, afternoon)
+## Where we are (2026-09-20, late evening)
 
-**Done, on `phase-r-prototype`:** Phase R (the gameplay model, levels 1-6 playable, bots, validator) · Phase A brief 1 creature · brief 2 world + colour pass · brief 3 motion · brief 2b materials · brief 4 props · **this pass (three commits): the dev frame meter, the "screen jumps" diagnosis + fixes, the monoliths rebuilt** — report right below.
+**The game is now ONE ENDLESS RUN** (Phase E brief 1, `PHASE_E_BRIEF_1_ENDLESS.md`): how far can you get. **Stage 1 (the run) is built, sections 1-6, one commit each; Stage 2 (menu + leaderboard) is NOT started — it waits for Milko's phone test.** Report right below.
 
-**ON HOLD (Milko, 2026-09-20): the level-1 orbiter tuning and the level-6 verdict cache.** The run structure is about to change to endless; `PHASE_E_BRIEF_1_ENDLESS.md` is in the repo root, not started. The old numbers, for the record: level-1 human bot median 6, 12/20 (82 of 100 deaths are orbiters, bars 46-54); level 6 needs 35 validation passes (64 s on the Mac) once per device.
+**What Milko should try on the phone** (`https://172.20.10.2:8443`, reload fully; the build opens straight into the run):
+- A first run as a new player: lap 0 is level 1 as you know it (no lives). Crossing into lap 1 (`STAGE 2`, ~2.5 min) makes you "graduated": from then on 3 lives, and lap 0 stops teaching.
+- **The seam by ear** at ~2:29 of music: bar 73 → bar 1. If it clicks or stumbles, `LOOP_END_BAR` moves to another 8-bar boundary and `tools/make_endless_audio.py <bar>` re-cuts the file.
+- Notes charge the ring right of the distance; full = a cyan bubble that takes one hit. `SHIELD_COST` 30.
+- Die three times as a graduated player: the end screen, RETRY (4 s run-up), MENU (= the dev level select, where ENDLESS RUN and the six old levels still are).
+- Top-right dev readout: `frame … cpu … audio ±N (±M)`. `?autoplay=1&live=1` on the URL = the bot plays and every lap is generated live: the web-build check I could not run from here.
 
-**What Milko should look at on the phone (the numbers can only come from there):**
-- Top-right corner: `frame X avg · Y worst ms` (last 2 seconds). 16.7 = a steady 60 fps. It shows while `Progress.UNLOCK_ALL` is true (or in a debug build) and disappears with that switch.
-- Does the picture still jump when the walls move? The downbeat camera nod + FOV punch are OFF now (they were the jump: see below). If it feels flat without them, `PUNCH` (`camera_rig.gd`) 0.02 and `NOD_DEG` (`motion.gd`) 1.5 bring them back, easing in over 80 ms instead of stepping.
-- The monoliths: carvings crisp, nothing stretched.
+**Open, Milko's calls:** `SHIELD_COST`; `reroll_passes` for bands 7+ (laps 6-9 clear 5-9 bars at 10 passes); the audio encoder (this Mac's ffmpeg has no libvorbis; the built-in one measured fine, a DAW export replaces the file 1:1); the human bot's blind spots at run bars 63 / 77 if a bot number is wanted before Stage 2.
 
-**LAN build:** `https://172.20.10.2:8443` (phone hotspot; accept the certificate once; `tools/serve.py tls build/phase-r` restarts it). Current export = this pass.
+**ON HOLD / superseded:** level-1 orbiter tuning (Milko called the pace right), the level-6 verdict cache (replaced by `levels/verdicts.json`).
 
-**Models in `assets/models/`:** all placed — `creature.glb` (the hero), and via their light copies in `assets/models/lod/`: `gate_pillar`, `sweeper_segment`, `slammer`, `orbiter_pillar`, `volley_emitter` (vertex colours from the bake), `building_tall` / `building_stacked` + their `_hi` copies (geometry only, procedural stone). Orbs and notes stay the shader spheres.
+**Still unmeasured from here:** anything on the phone — the load line, cpu headroom, live generation in a browser.
+
+**Models in `assets/models/`:** unchanged (creature; the five hazard props with vertex colours from the bake; the two buildings + `_hi` copies, geometry only).
 
 
-## Phase E report — brief 1, the endless run (Stage 1, in progress)
+## Phase E report — brief 1, the endless run (Stage 1 done, 2026-09-20)
 
 ### Section 1 — knobs per lap, not per game (done)
 Nothing reads "the current level's knobs" from a global any more. The knob dictionary (one row of `levels/curriculum.json`, `Rules.level(n)`) is an ARGUMENT everywhere: `Placement.build(clock, rerolls, knobs)`, `Fairness.validate(plan, clock, knobs)`, `Rules.plate_state(entry, col, row, t, k)`, every `Rules.*` knob accessor (`period_beats(k)`, `gate_gap(k)`, `sweep_gap(k)`, `player_speed(k)`, `window_depth(k)`, `reach_per_beat(k)`, `lives(k)`, …), every `HazardMath.*` function (`boxes_at(spec, t, k)` …). `BeatClock.period_beats` is gone: the period functions take the period (`period_index_at(t, pb)` …). A `field` carries the knobs it was built with (`field.knobs`), its hazards get them in `setup(spec, knobs)`, the death rules read `field.knobs`, the player reads its speed from the field it runs on, the camera gets its window in `configure(knobs)`, the bots read `test.knobs`. The plan itself is unchanged (the knobs travel beside it, not inside it), which is what makes the proof below possible. `Rules.LEVEL` survives only as the dev path's pick, read once in `track_test._ready`; the level select → one level path works as before.
@@ -67,7 +71,7 @@ Laps 0-5: 0 cleared (target ≤ 2). Laps 6-9 run out of their 10 passes; raising
 - **Nodes:** `field.gd` holds a rolling set of laps under run-wide bar numbers (the dev level is "one lap of 78 bars", built in one go). Lap k−1 is freed once the death line is 3 bars into lap k (monoliths with it); a later lap carries a hidden 12-unit lead-in slab that shows when the lap behind it goes, so a rewind to its bar-1 checkpoint never looks into a void. Hazards are posed only near the window now (`field.update_hazards`: −14 … +52 units) instead of every hazard of the level every frame.
 - **Window / camera between bands:** `track_test._window_depth_at` eases 2.5 → 2.2 bars over the new lap's first two bars; the camera distance follows (`rig.set_window_depth`).
 - **Entry:** the Phase R main scene is the run (`track_test.tscn`, `Rules.ENDLESS`); the level select is the dev tool (its ENDLESS RUN pill, or pick a level = the old path). Tools: `endless=1 [laps=N grad=1 start_lap=N]`.
-- **Validator bot (both variants so far through laps 0-2): 0 deaths, seams clean** — full acceptance run in the list below.
+- **Validator bot:** see the acceptance table below.
 
 ### Section 4 — lives and death (done)
 `rules.gd` untouched; `track_test.gd` is the referee. Graduated: `RUN_LIVES` 3 for the whole run; a death = lose one, the freeze, the song rewinds to the last checkpoint (what levels 2+ do); none left = the run is over. New player: lap 0 costs no lives (level 1's rules, 0.25 s freeze); they start at 3 on crossing into lap 1 (the same moment `Progress.graduated` is saved). RETRY: `RETRY_RUNUP_S` 4.0 — the song starts at 12.6 s instead of 8.0 s (`runs_this_session`, a static, so the first run of a session keeps the full run-up); z is measured from a fixed origin, so the course does not move. The band's own `lives` knob is ignored in the run. Every rewind logs `REWIND t=… lap=… bar=… audio=… checkpoint_bar=…`. Bots: no lives unless `lives=1`. Checked: a graduated bot that stands still dies three times (the two rewinds land at the start) and the run ends.
@@ -82,6 +86,19 @@ Laps 0-5: 0 cleared (target ≤ 2). Laps 6-9 run out of their 10 passes; raising
 
 ### Section 6 — end screen (done, minimal)
 `docs/screenshots/e-end-screen.png`: the distance big, `NEW BEST` when it is (else `BEST 1 240 m`), **RETRY** (big, cyan glass) and **MENU** (small). Drawn by `hud.gd` in the HUD's glass style over a dimmed, frozen world; the death line and the best line are hidden so nothing cuts across the buttons. RETRY = a new run with the 4 s run-up; MENU = the dev level select until Stage 2's menu exists; any key = retry. The run's summary goes to the log: `RUN OVER distance=… best=… new_best=… laps=… run_s=… deaths=… notes=… shields_used=…` (the numbers Stage 2's leaderboard entry needs). The share / roast screen is its own brief.
+
+### Stage 1 acceptance (2026-09-20, evening)
+| # | Item | Result |
+|---|---|---|
+| 1 | Layout hashes of levels 1-6 identical before / after | **Identical**, re-checked after every section and at the end (4db8f95b · 55a53537 · ac320116 · 5701d3f6 · 70ba1a40 · 489da92b), pass counts 1 / 3 / 3 / 7 / 8 / 35 unchanged. |
+| 2 | Validator bot: 0 deaths through laps 0-5, both lap-0 variants | **0 deaths, both variants, at `fps=60`** (15 min each, `run_s` 902). At the bots' usual 30 fps both runs had ONE identical death (run bar 202 = lap 2 bar 58, a sweeper): a 4 cm graze — the plan leaves 0.19 units to the wall's edge and a 30 fps bot was 0.23 off its tile at that frame; lap 2 played from its own start at 30 fps passes that bar, and at 60 fps the whole run is clean. The bot, not the lap; judge the validator bot at `fps=60`. |
+| 3 | Seam: `run_time` per-frame delta never negative, never over two frames' worth | Every seam of every run: **1.00-1.01 frames' worth at most, 0 negative steps** (30 fps: 33.0-33.9 ms; 60 fps: 16.5-16.8 ms; windowed 120 Hz: 8.26-8.36 ms). Milko judges the audio seam by ear. |
+| 4 | A death in the first bars of lap 1 rewinds to lap 1's bar-1 checkpoint, in sync | `kill_bar=75`: `DEATH … bar=75` → `REWIND t=163.558 lap=0 bar=72 audio=163.558 z_back=609.08 player=(0.00, 618.00) checkpoint_bar=73`: the song goes 2.0 s before the seam (the usual checkpoint lead), audio place = clock, the player stands on lap 1's start line + 1; the bot then crossed the seam again and played lap 1 into lap 2 with no further death. |
+| 5 | Live generation: no stall, worst frame under 25 ms while generating; times and cleared bars for laps 0-9 | **Native Mac, verdicts ignored (`frame_probe.gd -- endless=1 live=1 bars=147`):** lap 0 validated behind the loading bar (1 pass, 1.8 s); lap 1 live: 4 passes, 0 cleared, 6.7 s of CPU spread over 25.9 s; lap 2 live: 4 passes, 0 cleared, 3.6 s over 14.1 s; no stall, no death, **no frame over 25 ms while either lap was generating**. (Scattered 25-110 ms frames appear in every windowed run on this Mac, with or without generation, at different places each time: background load, not the game.) Times and cleared bars for laps 0-9: the table in section 3 (laps 0-5: 0 cleared; 6-9: 9 / 7 / 0 / 5). **NOT done: the same on the Mac WEB build** — the Chrome extension would not connect. It is one URL for Milko instead: `https://172.20.10.2:8443/?autoplay=1&live=1` (dev switches, `track_test._dev_url_switches`): the validator bot plays, stored verdicts are ignored, and the frame / cpu readout shows whether generating costs frames in the browser. |
+| 6 | Human bot, graduated, 3 lives, 20 seeds — report only | **Median distance 635 m, median run 167 s** (min 567 m / 152 s, max 636 m / 167 s); 16 of 20 reached lap 1. Killers: orbiter 29, slammer 19, gate 6, volley 4, back edge 2. The deaths pile up on the same bars for every seed (run bar 63: 20 deaths, bar 77: 19, then 73, 48, 52, 70, 74) — an identical death after every rewind is the bot's blind spot, not a verdict on the lap. One shield was used in 20 runs (the bot does not go for notes). No tuning done. |
+| 7 | Export, "Where we are", stop | Done: `build/phase-r`, this file. **Stage 2 not started.** |
+
+Found and fixed on the way: **audio drift** — on real audio the music fell 15 ms behind the clock by the first seam and 61 ms by the second (slow frames underrun the audio buffer). `BeatClock._follow_audio` now slews the clock toward the audio, low-passed, at most 2 ms per second, and only by how much the gap has CHANGED since the run / the last seek settled (the constant offset `SYNC_OFFSET_S` was tuned on stays). Measured after: +6 ms against a +14.5 ms baseline at the first seam, 37 ms slewed on the way. The dev readout shows it in a run: `audio −12 (−30)` = gap now (total slewed).
 
 ## Report — frame meter, the "screen jumps", the monoliths (2026-09-20)
 

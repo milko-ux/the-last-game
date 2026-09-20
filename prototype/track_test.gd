@@ -221,6 +221,7 @@ func _ready() -> void:
 # generated in the LOADING phase (a shipped or cached verdict makes that a
 # few milliseconds; without one it is validated there, behind the bar).
 func _ready_endless() -> void:
+	_dev_url_switches()
 	BeatClock.set_endless(true)
 	var stream: AudioStream = load(BeatClock.ENDLESS_MUSIC)
 	stream.loop = true
@@ -248,6 +249,37 @@ func _ready_endless() -> void:
 	print("ENDLESS season %d, start lap %d (%s), run %d of the session, run-up %.1f s, lives %s, %s" % [LapGen.SEASON_SEED, Rules.START_LAP,
 		String(knobs.get("variant", "")), runs_this_session, BeatClock.loop_start_t - BeatClock.start_offset,
 		str(lives) if _lives_on else "off", Rules.knobs_line(knobs)])
+
+
+# DEV ONLY (same switch as the frame meter), web build only: URL switches
+# for measuring the web build without anyone playing it.
+#   ?live=1       ignore shipped / cached verdicts: every lap is generated
+#                 and validated live, inside the frame budget
+#   ?autoplay=1   the validator bot (tools/autoplay.gd) drives, and starts
+#                 the run without a tap (no sound: the browser wants a tap)
+#   ?grad=1       play as a graduated player (nothing is saved)
+var _dev_autoplay := false
+
+func _dev_url_switches() -> void:
+	if not OS.has_feature("web") or not FrameMeter.enabled():
+		return
+	var q := str(JavaScriptBridge.eval("window.location.search"))
+	if q.contains("live=1"):
+		LapGen.ignore_verdicts = true
+	if q.contains("grad=1"):
+		Progress.save_enabled = false
+		Progress.graduated = true
+	if q.contains("autoplay=1"):
+		Progress.save_enabled = false
+		_dev_autoplay = true
+		var ap: Object = load("res://tools/autoplay.gd").new()
+		ap.mode = "validator"
+		ap.Rules = Rules
+		ap.HazardMath = HazardMath
+		ap.attach_endless(self, BeatClock)
+		bot = ap
+		Rules.LIVES_OVERRIDE = 0
+		print("DEV autoplay=1 live=%s" % LapGen.ignore_verdicts)
 
 
 # Every material is drawn once before the run so no shader compiles in
@@ -330,7 +362,7 @@ func _end_loading() -> void:
 		_bar_back.queue_free()
 	state = State.WAIT
 	status.text = "TAP TO START"
-	if _tap_queued:
+	if _tap_queued or _dev_autoplay:
 		state = State.STARTING
 		_start_delay = START_DELAY_S
 		status.text = ""

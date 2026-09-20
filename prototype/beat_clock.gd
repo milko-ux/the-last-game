@@ -90,6 +90,27 @@ const SYNC_OFFSET_S := 0.030
 const CLOCK_CORRECT_TAU_S := 0.5
 const CLOCK_SNAP_S := 0.05
 
+# AUDIO DRIFT (endless runs). The clock is the system clock; the music is
+# the audio device. Over minutes they part: measured on the Mac
+# 2026-09-20, the audio was 15 ms behind the clock at the first seam and
+# 61 ms at the second (an audio buffer that underruns on a slow frame
+# falls behind for good). A level never noticed (3 minutes, and every
+# death re-seeks); a long deathless run would. So the clock is slewed
+# toward the audio, slowly and only by how much the gap has CHANGED since
+# the run (or the last seek) settled: whatever constant offset the device
+# reports is left alone, because SYNC_OFFSET_S was tuned by ear on top of
+# it. The measurement is low-passed (the web reports the playback position
+# in chunks) and the slew is capped, so it can never be felt as a jump.
+const DRIFT_SETTLE_S := 3.0          # after a start / seek: measure the baseline
+const DRIFT_FILTER_TAU_S := 4.0
+const DRIFT_DEADBAND_S := 0.008
+const DRIFT_MAX_SLEW := 0.002        # seconds of correction per second
+const DRIFT_IGNORE_S := 0.25         # a gap this big is a glitch, not drift
+var _drift_lp := 0.0
+var _drift_base := 0.0
+var _drift_age := 0.0
+var drift_corrected_ms := 0.0        # total slewed this run (dev read-out)
+
 # One bar of music is this many world units of field. Everything spatial
 # (tile size, window depth, camera distance) was chosen around it.
 const BAR_UNITS := 8.0
@@ -288,6 +309,8 @@ func start(stream_player: AudioStreamPlayer) -> void:
 	_paused = false
 	_time_begin = Time.get_ticks_usec()
 	_time_delay = AudioServer.get_time_to_next_mix() + AudioServer.get_output_latency()
+	_drift_age = 0.0
+	drift_corrected_ms = 0.0
 	_player.play(local_t(start_offset))
 	_running = true
 	_resync_indices()
@@ -303,6 +326,7 @@ func seek(t: float) -> void:
 	_paused = false
 	_time_begin = Time.get_ticks_usec()
 	_time_delay = AudioServer.get_time_to_next_mix() + AudioServer.get_output_latency()
+	_drift_age = 0.0
 	# Across the seam too: the audio goes to the place INSIDE the loop, the
 	# clock (and with it the lap) to the run time asked for.
 	if _player.playing and not _player.stream_paused:
@@ -598,6 +622,8 @@ func _process(delta: float) -> void:
 	if not _running or _paused:
 		return
 	var before := _smooth_t
+	if endless:
+		_follow_audio(delta)
 	_advance(delta)
 	if endless:
 		_watch_seam(_smooth_t - before, delta)
@@ -631,8 +657,9 @@ func _watch_seam(step: float, delta: float) -> void:
 		if step < 0.0:
 			_seam_negative += 1
 	elif _seam_frames > 0:
-		print("SEAM into lap %d: %d frames, run_time step min %.2f ms max %.2f ms (at most %.2f frames' worth), negative steps %d, audio drift %+.1f ms" % [
-			current_lap(), _seam_frames, _seam_min * 1000.0, _seam_max * 1000.0, _seam_ratio, _seam_negative, audio_drift_ms()])
+		print("SEAM into lap %d: %d frames, run_time step min %.2f ms max %.2f ms (at most %.2f frames' worth), negative steps %d, audio drift %+.1f ms (baseline %+.1f, corrected so far %+.1f)" % [
+			current_lap(), _seam_frames, _seam_min * 1000.0, _seam_max * 1000.0, _seam_ratio, _seam_negative, audio_drift_ms(),
+			_drift_base * 1000.0, drift_corrected_ms])
 		_seam_frames = 0
 		_seam_min = INF
 		_seam_max = -INF
@@ -642,3 +669,30 @@ func _watch_seam(step: float, delta: float) -> void:
 	if lap != _prev_lap:
 		_prev_lap = lap
 		lap_changed.emit(lap)
+
+
+# See AUDIO DRIFT at the top. Moves the system-clock reference (which the
+# smoothed clock then follows on its own), never the smoothed time itself.
+func _follow_audio(delta: float) -> void:
+	if _player == null or not _player.playing or _raw_time() <= _base_t:
+		return
+	if AudioServer.get_driver_name() == "Dummy":
+		return                       # the headless tools: no audio device, nothing to follow
+	var d := audio_drift_ms() / 1000.0
+	if absf(d) > DRIFT_IGNORE_S:
+		return
+	_drift_age += delta
+	if _drift_age < 0.5:
+		_drift_lp = d
+		return
+	_drift_lp += (d - _drift_lp) * (1.0 - exp(-delta / DRIFT_FILTER_TAU_S))
+	if _drift_age < DRIFT_SETTLE_S:
+		_drift_base = _drift_lp
+		return
+	var gap := _drift_lp - _drift_base
+	if absf(gap) < DRIFT_DEADBAND_S:
+		return
+	var step := clampf(gap, -DRIFT_MAX_SLEW * delta, DRIFT_MAX_SLEW * delta)
+	_base_t += step                  # audio ahead (gap > 0): the clock moves on; behind: it waits
+	_drift_lp -= step
+	drift_corrected_ms += step * 1000.0

@@ -37,6 +37,9 @@ var endless := false          # endless=1: the endless run instead (laps=N: stop
 var laps := 1
 var grad := false
 var start_lap := 0
+var fps := 30                 # fps=60: the rate the game really runs at (30 = cheap enough for 4 bots side by side)
+var kill_bar := 0             # kill_bar=N: stand still from run bar N until ONE death (the rewind test), then carry on
+var _kill_deaths := -1
 var with_lives := false      # lives=1: the run's own lives (3 for a graduated player) instead of none
 # Endless: one validator path per lap. The game trusts shipped verdicts
 # and keeps no path, so the bot validates each lap itself, in slices of
@@ -90,6 +93,13 @@ func _process(_delta: float) -> bool:
 	if test.deaths != last_deaths:
 		last_deaths = test.deaths
 		death_bars.append(clock.current_bar())
+		if mode == "validator":
+			# The plan around the death: where the bot was meant to be, and when.
+			var i: int = clock.beat_at(clock.hazard_time()) - first_beat
+			for k in range(maxi(0, i - 2), mini(path.size(), i + 2)):
+				if path[k] != null:
+					print("  PLAN beat %+d: pos=(%.2f, %.2f) leave=%.2f%s" % [k - i, path[k]["pos"].x, path[k]["pos"].y, float(path[k]["leave"]), "  <- this beat" if k == i else ""])
+			print("  BOT at (%.2f, %.2f), beat phase %.2f, fps %d" % [test.player.position.x, test.player.position.z, clock.beat_phase_at(clock.hazard_time()), int(Engine.get_frames_per_second())])
 	if test.state == test.State.RUN and clock.song_time() > clock.start_offset + 3.0:
 		min_fps = mini(min_fps, int(Engine.get_frames_per_second()))
 	var done: bool = clock.current_bar() > max_bar or test.state == test.State.WON or test.state == test.State.GAMEOVER \
@@ -136,8 +146,12 @@ func _setup() -> void:
 			start_lap = int(kv[1])
 		if kv.size() == 2 and kv[0] == "lives":
 			with_lives = kv[1] == "1"
+		if kv.size() == 2 and kv[0] == "fps":
+			fps = int(kv[1])
+		if kv.size() == 2 and kv[0] == "kill_bar":
+			kill_bar = int(kv[1])
 	rng.seed = 424242 + seed * 7919
-	Engine.max_fps = 30
+	Engine.max_fps = fps
 	Rules = load("res://prototype/rules.gd")
 	Rules.ENDLESS = endless
 	Rules.START_LAP = start_lap
@@ -184,6 +198,11 @@ func _setup() -> void:
 func move_dir(scene: Node) -> Vector2:
 	if endless:
 		_tick_lap_paths()
+	if kill_bar > 0 and clock.current_bar() >= kill_bar:
+		if _kill_deaths < 0:
+			_kill_deaths = test.deaths
+		if test.deaths == _kill_deaths:
+			return Vector2.ZERO
 	var target: Variant
 	match mode:
 		"naive":
@@ -234,7 +253,13 @@ func _finish_lap_paths() -> void:
 # Endless: every lap the field holds gets a path, a slice per frame.
 func _tick_lap_paths() -> void:
 	for lap in test.field.laps:
-		if not _lap_paths.has(lap) and not _lap_jobs.has(lap) and test.field.lap_built(lap):
+		if _lap_paths.has(lap) or _lap_jobs.has(lap):
+			continue
+		var l = test.field.laps[lap]
+		# A lap the game validated live carries its path: no need to walk it again.
+		if not l.fairness.get("path", []).is_empty():
+			_lap_paths[lap] = {"path": l.fairness["path"], "first_beat": int(l.first_beat), "ok": true}
+		elif test.field.lap_built(lap):
 			_begin_lap_path(lap)
 	for lap in _lap_jobs:
 		_Fairness.step(_lap_jobs[lap], BOT_VALIDATE_USEC)
