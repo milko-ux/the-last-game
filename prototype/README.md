@@ -1,18 +1,54 @@
 # Phase R prototype — "an album you survive"
 
-## Where we are (2026-09-20, 01:40)
+## Where we are (2026-09-20, afternoon)
 
-**Done, on `phase-r-prototype`:** Phase R (the gameplay model, levels 1-6 playable, bots, validator) · Phase A brief 1 creature · brief 2 world + colour pass · brief 3 motion · brief 2b materials (procedural stone / concrete / hot glass / gloss, fog, one beatmap scaled by `song_tempo`, pace: tempo 1.0/1.05/1.10, player 2.2/2.3x) · seams as dark grooves · window depth per level (2.5 bars on level 1, 2.2 after; camera 28/26) · level 6 validates with `reroll_passes` 40.
+**Done, on `phase-r-prototype`:** Phase R (the gameplay model, levels 1-6 playable, bots, validator) · Phase A brief 1 creature · brief 2 world + colour pass · brief 3 motion · brief 2b materials · brief 4 props · **this pass (three commits): the dev frame meter, the "screen jumps" diagnosis + fixes, the monoliths rebuilt** — report right below.
 
-**Asked for, not done yet:**
-- Brief 4 (props): done — validator 0 deaths on 1-5 with the models in; see the report below.
-- Level-1 human bot at the current pace (2.5-bar window): validator 0 deaths on 1-5; human bot **median 6, 12/20 — FAIL**, 82 of 100 deaths are orbiters (bars 46-54). Tempo is off the table (Milko); the lever that fits the data is the orbiter wave on level 1 (fewer orbiters, or `orbiter_pairs`/density there) — not applied, Milko's call.
-- Level 6 first-play cost: its layout takes 35 validation passes (64 s on the Mac, minutes on a phone) once per device. Shipping the found re-rolls with the game (`levels/verdicts.json`) would remove that — offered, not started.
-- Phone frame time has never been measured from here; every brief's "within 1 ms" is unverified.
+**ON HOLD (Milko, 2026-09-20): the level-1 orbiter tuning and the level-6 verdict cache.** The run structure is about to change to endless; `PHASE_E_BRIEF_1_ENDLESS.md` is in the repo root, not started. The old numbers, for the record: level-1 human bot median 6, 12/20 (82 of 100 deaths are orbiters, bars 46-54); level 6 needs 35 validation passes (64 s on the Mac) once per device.
 
-**LAN build:** `https://172.20.10.2:8443` (phone hotspot; accept the certificate once; `tools/serve.py tls build/phase-r` restarts it). Current export = brief 4.
+**What Milko should look at on the phone (the numbers can only come from there):**
+- Top-right corner: `frame X avg · Y worst ms` (last 2 seconds). 16.7 = a steady 60 fps. It shows while `Progress.UNLOCK_ALL` is true (or in a debug build) and disappears with that switch.
+- Does the picture still jump when the walls move? The downbeat camera nod + FOV punch are OFF now (they were the jump: see below). If it feels flat without them, `PUNCH` (`camera_rig.gd`) 0.02 and `NOD_DEG` (`motion.gd`) 1.5 bring them back, easing in over 80 ms instead of stepping.
+- The monoliths: carvings crisp, nothing stretched.
 
-**Models in `assets/models/`:** all placed — `creature.glb` (the hero), and via their light copies in `assets/models/lod/`: `gate_pillar`, `sweeper_segment`, `slammer`, `orbiter_pillar`, `volley_emitter`, `building_tall`, `building_stacked` (brief 4). Orbs and notes stay the shader spheres.
+**LAN build:** `https://172.20.10.2:8443` (phone hotspot; accept the certificate once; `tools/serve.py tls build/phase-r` restarts it). Current export = this pass.
+
+**Models in `assets/models/`:** all placed — `creature.glb` (the hero), and via their light copies in `assets/models/lod/`: `gate_pillar`, `sweeper_segment`, `slammer`, `orbiter_pillar`, `volley_emitter` (vertex colours from the bake), `building_tall` / `building_stacked` + their `_hi` copies (geometry only, procedural stone). Orbs and notes stay the shader spheres.
+
+
+## Report — frame meter, the "screen jumps", the monoliths (2026-09-20)
+
+**`rules.gd`, `hazard_math.gd`, `fairness.gd`, `placement.gd` untouched.** One thing under the rules did change: the clock they read is smoothed (below). Validator bot after it: **0 deaths, goal reached on levels 1, 2, 3, 4, 5** (one level-5 run died once at bar 2 while the Mac was rendering screenshots next to it, 27 fps; alone it passes — the known starved-bot pattern).
+
+### 1. Frame meter (`prototype/frame_meter.gd`, `FrameMeter`)
+Top-right: average and worst frame ms over the last 2 s. On in debug builds and while `Progress.UNLOCK_ALL`; never in the headless tools; in a release with the switch off the node is never created and every hook is one static bool test. Cost when on: one clock read + one array write per frame, text rebuilt 4x/s. Any frame over 25 ms prints
+`FRAME 102.2 ms  bar=0 beat=2 t=15.53  events=[pickup burst]`
+— the events are whatever noted itself that frame: beat / downbeat, gate jump, volley fire / warning line, material swaps, tile repaints, monolith detail swaps, killer flash, pickup burst, checkpoint, death, rewind (song seek), progress save; "(off-screen)" marks hazards outside the view.
+
+### 2. The "screen jumps" — what was true
+Measured with the new `tools/frame_probe.gd` (the run scene with the validator bot, like `shot.gd`; `--rendering-method gl_compatibility` = the web renderer; shader cache moved away first, because a web page has none). Level 1, bars 1-22:
+
+| Suspect | Verdict | Evidence |
+|---|---|---|
+| a. shader compile on first draw | **TRUE** | ~100 ms frames at the first pickup burst (102-117 ms), the first checkpoint (97 ms: first flat-shader material), and two first-appearances (98-108 ms). 10 frames over 25 ms mid-run. |
+| b. clock stepping | **the named cause false, a cousin true** | nothing reads `get_playback_position()`. But `song_time()` read the system clock at whatever moment the script ran: its per-frame step differed from the engine's frame delta by **3.46 ms median, 6.7 ms p99, 12 ms worst** — everything on screen is positioned from it, so the whole picture trembled along the scroll. |
+| c. camera | **kick / hit-stop: false. Downbeat nod + punch: THE JUMP** | `kick()` is only called from `on_death`. But the brief-3 nod (1.5°) and the 2 % FOV punch went to full strength in ONE frame: a point fixed to the camera rig moved **18.7 px (at 1200 px wide, ~37 px on a phone) on 22 of 22 downbeats and on no other frame** — the frame the gates jump and the volleys fire. The camera follows `z_at(song_time)`, so it inherited (b) and nothing else. |
+| d. spawn spikes | **false** | nothing is instantiated after `field.build()`. One-off: on the bar-1 downbeat every wall in the level swaps material at once (23 gates, 10 sweepers, 16 slammers): ~2 ms on the Mac. Left alone. |
+
+**Fixed (only those):** (a) `prototype/prewarm.gd` draws every real mesh + material pair, and invisible copies of both particle bursts, at 1/1000 scale behind TAP TO START, then frees itself after 8 frames. (b) `BeatClock` advances by frame delta and is pulled toward the system clock (`CLOCK_CORRECT_TAU_S` 0.5, hard snap beyond `CLOCK_SNAP_S` 50 ms); `song_time()` is constant within a frame. (c) `PUNCH` and `NOD_DEG` are 0; if re-enabled they ease in over `BEAT_ATTACK_S` 80 ms.
+
+**Before → after (same probe, cold cache, Mac):** frames over 25 ms mid-run **10 → 0**; worst mid-run frame **117.7 → under 25 ms** (ring worst 15.3); camera steps over 1.5 px **22 → 0**; clock step vs frame delta **3.46 → 0.04 ms** median. The load frame got longer (845 → ~1500 ms) — that is the compile moving behind TAP TO START, where it belongs. **Phone numbers: not measured from here; read them off the meter.**
+
+Leads, not touched: every hazard in the level is posed every frame, on screen or not (`track_test._update_world`) — if the phone's AVERAGE is high, that is the first thing to cut. `Progress.record_best` writes the save file every 2 s while setting a new best (shows as `progress save` in a FRAME line if it ever costs).
+
+### 3. Monoliths
+- **Were the carvings geometry? Yes** — an untextured render of both source GLBs shows every symbol and the recessed circle; nothing was invented. At the old 1.5k triangles they were mush; at 6k they read.
+- **Uniform scale:** one number per monolith (height / model height). The per-axis stretch and the shader taper are gone. Tall 14-40 high, stacked 14-28, far huge ones 44-64 (tall only). 1-2 per side per bar (was 1-3).
+- **Material:** no colour from the model (the vertex colours were a blurred copy of the AI bake). `Props.building()` is procedural stone from world position: triplanar fine + coarse grain, formwork bands, lit per facet from derivative normals so carved edges are hard. `WorldPalette.BUILDING_STONE` / `_FAR`.
+- **Detail:** `building_*_hi` (6000 triangles) within -6..+18 units of the window, `building_*` (1500 / 1800) beyond; one `MeshInstance3D` each (289 on level 1, ~26 shown, 6-9 detailed).
+- **Fog:** the z fade, plus fog by |x| (16 → 60 units, up to 85 %) and below the field (6 → 30, up to 90 %).
+- **Triangles in frame (whole scene):** bar 1 **76 852 → 145 234**, bar 9 **64 290 → 119 466** (under brief 4's 150k); draw calls 308 → 326, 324 → 342.
+- **Screenshots (web renderer):** `docs/screenshots/a5-monoliths-before-bar1.png` / `after-bar1.png`, `-before-bar9.png` / `-after-bar9.png`.
 
 
 ## Phase A report — brief 4, the props (2026-09-20)
@@ -355,6 +391,9 @@ dominant band. Checkpoints sit on the first breather bar of a section.
 | `../tools/plan_stats.gd` | generate + validate levels headlessly in seconds: `godot --headless --path . -s tools/plan_stats.gd -- levels=1,2,3` (`PLAN_BARS=1` prints every bar, `FAIR_DEBUG=1` explains a fairness failure) |
 | `../tools/shot.gd` | framing screenshot: `godot --path . --resolution 2400x1080 -s tools/shot.gd -- out=docs/screenshots/x.png bar=1 level=1` (or `scene=select`) |
 | `flat_mats.gd` | the handful of unlit materials |
+| `frame_meter.gd` | dev-only frame-time readout + the FRAME log line (`FrameMeter.note()`) |
+| `prewarm.gd` | draws every material once behind TAP TO START so no shader compiles mid-run |
+| `../tools/frame_probe.gd` | measures hitches, camera steps and clock evenness with the validator bot: `godot --path . --resolution 1200x540 --rendering-method gl_compatibility -s tools/frame_probe.gd -- level=1 bars=22` |
 
 ## Tuning knobs
 
