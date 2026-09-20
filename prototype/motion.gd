@@ -25,6 +25,7 @@ extends Node
 # ============================================================
 
 const Mats := preload("res://prototype/flat_mats.gd")
+const Rig := preload("res://prototype/camera_rig.gd")
 
 # --- 1. The world on the beat ---------------------------------------------
 const RIM_DOWNBEAT := 0.40          # rim brightens this much on a downbeat...
@@ -59,7 +60,7 @@ const GOAL_WIDEN_UNITS := 1.5       # each gate post moves outward this much ove
 const BUILD_AHEAD := Mats.FADE_AHEAD_START   # tiles rise as they enter fade range
 const PROGRESS_FILL_S := 1.0
 # --- 6. Camera --------------------------------------------------------------------
-const NOD_DEG := 1.5
+const NOD_DEG := 0.0                # was 1.5: off, see camera_rig.gd's header (the "screen jumps")
 
 var frozen := false
 var vis_time := 0.0                 # song time as the visuals see it (holds during hit-stop)
@@ -83,7 +84,7 @@ var _combo_break_t := 99.0
 var _combo_broken := false
 var _progress_t := 99.0
 var _build_front := -1e9
-var _nod := 0.0
+var _nod_age := 99.0
 var _last_delta := 0.0
 
 var _burst: CPUParticles3D
@@ -119,7 +120,7 @@ func _on_downbeat(bar: int) -> void:
 		return
 	_rim = 1.0
 	_seam = 1.0
-	_nod = 1.0
+	_nod_age = 0.0
 	if _amber_hold_until > BeatClock.song_time():
 		_amber = 1.0
 
@@ -205,7 +206,7 @@ func _process(delta: float) -> void:
 		_rim = maxf(0.0, _rim - delta / (beat * RIM_DECAY_BEATS))
 		_seam = maxf(0.0, _seam - delta / (beat * SEAM_DECAY_BEATS))
 		_armed = maxf(0.0, _armed - delta / (beat * ARMED_DECAY_BEATS))
-		_nod = maxf(0.0, _nod - delta / (beat * 4.0))
+		_nod_age += delta
 		if _amber_hold_until > BeatClock.song_time():
 			_amber = maxf(_amber, 0.6)
 		_amber = maxf(0.0, _amber - delta / beat)
@@ -281,10 +282,10 @@ func animate_notes(notes: Array, player_pos: Vector3) -> void:
 		nearest.scale = Vector3.ONE * (1.0 + NOTE_NEAR_PULSE * p * p)
 
 
-# The camera's nod: 1.5 degrees forward on the downbeat, decaying over
-# the bar (section 6). Radians, for the rig.
+# The camera's nod: NOD_DEG forward on the downbeat, easing in and then
+# decaying over the bar (section 6). Radians, for the rig.
 func nod() -> float:
-	return deg_to_rad(NOD_DEG) * _nod
+	return deg_to_rad(NOD_DEG) * Rig.beat_envelope(_nod_age, BeatClock.beat_interval * 4.0)
 
 
 # ------------------------------------------------------------
@@ -351,6 +352,11 @@ func _build_burst() -> void:
 	_burst.mesh = ball
 	_burst.top_level = true
 	add_child(_burst)
+
+
+# The pickup emitter, for prewarm.gd.
+func burst() -> CPUParticles3D:
+	return _burst
 
 
 # 1 at t = 0, settling to 0 over `dur` with one bounce.

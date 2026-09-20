@@ -15,6 +15,17 @@ extends Node
 # Sync method is Godot's recommended one for a few-minute track:
 # system clock + latency compensation (never the stream's own
 # playback position, which only updates per audio chunk).
+#
+# SMOOTHED (2026-09-20). song_time() is NOT the raw system clock: it
+# advances by the engine's frame delta once per frame and is pulled
+# gently toward the system-clock time (CLOCK_CORRECT_TAU_S), snapping
+# only if it is ever more than CLOCK_SNAP_S off. Why: the raw clock is
+# read at whatever moment the script happens to run inside the frame,
+# and that moment wanders (measured with tools/frame_probe.gd: the
+# raw clock's step differed from the frame delta by 3.5 ms median, 12
+# ms worst). Everything on screen is positioned from this clock, so
+# that wander was the whole picture trembling along the scroll. The
+# value is also constant within a frame now: every reader agrees.
 # ============================================================
 
 signal beat(index: int)
@@ -35,6 +46,14 @@ var beatmap_path := BEATMAP_PATH   # (read by the verdict cache key)
 # than the engine believes). Positive = hazards later, negative = earlier.
 # The single knob Milko tunes if things feel late: try 0.030 -> 0.060.
 const SYNC_OFFSET_S := 0.030
+
+# The smoothed clock closes this share of its distance to the system
+# clock per CLOCK_CORRECT_TAU_S (an exponential pull: gentle enough to
+# hide per-frame wander, quick enough to follow real drift), and gives
+# up and snaps if it is ever further than CLOCK_SNAP_S away (a long
+# hitch, a backgrounded tab).
+const CLOCK_CORRECT_TAU_S := 0.5
+const CLOCK_SNAP_S := 0.05
 
 # One bar of music is this many world units of field. Everything spatial
 # (tile size, window depth, camera distance) was chosen around it.
@@ -67,6 +86,7 @@ var _base_t := 0.0
 var _running := false
 var _paused := false
 var _paused_t := 0.0
+var _smooth_t := 0.0
 var _prev_beat := -1
 var _prev_bar := 0
 var _prev_section := 0
@@ -146,6 +166,7 @@ func _load() -> void:
 func start(stream_player: AudioStreamPlayer) -> void:
 	_player = stream_player
 	_base_t = start_offset
+	_smooth_t = start_offset
 	_paused = false
 	_time_begin = Time.get_ticks_usec()
 	_time_delay = AudioServer.get_time_to_next_mix() + AudioServer.get_output_latency()
@@ -160,6 +181,7 @@ func seek(t: float) -> void:
 	if _player == null:
 		return
 	_base_t = t
+	_smooth_t = t
 	_paused = false
 	_time_begin = Time.get_ticks_usec()
 	_time_delay = AudioServer.get_time_to_next_mix() + AudioServer.get_output_latency()
@@ -199,8 +221,27 @@ func song_time() -> float:
 		return start_offset
 	if _paused:
 		return _paused_t
+	return _smooth_t
+
+
+# The system clock with latency compensation: what the smoothed clock
+# follows. Nothing positions itself from this directly.
+func _raw_time() -> float:
 	var t := (Time.get_ticks_usec() - _time_begin) / 1_000_000.0
 	return _base_t + max(0.0, t - _time_delay)
+
+
+func _advance(delta: float) -> void:
+	var raw := _raw_time()
+	if raw <= _base_t:
+		_smooth_t = raw          # still waiting out the output latency
+		return
+	_smooth_t += delta
+	var err := raw - _smooth_t
+	if absf(err) > CLOCK_SNAP_S:
+		_smooth_t = raw
+	else:
+		_smooth_t += err * (1.0 - exp(-delta / CLOCK_CORRECT_TAU_S))
 
 
 # The clock hazards read. Same clock, shifted by the sync offset.
@@ -411,9 +452,10 @@ func _resync_indices() -> void:
 	_prev_section = section_of_bar(_prev_bar) if _prev_bar > 0 else 0
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	if not _running or _paused:
 		return
+	_advance(delta)
 	var b := current_beat()
 	if b != _prev_beat:
 		if b > _prev_beat:

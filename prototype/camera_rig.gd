@@ -10,8 +10,17 @@ extends Node3D
 # 4 section 1): the near edge runs diagonally across the lower part
 # of the screen, not horizontally.
 #
-# z is time, so the rig never lags. The only "juice" is a 2 % FOV
-# punch on each downbeat, there so Milko can feel the beat clock.
+# z is time, so the rig never lags.
+#
+# DOWNBEAT PUNCH AND NOD: OFF since 2026-09-20 (PUNCH here, NOD_DEG in
+# motion.gd). Both used to jump to full strength in ONE frame on every
+# downbeat, which is the frame the walls move and the volleys fire:
+# measured with tools/frame_probe.gd, the whole picture moved 18.7 px
+# (at 1200 px wide; ~37 px on a phone) in a single frame on 22 of 22
+# downbeats and on no other frame. That is the "screen jumps when the
+# hazards move" report. To bring them back set PUNCH to 0.02 and
+# NOD_DEG to 1.5: they now ease in over BEAT_ATTACK_S instead of
+# stepping. The death kick is separate and fires only on a death.
 # ============================================================
 
 const Rules := preload("res://prototype/rules.gd")
@@ -40,11 +49,12 @@ const FOV := 55.0
 # relative). true: joystick up = away from the camera.
 const INPUT_CAMERA_RELATIVE := false
 
-const PUNCH := 0.02
+const PUNCH := 0.0            # was 0.02; see the header
+const BEAT_ATTACK_S := 0.08   # the punch and the nod ease in over this, never a one-frame step
 const SHAKE_S := 0.35
 const SHAKE_AMOUNT := 0.15
 
-var _punch := 0.0
+var _punch_age := 99.0
 var _shake_t := 0.0
 var window_back := 0.0
 # Brief 3: the death kick (a directional, decaying shake plus an outward
@@ -158,7 +168,15 @@ func _build_backdrop() -> void:
 
 
 func _on_downbeat(_bar: int) -> void:
-	_punch = 1.0
+	_punch_age = 0.0
+
+
+# 0 -> 1 over BEAT_ATTACK_S, then back to 0 by `decay_s`: a beat accent
+# that moves the picture instead of teleporting it.
+static func beat_envelope(age: float, decay_s: float) -> float:
+	if age >= decay_s:
+		return 0.0
+	return smoothstep(0.0, BEAT_ATTACK_S, age) * (1.0 - age / decay_s)
 
 
 func shake() -> void:
@@ -205,13 +223,13 @@ static func screen_to_world_dir(v: Vector2) -> Vector2:
 
 
 func _process(delta: float) -> void:
-	if _punch > 0.0:
-		_punch = maxf(0.0, _punch - delta / BeatClock.beat_interval)
+	_punch_age += delta
+	var punch := beat_envelope(_punch_age, BeatClock.beat_interval)
 	var kick_u := 0.0
 	if _kick_t > 0.0:
 		_kick_t -= delta
 		kick_u = maxf(_kick_t, 0.0) / _kick_s
-	cam.fov = FOV * (1.0 + PUNCH * _punch + _kick_fov * kick_u)
+	cam.fov = FOV * (1.0 + PUNCH * punch + _kick_fov * kick_u)
 
 	var off := Vector3.ZERO
 	if _shake_t > 0.0:

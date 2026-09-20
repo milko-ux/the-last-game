@@ -278,6 +278,11 @@ func set_look_target(target: Variant) -> void:
 	_look_target = target
 
 
+# The death emitter, for prewarm.gd.
+func burst() -> CPUParticles3D:
+	return _burst
+
+
 func play_death(freeze_s: float) -> void:
 	mode = Mode.DYING
 	_mode_t = 0.0

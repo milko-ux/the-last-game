@@ -116,6 +116,12 @@ func _ready() -> void:
 	_update_world(BeatClock.hazard_time(), 0.0)
 	rig.set_window(0.0)
 	motion.set_window(0.0)
+	# Every material drawn once behind TAP TO START, so no shader is
+	# compiled mid-run (see prewarm.gd).
+	var warm: Node3D = load("res://prototype/prewarm.gd").new()
+	add_child(warm)
+	warm.global_position = rig.global_position
+	warm.build([motion.burst(), player.creature.burst()])
 	# Dev only: the frame-time readout (off in a release, see frame_meter.gd).
 	if FrameMeter.enabled():
 		meter = FrameMeter.new()
