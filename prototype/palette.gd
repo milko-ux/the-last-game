@@ -27,3 +27,8 @@ const LETHAL_SEAM := Color("#ffd6ec")   # a live plate's seam: white-magenta
 const GOAL := Color("#ffb020")          # amber
 const MONOLITH := Color("#2a2f37")
 const MONOLITH_FAR := Color("#3a404a")
+# The carved stone of the building models (2026-09-20: their material is
+# procedural now, so the stone's colour lives here instead of in the
+# model's baked texture). Near ones, and the far huge ones the fog carries.
+const BUILDING_STONE := Color("#474b58")
+const BUILDING_STONE_FAR := Color("#3d424d")

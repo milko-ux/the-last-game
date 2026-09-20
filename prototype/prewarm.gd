@@ -26,7 +26,7 @@ const Props := preload("res://prototype/props/props.gd")
 const FRAMES := 8
 const TINY := 0.001
 const HAZARD_MODELS := ["gate_pillar", "sweeper_segment", "slammer", "orbiter_pillar", "volley_emitter"]
-const BUILDING_MODELS := ["building_tall", "building_stacked"]
+const BUILDING_MODELS := ["building_tall", "building_stacked", "building_tall_hi", "building_stacked_hi"]
 
 var _frames := 0
 
@@ -49,21 +49,10 @@ func build(bursts: Array) -> void:
 		for m in [Props.clay(false), Props.clay(true), Props.clay_safe(), white]:
 			add_child(Props.make(model, Props.size_of(model), "base", m))
 		add_child(Props.make(model, Props.size_of(model), "base", Props.clay(false), 0.0, true))
-	# The buildings are drawn through a MultiMesh, which is its own shader variant.
+	# The buildings: both detail levels, the near and the far material.
 	for model in BUILDING_MODELS:
-		var mm := MultiMesh.new()
-		mm.transform_format = MultiMesh.TRANSFORM_3D
-		mm.use_custom_data = true
-		mm.use_colors = true
-		mm.mesh = Props.mesh_of(model)
-		mm.instance_count = 1
-		mm.set_instance_transform(0, Transform3D.IDENTITY)
-		mm.set_instance_color(0, Color.WHITE)
-		mm.set_instance_custom_data(0, Color(1.0, 0.0, 0.0, 1.0))
-		var mmi := MultiMeshInstance3D.new()
-		mmi.multimesh = mm
-		mmi.material_override = Props.building()
-		add_child(mmi)
+		_mesh(Props.mesh_of(model), Props.building(false))
+		_mesh(Props.mesh_of(model), Props.building(true))
 	# The particle bursts: copies of the real emitters, particles too small to see.
 	for b in bursts:
 		var e: CPUParticles3D = b.duplicate()

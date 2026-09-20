@@ -32,16 +32,53 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SRC = os.path.join(HERE, "..", "assets", "models")
 DST = os.path.join(SRC, "lod")
 
-# Triangle budgets. Buildings are far and many; hazards are near and few.
+# Triangle budgets. Hazards are near and few.
 BUDGET = {
     "gate_pillar": 4000,
     "sweeper_segment": 2000,
     "slammer": 3500,
     "orbiter_pillar": 3500,
     "volley_emitter": 3500,
-    "building_tall": 1500,
-    "building_stacked": 1800,
 }
+
+# The buildings (2026-09-20): GEOMETRY ONLY, no colours from the bake (the
+# rule is no AI image textures in the game; their material is procedural,
+# see props.gd BUILDING_SHADER). Two copies each: the near one keeps the
+# carved symbols and the recessed circle as geometry (they ARE geometry in
+# the source: checked with an untextured render; at 1.5k they were mush,
+# at 6k they read cleanly), the far one is what the fog carries.
+# output name -> (source model, triangles)
+GEOMETRY_ONLY = {
+    "building_tall_hi": ("building_tall", 6000),
+    "building_tall": ("building_tall", 1500),
+    "building_stacked_hi": ("building_stacked", 6000),
+    "building_stacked": ("building_stacked", 1800),
+}
+
+
+def _weld_and_simplify(mesh, target):
+    # The bakes split every vertex on a UV-island border; decimating that
+    # opens a crack at every island. Weld first (positions only).
+    welded = trimesh.Trimesh(vertices=mesh.vertices, faces=mesh.faces, process=False)
+    welded.merge_vertices(merge_tex=True, merge_norm=True)
+    v0 = np.asarray(welded.vertices, dtype=np.float64)
+    f0 = np.asarray(welded.faces, dtype=np.int64)
+    reduction = 1.0 - min(1.0, target / float(len(f0)))
+    return fast_simplification.simplify(v0, f0, target_reduction=reduction)
+
+
+def decimate_geometry(out_name: str, src_name: str, target: int) -> None:
+    scene = trimesh.load(os.path.join(SRC, src_name + ".glb"), force="scene")
+    mesh = list(scene.geometry.values())[0]
+    v, f = _weld_and_simplify(mesh, target)
+    result = trimesh.Trimesh(vertices=v, faces=f, process=False)
+    trimesh.repair.fix_winding(result)
+    trimesh.repair.fix_normals(result)
+    result.vertex_normals
+    os.makedirs(DST, exist_ok=True)
+    dst = os.path.join(DST, out_name + ".glb")
+    result.export(dst)
+    print(f"{out_name}: {len(mesh.faces)} -> {len(f)} triangles, geometry only  ({os.path.getsize(dst) // 1024} KB)")
 
 
 def decimate(name: str, target: int) -> None:
@@ -54,14 +91,7 @@ def decimate(name: str, target: int) -> None:
     uv = mesh.visual.uv
     image = mesh.visual.material.baseColorTexture if hasattr(mesh.visual.material, "baseColorTexture") else mesh.visual.material.image
 
-    # The bakes split every vertex on a UV-island border; decimating that
-    # opens a crack at every island. Weld first (positions only).
-    welded = trimesh.Trimesh(vertices=mesh.vertices, faces=mesh.faces, process=False)
-    welded.merge_vertices(merge_tex=True, merge_norm=True)
-    v0 = np.asarray(welded.vertices, dtype=np.float64)
-    f0 = np.asarray(welded.faces, dtype=np.int64)
-    reduction = 1.0 - min(1.0, target / float(len(f0)))
-    v, f = fast_simplification.simplify(v0, f0, target_reduction=reduction)
+    v, f = _weld_and_simplify(mesh, target)
     # Vertex colours: the texture at the closest point of the original surface.
     closest, _dist, tri = trimesh.proximity.closest_point(mesh, v)
     bary = trimesh.triangles.points_to_barycentric(mesh.triangles[tri], closest)
@@ -84,6 +114,9 @@ def decimate(name: str, target: int) -> None:
 
 
 if __name__ == "__main__":
-    names = sys.argv[1:] or list(BUDGET)
+    names = sys.argv[1:] or list(BUDGET) + list(GEOMETRY_ONLY)
     for n in names:
-        decimate(n, BUDGET[n])
+        if n in GEOMETRY_ONLY:
+            decimate_geometry(n, *GEOMETRY_ONLY[n])
+        else:
+            decimate(n, BUDGET[n])

@@ -20,8 +20,8 @@ extends RefCounted
 # bright rim, breathing to the beat on pr_armed_pulse (brief 3), the
 # white flash still works (motion.gd swaps material_override). Eye
 # recesses stay dark: the tint is scaled by the clay's own luminance.
-# BUILDING is unlit with the distance fade and the concrete grain on
-# top of the vertex colour (at 1.5k triangles the bake alone is flat).
+# BUILDING is fully procedural (no colour from the model): see the
+# shader's own comment.
 # ============================================================
 
 const Mats := preload("res://prototype/flat_mats.gd")
@@ -37,6 +37,9 @@ const MODELS := {
 	"volley_emitter": [Vector3(1.72, 1.90, 1.82), 0.0],
 	"building_tall": [Vector3(0.62, 1.90, 0.34), 0.0],
 	"building_stacked": [Vector3(0.96, 1.90, 1.08), 0.0],
+	# The near copies: 6k triangles, the carvings survive as geometry.
+	"building_tall_hi": [Vector3(0.62, 1.90, 0.34), 0.0],
+	"building_stacked_hi": [Vector3(0.96, 1.90, 1.08), 0.0],
 }
 # Every model is centred on its own middle: the base is at -size.y / 2.
 
@@ -84,33 +87,41 @@ void fragment() {
 }
 """
 
+# BUILDING (2026-09-20): fully procedural, no colour from the model at
+# all (the rule: no AI image textures in the game, and the vertex colours
+# were a blurred copy of one). Stone/concrete from WORLD position with
+# triplanar mapping, so it is equally crisp on a 12-unit and a 60-unit
+# monolith and never stretches. The carved symbols and the circle are
+# GEOMETRY (the _hi meshes); what makes them readable is light, so the
+# shader lights each facet from its true face normal (screen-space
+# derivatives of the world position: hard, chiselled edges, the same on
+# web and native, no dependence on the decimated vertex normals).
+# Fog: the usual fade along z, plus fog to the sides and below, so the
+# far ones and every monolith's foot dissolve into the background.
 const BUILDING_SHADER := """
 shader_type spatial;
 render_mode unshaded, fog_disabled;
-uniform float far_lift = 0.35;      // the far, huge ones are this much lighter
-uniform float grain_amount = 0.08;
+uniform vec3 colour : source_color;
+uniform vec3 light_dir = vec3(-0.35, 0.6, -0.72);  // toward the light: up and behind the camera, on its side of the field
+uniform float shade_dark = 0.45;     // a facet facing away from the light
+uniform float shade_lit = 1.3;       // a facet facing it
+uniform float top_lighter = 0.12;
+uniform float grain_amount = 0.08;   // fine grain, +-8 % at 1.5 units
 uniform float grain_scale = 1.5;
-uniform float foot_band = 0.3;
-uniform float foot_dark = 0.25;
+uniform float coarse_amount = 0.05;  // +-5 % at 5 units so big faces are not flat
+uniform float coarse_scale = 5.0;
+uniform float band_every = 2.5;      // formwork lines every 2.5 units of height...
+uniform float band_width = 0.05;
+uniform float band_dark = 0.03;
+uniform vec3 side_fog = vec3(16.0, 60.0, 0.85);   // |x| start, end, most it may take
+uniform vec3 low_fog = vec3(6.0, 30.0, 0.9);      // depth below the field: start, end, most
 FADE_HEAD
 varying vec3 world_pos;
-varying vec3 world_n;
-varying vec3 vcol;
-varying float far;
-varying float above_base;
 
 void vertex() {
-	// Taper: the top half narrows to INSTANCE_CUSTOM.r of its width.
-	if (VERTEX.y > 0.0) {
-		VERTEX.xz *= INSTANCE_CUSTOM.r;
-	}
 	vec4 wp = MODEL_MATRIX * vec4(VERTEX, 1.0);
 	world_z = wp.z;
 	world_pos = wp.xyz;
-	world_n = normalize(mat3(MODEL_MATRIX) * NORMAL);
-	vcol = COLOR.rgb;
-	far = INSTANCE_CUSTOM.g;
-	above_base = (VERTEX.y + 0.95) * length(MODEL_MATRIX[1].xyz);
 }
 
 float triplanar(vec3 p, vec3 n, float scale) {
@@ -120,11 +131,23 @@ float triplanar(vec3 p, vec3 n, float scale) {
 }
 
 void fragment() {
-	vec3 c = vcol * (1.0 + far_lift * far);
-	c *= 1.0 + triplanar(world_pos, world_n, grain_scale) * grain_amount;
-	c *= 1.0 - foot_dark * (1.0 - smoothstep(0.0, foot_band, above_base));
-	ALBEDO = c;
-FADE_APPLY
+	float f = fade_amount();
+	if (f > 0.97) {
+		discard;
+	}
+	// The facet's own normal, turned toward the camera.
+	vec3 n = normalize(cross(dFdx(world_pos), dFdy(world_pos)));
+	if (dot(n, CAMERA_POSITION_WORLD - world_pos) < 0.0) {
+		n = -n;
+	}
+	float lit = dot(n, normalize(light_dir)) * 0.5 + 0.5;
+	vec3 c = colour * mix(shade_dark, shade_lit, lit) * (1.0 + top_lighter * smoothstep(0.7, 0.95, n.y));
+	float g = triplanar(world_pos, n, grain_scale) * grain_amount + triplanar(world_pos, n, coarse_scale) * coarse_amount;
+	float band = 1.0 - smoothstep(band_width * 0.5, band_width, abs(fract(world_pos.y / band_every) - 0.5) * band_every);
+	c *= (1.0 + g) * (1.0 - band_dark * band * (1.0 - smoothstep(0.7, 0.95, n.y)));
+	float side = smoothstep(side_fog.x, side_fog.y, abs(world_pos.x)) * side_fog.z;
+	float low = smoothstep(low_fog.x, low_fog.y, -world_pos.y) * low_fog.z;
+	ALBEDO = mix(c, background, max(f, max(side, low)));
 }
 """
 
@@ -176,14 +199,16 @@ static func clay_safe() -> Material:
 	return _mats["clay_safe"]
 
 
-static func building() -> Material:
-	if not _mats.has("building"):
+static func building(far: bool = false) -> Material:
+	var key := "building_far" if far else "building"
+	if not _mats.has(key):
 		var m := ShaderMaterial.new()
 		m.shader = _shader("building")
+		m.set_shader_parameter("colour", WorldPalette.BUILDING_STONE_FAR if far else WorldPalette.BUILDING_STONE)
 		m.set_shader_parameter("background", WorldPalette.BG_BOTTOM)
 		m.set_shader_parameter("fade", Quaternion(Mats.FADE_AHEAD_START, Mats.FADE_AHEAD_END, Mats.FADE_BEHIND_START, Mats.FADE_BEHIND_END))
-		_mats["building"] = m
-	return _mats["building"]
+		_mats[key] = m
+	return _mats[key]
 
 
 static func size_of(name: String) -> Vector3:
