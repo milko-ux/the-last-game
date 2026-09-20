@@ -69,6 +69,9 @@ Laps 0-5: 0 cleared (target ≤ 2). Laps 6-9 run out of their 10 passes; raising
 - **Entry:** the Phase R main scene is the run (`track_test.tscn`, `Rules.ENDLESS`); the level select is the dev tool (its ENDLESS RUN pill, or pick a level = the old path). Tools: `endless=1 [laps=N grad=1 start_lap=N]`.
 - **Validator bot (both variants so far through laps 0-2): 0 deaths, seams clean** — full acceptance run in the list below.
 
+### Section 4 — lives and death (done)
+`rules.gd` untouched; `track_test.gd` is the referee. Graduated: `RUN_LIVES` 3 for the whole run; a death = lose one, the freeze, the song rewinds to the last checkpoint (what levels 2+ do); none left = the run is over. New player: lap 0 costs no lives (level 1's rules, 0.25 s freeze); they start at 3 on crossing into lap 1 (the same moment `Progress.graduated` is saved). RETRY: `RETRY_RUNUP_S` 4.0 — the song starts at 12.6 s instead of 8.0 s (`runs_this_session`, a static, so the first run of a session keeps the full run-up); z is measured from a fixed origin, so the course does not move. The band's own `lives` knob is ignored in the run. Every rewind logs `REWIND t=… lap=… bar=… audio=… checkpoint_bar=…`. Bots: no lives unless `lives=1`. Checked: a graduated bot that stands still dies three times (the two rewinds land at the start) and the run ends.
+
 ## Report — frame meter, the "screen jumps", the monoliths (2026-09-20)
 
 **`rules.gd`, `hazard_math.gd`, `fairness.gd`, `placement.gd` untouched.** One thing under the rules did change: the clock they read is smoothed (below). Validator bot after it: **0 deaths, goal reached on levels 1, 2, 3, 4, 5** (one level-5 run died once at bar 2 while the Mac was rendering screenshots next to it, 27 fps; alone it passes — the known starved-bot pattern).

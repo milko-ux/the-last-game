@@ -37,6 +37,7 @@ var endless := false          # endless=1: the endless run instead (laps=N: stop
 var laps := 1
 var grad := false
 var start_lap := 0
+var with_lives := false      # lives=1: the run's own lives (3 for a graduated player) instead of none
 # Endless: one validator path per lap. The game trusts shipped verdicts
 # and keeps no path, so the bot validates each lap itself, in slices of
 # BOT_VALIDATE_USEC per frame while the lap before it is being played.
@@ -133,6 +134,8 @@ func _setup() -> void:
 			grad = kv[1] == "1"
 		if kv.size() == 2 and kv[0] == "start_lap":
 			start_lap = int(kv[1])
+		if kv.size() == 2 and kv[0] == "lives":
+			with_lives = kv[1] == "1"
 	rng.seed = 424242 + seed * 7919
 	Engine.max_fps = 30
 	Rules = load("res://prototype/rules.gd")
@@ -140,7 +143,7 @@ func _setup() -> void:
 	Rules.START_LAP = start_lap
 	Rules.LEVEL = level
 	_Fairness = load("res://prototype/fairness.gd")
-	Rules.LIVES_OVERRIDE = 0   # bots measure the level, never the lives
+	Rules.LIVES_OVERRIDE = -1 if with_lives else 0   # bots measure the course, not the lives (lives=1: play with them)
 	HazardMath = load("res://prototype/hazard_math.gd")
 	clock = root.get_node_or_null("BeatClock")
 	if clock == null:

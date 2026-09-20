@@ -117,6 +117,19 @@ var _lap_now := -1
 var _start_z := 0.0                  # where the player stands at the start of this run
 var _load_phase := 0                 # 0 generate lap 0, 1 build its nodes, 2 prewarm + reveal
 
+# Lives in the endless run (section 4). A graduated player has RUN_LIVES
+# for the whole run; a death costs one, freezes, rewinds the song to the
+# last checkpoint (exactly what levels 2+ do); none left = the run is
+# over. A NEW player's lap 0 costs no lives (exactly level 1): theirs
+# start at RUN_LIVES when they cross into lap 1. rules.gd still decides
+# what is lethal; this scene is the referee.
+const RUN_LIVES := 3
+# RETRY starts the song later into the intro: a run-up of RETRY_RUNUP_S
+# instead of the full 8.6 s. The first run of a session keeps the full one.
+const RETRY_RUNUP_S := 4.0
+static var runs_this_session := 0
+var _lives_on := false
+
 
 func _ready() -> void:
 	FrameMeter.load_mark("scene")
@@ -187,6 +200,9 @@ func _ready_endless() -> void:
 	stream.loop_offset = BeatClock.loop_start_t
 	music.stream = stream
 	BeatClock.start_offset = BeatClock.ENDLESS_Z_ORIGIN_S
+	if runs_this_session > 0:
+		BeatClock.start_offset = BeatClock.loop_start_t - RETRY_RUNUP_S
+	runs_this_session += 1
 	if Rules.START_LAP > 0:
 		# Dev: enter the course at a later lap, a short run-up before its bar 1.
 		BeatClock.start_offset = BeatClock.bar_start(Rules.START_LAP * BeatClock.loop_bars + 1) - 4.0
@@ -196,9 +212,15 @@ func _ready_endless() -> void:
 	_lap_knobs[Rules.START_LAP] = knobs
 	_job = LapGen.begin(BeatClock, Rules.START_LAP, graduated)
 	_job_started_ms = Time.get_ticks_msec()
-	lives = 0
-	print("ENDLESS season %d, start lap %d (%s), %s" % [LapGen.SEASON_SEED, Rules.START_LAP,
-		String(knobs.get("variant", "")), Rules.knobs_line(knobs)])
+	_lives_on = graduated
+	lives = RUN_LIVES if graduated else 0
+	if Rules.LIVES_OVERRIDE >= 0:
+		# The bots measure the course, not the lives (unless asked to: lives=1).
+		_lives_on = Rules.LIVES_OVERRIDE > 0
+		lives = Rules.LIVES_OVERRIDE
+	print("ENDLESS season %d, start lap %d (%s), run %d of the session, run-up %.1f s, lives %s, %s" % [LapGen.SEASON_SEED, Rules.START_LAP,
+		String(knobs.get("variant", "")), runs_this_session, BeatClock.loop_start_t - BeatClock.start_offset,
+		str(lives) if _lives_on else "off", Rules.knobs_line(knobs)])
 
 
 # Every material is drawn once before the run so no shader compiles in
@@ -312,9 +334,13 @@ func _tick_course(t: float, z_back: float) -> void:
 		knobs = _lap_knobs.get(lap, knobs)
 		motion.knobs = knobs
 		if lap >= 1 and not graduated:
-			# The one flag: from now on lap 0 no longer teaches.
+			# The one flag: from now on lap 0 no longer teaches...
 			graduated = true
 			Progress.set_graduated()
+			# ...and the new player's lives start here.
+			if Rules.LIVES_OVERRIDE < 0:
+				_lives_on = true
+				lives = RUN_LIVES
 	var next := maxi(lap, Rules.START_LAP) + 1
 	if _job == null and not field.has_lap(next):
 		_job = LapGen.begin(BeatClock, next, true)
@@ -348,6 +374,11 @@ func _window_depth_at(t: float) -> float:
 	return lerpf(prev, depth, u * u * (3.0 - 2.0 * u))
 
 
+# Do deaths cost lives right now?
+func lives_enabled() -> bool:
+	return _lives_on if endless else Rules.lives_enabled(knobs)
+
+
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_SPACE:
 		if state == State.RUN:
@@ -372,9 +403,11 @@ func _input(event: InputEvent) -> void:
 			if _end_shown > 0.6:
 				_to_level_select()
 		State.GAMEOVER:
-			# Out of lives: the loop starts over from level 1 (the original rule).
+			# Out of lives. A level: the loop starts over from level 1 (the
+			# original rule). The endless run: a new run, short run-up.
 			if _end_shown > 0.6:
-				Rules.LEVEL = 1
+				if not endless:
+					Rules.LEVEL = 1
 				get_tree().reload_current_scene()
 
 
@@ -404,7 +437,7 @@ func _process(delta: float) -> void:
 				_rewind()
 		State.WON, State.GAMEOVER:
 			_end_shown += delta
-	ui.set_status(0, 1, lives, deaths, state == State.DEAD and Rules.lives_enabled(knobs))
+	ui.set_status(0, 1, lives, deaths, state == State.DEAD and lives_enabled())
 	if state != State.DEAD:
 		motion.animate_notes(field.notes, player.position)
 	_update_hud()
@@ -469,6 +502,8 @@ func _tick_run(delta: float) -> void:
 
 func _update_progress(t: float) -> void:
 	furthest_t = maxf(furthest_t, t)
+	if endless:
+		return            # a level's progress bar and best time mean nothing here
 	hud.fill = motion.progress_fill(BeatClock.progress_of(t))
 	if t > Progress.best_for(Rules.LEVEL):
 		hud.best = BeatClock.progress_of(t)
@@ -662,7 +697,7 @@ func start_now() -> void:
 
 func _die() -> void:
 	state = State.DEAD
-	if Rules.lives_enabled(knobs):
+	if lives_enabled():
 		lives -= 1
 	deaths += 1
 	streak = 0
@@ -673,10 +708,11 @@ func _die() -> void:
 	# visuals hold because nothing samples time in State.DEAD and
 	# motion.frozen stops the beat visuals. (Was BeatClock.pause().)
 	_death_z = player.position.z
-	_freeze = DEATH_FREEZE_LIVES_S if Rules.lives_enabled(knobs) else DEATH_FREEZE_S
+	_freeze = DEATH_FREEZE_LIVES_S if lives_enabled() else DEATH_FREEZE_S
 	player.creature.play_death(_freeze)
-	Progress.record_best(Rules.LEVEL, BeatClock.song_time())
-	if Rules.lives_enabled(knobs) and lives <= 0:
+	if not endless:
+		Progress.record_best(Rules.LEVEL, BeatClock.song_time())
+	if lives_enabled() and lives <= 0:
 		_game_over()
 
 
@@ -685,9 +721,12 @@ func _die() -> void:
 func _game_over() -> void:
 	state = State.GAMEOVER
 	_end_shown = 0.0
+	hud.hide_word()
+	if endless:
+		status.text = "OUT OF LIVES\nTAP TO RETRY"
+		return
 	score = current_score()
 	Progress.record_score(Rules.LEVEL, score)
-	hud.hide_word()
 	status.text = "OUT OF LIVES\ndied at %d%%   ·   deaths %d   ·   score %d\nTAP TO RETRY FROM LEVEL 1" % [
 		int(round(BeatClock.progress_of(furthest_t) * 100.0)), deaths, score]
 
@@ -707,6 +746,10 @@ func _rewind() -> void:
 	FrameMeter.note("rewind (song seek)")
 	BeatClock.seek(t)
 	var z_back := BeatClock.z_at(t)
+	# Permanent log, like DEATH: where the song and the world went back to.
+	print("REWIND t=%.3f lap=%d bar=%d audio=%.3f z_back=%.2f player=(%.2f, %.2f) checkpoint_bar=%d lives=%s" % [
+		t, BeatClock.lap_at(t), BeatClock.bar_at(t), BeatClock.local_t(t), z_back, x, z,
+		int(checkpoint.get("bar", 0)), str(lives) if lives_enabled() else "off"])
 	rig.set_window(z_back)
 	_update_world(BeatClock.hazard_time(), z_back)
 	state = State.RUN
@@ -734,7 +777,7 @@ func _win() -> void:
 func _update_hud() -> void:
 	if state == State.WAIT:
 		return
-	if Rules.lives_enabled(knobs):
+	if lives_enabled():
 		score_label.text = "♪ %d   x%d   ·   lives %d   ·   %d" % [notes, mini(maxi(streak, 1), COMBO_CAP), lives, current_score()]
 	else:
 		score_label.text = "♪ %d   x%d   ·   %d" % [notes, mini(maxi(streak, 1), COMBO_CAP), current_score()]
