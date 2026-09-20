@@ -18,6 +18,8 @@ var out := "docs/screenshots/shot.png"
 var bar := 1
 var after := 0.4
 var level := 1
+var endless := false         # endless=1: the endless run instead of one level (start_lap=N: enter at lap N)
+var start_lap := 0
 var scene_kind := "run"      # scene=select captures the level-select screen instead
 var _select_frames := -1
 var test: Node = null
@@ -78,7 +80,7 @@ func _process(_delta: float) -> bool:
 			print("SHOT saved=%s err=%d size=%dx%d t=%.2f bar=%d triangles=%d draw_calls=%d" % [out, err, img.get_width(), img.get_height(), clock.song_time(), clock.current_bar(),
 				RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_PRIMITIVES_IN_FRAME),
 				RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME)])
-			print("SHOT monoliths=%s" % [test.field.monoliths.counts()])
+			print("SHOT monoliths=%s" % [test.field.monolith_counts()])
 			return true
 		return false
 	var t: float = clock.song_time()
@@ -117,6 +119,8 @@ func _setup_args() -> void:
 			"bar": bar = int(kv[1])
 			"after": after = float(kv[1])
 			"level": level = int(kv[1])
+			"endless": endless = kv[1] == "1"
+			"start_lap": start_lap = int(kv[1])
 			"scene": scene_kind = kv[1]
 			"jump": jump = kv[1] == "1"
 			"kill": kill = kv[1] == "1"
@@ -128,6 +132,11 @@ func _setup() -> void:
 	_setup_args()
 	AudioServer.set_bus_volume_db(0, -80.0)
 	var Rules: GDScript = load("res://prototype/rules.gd")
+	Rules.ENDLESS = endless
+	var progress = root.get_node_or_null("Progress")
+	if progress != null:
+		progress.save_enabled = false
+	Rules.START_LAP = start_lap
 	if level != 1:
 		Rules.LEVEL = level
 	clock = root.get_node_or_null("BeatClock")
@@ -147,8 +156,11 @@ func _setup() -> void:
 		ap.clock = clock
 		ap.Rules = Rules
 		ap.HazardMath = load("res://prototype/hazard_math.gd")
-		var fair: Dictionary = test.field.fairness
-		if fair.get("cached", false) or fair["path"].is_empty():
-			fair = load("res://prototype/fairness.gd").validate(test.field.plan, clock, test.knobs)
-		ap.path = fair["path"]
-		ap.first_beat = int(fair["first_beat"])
+		if endless:
+			ap.attach_endless(test, clock)
+		else:
+			var fair: Dictionary = test.field.fairness
+			if fair.get("cached", false) or fair["path"].is_empty():
+				fair = load("res://prototype/fairness.gd").validate(test.field.plan, clock, test.knobs)
+			ap.path = fair["path"]
+			ap.first_beat = int(fair["first_beat"])

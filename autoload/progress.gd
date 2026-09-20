@@ -87,6 +87,39 @@ func mark_cleared(d: Diff) -> void:
 		save_progress()
 
 
+# ------------------------------------------------------------
+# The endless run (Phase E brief 1). `graduated`: the player has crossed
+# into lap 1 once, so lap 0 no longer teaches (no demo bars) and lives
+# count from the start. One flag, no per-hazard bookkeeping.
+# `best_distance`: metres, per SEASON_SEED (a new season starts at 0).
+# Progression only, no personal data: still no consent needed.
+# ------------------------------------------------------------
+var graduated := false
+var best_distance := {}
+# The bots and tools turn this off: they must never write to the save file
+# of whoever owns the machine.
+var save_enabled := true
+
+
+func set_graduated() -> void:
+	if not graduated:
+		graduated = true
+		save_progress()
+
+
+func best_distance_for(season: int) -> int:
+	return int(best_distance.get(str(season), 0))
+
+
+# Returns true when it is a new best (and saves it).
+func record_distance(season: int, metres: int) -> bool:
+	if metres <= best_distance_for(season):
+		return false
+	best_distance[str(season)] = metres
+	save_progress()
+	return true
+
+
 func best_for(level: int) -> float:
 	return float(best_song_time.get(str(level), 0.0))
 
@@ -130,12 +163,15 @@ func is_level_unlocked(level: int) -> bool:
 
 
 func save_progress() -> void:
+	if not save_enabled:
+		return
 	var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if f == null:
 		push_warning("Could not write %s" % SAVE_PATH)
 		return
 	f.store_string(JSON.stringify({"standard_cleared": standard_cleared, "best_song_time": best_song_time,
-		"best_score": best_score, "levels_cleared": levels_cleared}))
+		"best_score": best_score, "levels_cleared": levels_cleared,
+		"graduated": graduated, "best_distance": best_distance}))
 	f.close()
 
 
@@ -158,3 +194,7 @@ func load_progress() -> void:
 		var lc = parsed.get("levels_cleared", {})
 		if lc is Dictionary:
 			levels_cleared = lc
+		graduated = bool(parsed.get("graduated", false))
+		var bd = parsed.get("best_distance", {})
+		if bd is Dictionary:
+			best_distance = bd

@@ -62,7 +62,61 @@ class Ctx:
 
 # `knobs`: the knob dictionary the plan was built with (Phase E section
 # 1): the validator assumes THAT lap's player speed, window, period and gaps.
+#
+# RESUMABLE (Phase E section 3): begin() sets up, step(job, budget_usec)
+# works until the budget is spent (the unit of work is one beat's safe
+# set, then one tile's reachability search at a time), finish() reads the
+# plan off. validate() is the three in a row and returns exactly what it
+# always did; the endless run validates the NEXT lap with step(job, 2000)
+# once per frame while the current lap is being played.
+class Job:
+	var ctx: Ctx
+	var plan: Dictionary
+	var clock
+	var knobs: Dictionary
+	var problems := []
+	var beats: PackedFloat64Array
+	var speed := 0.0
+	var last_bar_end := 0.0
+	var outro_bar := 0
+	var layers := []          # [{safe:{key:Vector2}, reach:{key:[parent_key, leave]}}]
+	var prev_reach := {}
+	var prev_safe := {}
+	var first := true
+	var i := 0                # the beat being worked on
+	var finished := false
+	# inside one beat
+	var in_beat := false
+	var t0 := 0.0
+	var t1 := 0.0
+	var tp := 0.0
+	var z_back0 := 0.0
+	var z_back1 := 0.0
+	var k := 0
+	var safe := {}
+	var reachable := {}
+	var keys: Array = []
+	var key_i := 0
+	# The state at the first beat of every bar, so a later pass over a plan
+	# that only differs from bar N on can RESUME a few bars before N
+	# (begin_from) instead of walking the whole lap again.
+	var snapshots := {}       # bar -> {i, layers, prev_reach, prev_safe, first, problems}
+	var _snap_bar := -999
+
+	# The lap-local bar the validator has reached (for a forced finish).
+	func bar_reached() -> int:
+		if i >= beats.size():
+			return clock.bar_count() + 1
+		return clock.bar_at(beats[i])
+
+
 static func validate(plan: Dictionary, clock, knobs: Dictionary) -> Dictionary:
+	var job := begin(plan, clock, knobs)
+	step(job, -1)
+	return finish(job)
+
+
+static func begin(plan: Dictionary, clock, knobs: Dictionary) -> Job:
 	var ctx := Ctx.new()
 	ctx.plan = plan
 	ctx.clock = clock
@@ -70,103 +124,200 @@ static func validate(plan: Dictionary, clock, knobs: Dictionary) -> Dictionary:
 	for bar in range(1, clock.bar_count() + 1):
 		ctx.bar_z0[bar] = clock.z_at(clock.bar_start(bar))
 		ctx.bar_depth[bar] = clock.z_at(clock.bar_end(bar)) - ctx.bar_z0[bar]
+	var job := Job.new()
+	job.ctx = ctx
+	job.plan = plan
+	job.clock = clock
+	job.knobs = knobs
+	job.beats = clock.beats
+	job.speed = Rules.player_speed(knobs)
+	job.last_bar_end = clock.z_at(clock.bar_end(clock.bar_count()))
+	job.outro_bar = clock.bar_count() + 1
+	job.i = clock.first_bar_beat
+	return job
 
-	var problems := []
-	var beats: PackedFloat64Array = clock.beats
-	var speed: float = Rules.player_speed(knobs)
-	var last_bar_end: float = clock.z_at(clock.bar_end(clock.bar_count()))
-	var outro_bar: int = clock.bar_count() + 1
 
-	var layers := []          # [{safe:{key:Vector2}, reach:{key:[parent_key, leave]}}]
-	var prev_reach := {}
-	var prev_safe := {}
-	var first := true
+# How many bars before the first changed bar a resumed walk starts: the
+# window shows 2.5 bars ahead of the back edge and hazards are considered
+# up to a window's depth either side of its middle (3.75 bars ahead).
+const RESUME_MARGIN_BARS := 5
 
-	for i in range(clock.first_bar_beat, beats.size()):
-		var t0: float = beats[i]
-		var t1: float = beats[i + 1] if i + 1 < beats.size() else t0 + clock.beat_interval
-		var tp: float = beats[i - 1] if i > 0 else t0 - clock.beat_interval
-		var z_back0: float = clock.z_at(t0)
-		var z_back1: float = clock.z_at(t1)
-		var z_front: float = z_back0 + Rules.window_depth(knobs)
-		var k: int = clock.beat_in_bar_at(t0)
-		if z_back0 > last_bar_end + Rules.window_depth(knobs):
-			break
 
-		ctx.specs = []
-		for spec in plan["hazards"]:
-			if absf(float(spec["z"]) - (z_back0 + z_front) * 0.5) > Rules.window_depth(knobs):
-				continue
-			ctx.specs.append(spec)
+# A plan that is identical to `prev`'s up to (not including) bar
+# `first_changed_bar` — a re-roll or a cleared bar only ever changes that
+# bar and the ones after it — is walked from RESUME_MARGIN_BARS before it,
+# on top of what `prev` already worked out. Same result as begin() + a
+# full walk, for a fraction of the work.
+static func begin_from(prev: Job, plan: Dictionary, first_changed_bar: int) -> Job:
+	var job := begin(plan, prev.clock, prev.knobs)
+	var from_bar := first_changed_bar - RESUME_MARGIN_BARS
+	var best := -1
+	for bar in prev.snapshots:
+		if int(bar) <= from_bar and int(bar) > best:
+			best = int(bar)
+	if best < 0:
+		return job
+	var snap: Dictionary = prev.snapshots[best]
+	job.i = int(snap["i"])
+	job.layers = prev.layers.slice(0, int(snap["layers"]))
+	job.prev_reach = snap["prev_reach"]
+	job.prev_safe = snap["prev_safe"]
+	job.first = bool(snap["first"])
+	job.problems = prev.problems.slice(0, int(snap["problems"]))
+	for bar in prev.snapshots:
+		if int(bar) <= best:
+			job.snapshots[bar] = prev.snapshots[bar]
+	job._snap_bar = best
+	return job
 
-		# Safe = where the player may BE at t0 (and, if they stay, through
-		# the beat: the back edge must not pass the tile before t1).
-		var safe := {}
-		for bar in range(1, clock.bar_count() + 1):
-			var z0: float = ctx.bar_z0[bar]
-			var depth: float = ctx.bar_depth[bar]
-			if z0 + depth < z_back0 or z0 > z_front:
-				continue
-			var entry: Dictionary = plan["bars"][bar]
-			for col in Rules.COLS:
-				for row in Rules.ROWS:
-					if entry["pits"].has([col, row]):
-						continue
-					var cz := z0 + (row + 0.5) * depth / Rules.ROWS
-					if cz < Rules.min_z(z_back1) + 0.6 or cz > z_front - 1.0:
-						continue
-					var cx := Rules.col_x(col)
-					if _lethal_at(ctx, Vector2(cx, cz), t0):
-						continue
-					safe[Vector3i(bar, col, row)] = Vector2(cx, cz)
-		if z_front - 1.0 > last_bar_end:
-			for col in Rules.COLS:
-				safe[Vector3i(outro_bar, col, 0)] = Vector2(Rules.col_x(col), maxf(last_bar_end + 1.0, Rules.min_z(z_back1) + 0.6))
 
-		var reachable := {}
-		if first:
-			for key in safe:
-				reachable[key] = [null, 0.0]
+# Works until `budget_usec` microseconds are spent (-1 = until done).
+# Returns true when the whole song / lap has been walked.
+static func step(job: Job, budget_usec: int) -> bool:
+	var until := Time.get_ticks_usec() + budget_usec
+	while not job.finished:
+		if not job.in_beat:
+			_begin_beat(job)
 		else:
-			for key in safe:
-				var b: Vector2 = safe[key]
-				var found := false
-				# Own tile first (standing still is the cheapest plan).
-				var cands := [key]
-				cands.append_array(_neighbours(key, clock.bar_count()))
-				for nkey in cands:
-					if not prev_reach.has(nkey):
-						continue
-					var a: Vector2 = prev_safe[nkey]
-					for leave in LEAVE_OPTIONS:
-						var t_leave: float = tp + (t0 - tp) * float(leave)
-						var dist := a.distance_to(b)
-						if dist > speed * (t0 - t_leave) - 0.15:
-							continue
-						if _plan_ok(ctx, a, b, tp, t_leave, t0, speed):
-							reachable[key] = [nkey, leave]
-							found = true
-							break
-					if found:
-						break
+			_reach_one(job)
+		if budget_usec >= 0 and Time.get_ticks_usec() >= until:
+			break
+	return job.finished
 
-		if safe.is_empty():
-			problems.append("beat %d (bar %d, beat %d): no safe tile in the window" % [i, clock.bar_at(t0), k + 1])
-		elif reachable.is_empty():
-			problems.append("beat %d (bar %d, beat %d): no safe tile reachable from the previous beat" % [i, clock.bar_at(t0), k + 1])
-			if OS.has_environment("FAIR_DEBUG"):
-				_explain(ctx, safe, prev_safe, prev_reach, tp, t0, speed, z_back0, z_back1)
-			for key in safe:
-				reachable[key] = [null, 0.0]
 
-		layers.append({"safe": safe, "reach": reachable, "z_back": z_back0})
-		prev_reach = reachable
-		prev_safe = safe
-		first = safe.is_empty()
+# Safe = where the player may BE at t0 (and, if they stay, through the
+# beat: the back edge must not pass the tile before t1).
+static func _begin_beat(job: Job) -> void:
+	var ctx := job.ctx
+	var clock = job.clock
+	var plan := job.plan
+	var knobs := job.knobs
+	var beats := job.beats
+	var i := job.i
+	if i >= beats.size():
+		job.finished = true
+		return
+	var t0: float = beats[i]
+	var bar_now: int = clock.bar_at(t0)
+	if bar_now != job._snap_bar:
+		job._snap_bar = bar_now
+		job.snapshots[bar_now] = {"i": i, "layers": job.layers.size(), "prev_reach": job.prev_reach,
+			"prev_safe": job.prev_safe, "first": job.first, "problems": job.problems.size()}
+	var t1: float = beats[i + 1] if i + 1 < beats.size() else t0 + clock.beat_interval
+	var tp: float = beats[i - 1] if i > 0 else t0 - clock.beat_interval
+	var z_back0: float = clock.z_at(t0)
+	var z_back1: float = clock.z_at(t1)
+	var z_front: float = z_back0 + Rules.window_depth(knobs)
+	var k: int = clock.beat_in_bar_at(t0)
+	if z_back0 > job.last_bar_end + Rules.window_depth(knobs):
+		job.finished = true
+		return
 
-	# Read the plan off the back-pointers, last beat to first. Each entry:
-	# {"pos": Vector2, "leave": phase of THIS beat at which to set off for
-	# the next entry}.
+	ctx.specs = []
+	for spec in plan["hazards"]:
+		if absf(float(spec["z"]) - (z_back0 + z_front) * 0.5) > Rules.window_depth(knobs):
+			continue
+		ctx.specs.append(spec)
+
+	var safe := {}
+	for bar in range(1, clock.bar_count() + 1):
+		var z0: float = ctx.bar_z0[bar]
+		var depth: float = ctx.bar_depth[bar]
+		if z0 + depth < z_back0 or z0 > z_front:
+			continue
+		var entry: Dictionary = plan["bars"][bar]
+		for col in Rules.COLS:
+			for row in Rules.ROWS:
+				if entry["pits"].has([col, row]):
+					continue
+				var cz := z0 + (row + 0.5) * depth / Rules.ROWS
+				if cz < Rules.min_z(z_back1) + 0.6 or cz > z_front - 1.0:
+					continue
+				var cx := Rules.col_x(col)
+				if _lethal_at(ctx, Vector2(cx, cz), t0):
+					continue
+				safe[Vector3i(bar, col, row)] = Vector2(cx, cz)
+	if z_front - 1.0 > job.last_bar_end:
+		for col in Rules.COLS:
+			safe[Vector3i(job.outro_bar, col, 0)] = Vector2(Rules.col_x(col), maxf(job.last_bar_end + 1.0, Rules.min_z(z_back1) + 0.6))
+
+	job.t0 = t0
+	job.t1 = t1
+	job.tp = tp
+	job.z_back0 = z_back0
+	job.z_back1 = z_back1
+	job.k = k
+	job.safe = safe
+	job.reachable = {}
+	job.keys = safe.keys()
+	job.key_i = 0
+	job.in_beat = true
+	if job.first:
+		# Where the walk may START. A level: any safe tile. A lap that opens
+		# on its plain bar (every lap after the first): only that bar's tiles,
+		# because that is where the player really is at the seam — and where a
+		# rewind to the lap's checkpoint puts them. The lap is then proven
+		# fair FROM THERE, not from a tile two bars in that nobody stands on.
+		var only_bar1: bool = bool(knobs.get("plain_bar1", false)) and job.layers.is_empty()
+		for key in safe:
+			if only_bar1 and key.x != 1:
+				continue
+			job.reachable[key] = [null, 0.0]
+		job.key_i = job.keys.size()
+
+
+# One safe tile: can it be reached from a tile that was reachable last beat?
+static func _reach_one(job: Job) -> void:
+	if job.key_i >= job.keys.size():
+		_end_beat(job)
+		return
+	var ctx := job.ctx
+	var key = job.keys[job.key_i]
+	job.key_i += 1
+	var b: Vector2 = job.safe[key]
+	# Own tile first (standing still is the cheapest plan).
+	var cands := [key]
+	cands.append_array(_neighbours(key, job.clock.bar_count()))
+	for nkey in cands:
+		if not job.prev_reach.has(nkey):
+			continue
+		var a: Vector2 = job.prev_safe[nkey]
+		for leave in LEAVE_OPTIONS:
+			var t_leave: float = job.tp + (job.t0 - job.tp) * float(leave)
+			var dist := a.distance_to(b)
+			if dist > job.speed * (job.t0 - t_leave) - 0.15:
+				continue
+			if _plan_ok(ctx, a, b, job.tp, t_leave, job.t0, job.speed):
+				job.reachable[key] = [nkey, leave]
+				return
+
+
+static func _end_beat(job: Job) -> void:
+	var clock = job.clock
+	var safe := job.safe
+	var reachable := job.reachable
+	if safe.is_empty():
+		job.problems.append("beat %d (bar %d, beat %d): no safe tile in the window" % [job.i, clock.bar_at(job.t0), job.k + 1])
+	elif reachable.is_empty():
+		job.problems.append("beat %d (bar %d, beat %d): no safe tile reachable from the previous beat" % [job.i, clock.bar_at(job.t0), job.k + 1])
+		if OS.has_environment("FAIR_DEBUG"):
+			_explain(job.ctx, safe, job.prev_safe, job.prev_reach, job.tp, job.t0, job.speed, job.z_back0, job.z_back1)
+		for key in safe:
+			reachable[key] = [null, 0.0]
+
+	job.layers.append({"safe": safe, "reach": reachable, "z_back": job.z_back0})
+	job.prev_reach = reachable
+	job.prev_safe = safe
+	job.first = safe.is_empty()
+	job.in_beat = false
+	job.i += 1
+
+
+# Read the plan off the back-pointers, last beat to first. Each entry:
+# {"pos": Vector2, "leave": phase of THIS beat at which to set off for
+# the next entry}.
+static func finish(job: Job) -> Dictionary:
+	var layers := job.layers
 	var path := []
 	path.resize(layers.size())
 	var want: Variant = null
@@ -185,8 +336,8 @@ static func validate(plan: Dictionary, clock, knobs: Dictionary) -> Dictionary:
 		want = link[0]
 		next_leave = float(link[1])
 
-	return {"ok": problems.is_empty(), "problems": problems, "path": path,
-		"first_beat": clock.first_bar_beat}
+	return {"ok": job.problems.is_empty(), "problems": job.problems, "path": path,
+		"first_beat": job.clock.first_bar_beat}
 
 
 # FAIR_DEBUG=1: why nothing was reachable at this beat.

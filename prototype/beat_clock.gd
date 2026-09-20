@@ -288,7 +288,7 @@ func start(stream_player: AudioStreamPlayer) -> void:
 	_paused = false
 	_time_begin = Time.get_ticks_usec()
 	_time_delay = AudioServer.get_time_to_next_mix() + AudioServer.get_output_latency()
-	_player.play(start_offset)
+	_player.play(local_t(start_offset))
 	_running = true
 	_resync_indices()
 	set_process(true)

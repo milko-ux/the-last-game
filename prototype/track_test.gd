@@ -16,6 +16,7 @@ extends Node3D
 const Rules := preload("res://prototype/rules.gd")
 const Mats := preload("res://prototype/flat_mats.gd")
 const HazardMath := preload("res://prototype/hazard_math.gd")
+const LapGen := preload("res://prototype/lap_gen.gd")
 
 # Lives come from the level's knobs (Rules.lives(): 0 on level 1, 3 from
 # level 2). Out of lives = the death screen, then back to level 1.
@@ -62,7 +63,7 @@ var meter: FrameMeter = null   # dev only, null in a release
 var state := State.WAIT
 var lives := 0
 var deaths := 0
-var checkpoint := -1        # index into field.checkpoints; -1 = song start
+var checkpoint := {}        # the last checkpoint passed ({} = the start): t, resume_t, x, z, bar
 var notes := 0
 var streak := 0             # notes since the last death
 var combo_max := 1          # the longest streak this run
@@ -92,19 +93,49 @@ var _tap_queued := false    # a tap during LOADING is kept: the run starts the m
 var _bar_back: ColorRect
 var _bar_fill: ColorRect
 
+# ------------------------------------------------------------
+# THE ENDLESS RUN (Phase E brief 1). The course is generated lap by lap
+# (lap_gen.gd): the lap being played and the next one exist, nothing
+# else. The next lap is generated, validated and built inside a budget
+# of GEN_BUDGET_USEC per frame while this one is played; it should be
+# ready by bar GEN_READY_BAR and, if it still is not at bar
+# GEN_FORCE_BAR, it is finished on the spot with every unvalidated bar
+# cleared to open floor (never a stall, never an unfair bar).
+# ------------------------------------------------------------
+const GEN_BUDGET_USEC := 2000
+const GEN_READY_BAR := 60
+const GEN_FORCE_BAR := 68
+const LOAD_BUDGET_USEC := 10000      # per frame behind the progress bar, before the run
+const FREE_AFTER_BARS := 3           # lap k - 1 goes once the death line is this far into lap k
+const EASE_BARS := 2.0               # window / camera ease between two bands over this many bars
+var endless := false
+var graduated := false
+var _job = null                      # LapGen.Job for the lap being generated
+var _job_started_ms := 0
+var _lap_knobs := {}                 # lap -> knobs (kept after the lap's nodes are gone)
+var _lap_now := -1
+var _start_z := 0.0                  # where the player stands at the start of this run
+var _load_phase := 0                 # 0 generate lap 0, 1 build its nodes, 2 prewarm + reveal
+
 
 func _ready() -> void:
 	FrameMeter.load_mark("scene")
-	knobs = Rules.level(Rules.LEVEL)
-	# The level's knobs (addendum 3 / 4): hazards act once per period, the
-	# song starts at the level's offset. Both before the field is built,
-	# since the layout is a function of them.
-	BeatClock.set_tempo(Rules.song_tempo(knobs))
-	music.stream = load(BeatClock.music_path())
-	BeatClock.set_start_offset(Rules.song_offset(knobs))
-	lives = Rules.lives(knobs)
+	endless = Rules.ENDLESS
+	if endless:
+		_ready_endless()
+	else:
+		knobs = Rules.level(Rules.LEVEL)
+		# The level's knobs (addendum 3 / 4): hazards act once per period, the
+		# song starts at the level's offset. Both before the field is built,
+		# since the layout is a function of them.
+		BeatClock.set_endless(false)
+		BeatClock.set_tempo(Rules.song_tempo(knobs))
+		music.stream = load(BeatClock.music_path())
+		BeatClock.set_start_offset(Rules.song_offset(knobs))
+		lives = Rules.lives(knobs)
+		print(Rules.knobs_line(knobs))
+	_start_z = BeatClock.z_at(BeatClock.start_offset) + START_Z
 	furthest_t = BeatClock.start_offset
-	print(Rules.knobs_line(knobs))
 	FrameMeter.load_mark("music")
 	motion = load("res://prototype/motion.gd").new()
 	motion.name = "Motion"
@@ -112,10 +143,11 @@ func _ready() -> void:
 	motion.knobs = knobs
 	rig.motion = motion
 	rig.configure(knobs)
-	field.build(knobs)
-	if not field.fairness["ok"]:
-		_fair_warning = "FAIRNESS CHECK FAILED (%d) — see log" % field.fairness["problems"].size()
-	player.reset_to(0.0, START_Z)
+	if not endless:
+		field.build(knobs)
+		if not field.fairness["ok"]:
+			_fair_warning = "FAIRNESS CHECK FAILED (%d) — see log" % field.fairness["problems"].size()
+	player.reset_to(0.0, _start_z)
 	ui.level_count = 1
 	ui.show_hud = false
 	ui.leave_menu()
@@ -126,21 +158,47 @@ func _ready() -> void:
 	_edge_line.material_override = Mats.player(WorldPalette.SAFE)
 	add_child(_edge_line)
 	hud.ticks = []
-	for cp in field.checkpoints:
-		hud.ticks.append(BeatClock.progress_of(float(cp["t"])))
-	hud.best = BeatClock.progress_of(Progress.best_for(Rules.LEVEL))
+	if not endless:
+		for cp in field.checkpoints:
+			hud.ticks.append(BeatClock.progress_of(float(cp["t"])))
+		hud.best = BeatClock.progress_of(Progress.best_for(Rules.LEVEL))
 	ui.jump_pressed.connect(_on_jump)
 	status.text = "TAP TO START"
 	debug.text = _fair_warning
 	score_label.text = ""
-	_update_world(BeatClock.hazard_time(), 0.0)
-	rig.set_window(0.0)
-	motion.set_window(0.0)
+	var z_back0 := BeatClock.z_at(BeatClock.start_offset)
+	_update_world(BeatClock.hazard_time(), z_back0)
+	rig.set_window(z_back0)
+	motion.set_window(z_back0)
 	# Dev only: the frame-time readout and the load line (off in a release, see frame_meter.gd).
 	if FrameMeter.enabled():
 		meter = FrameMeter.new()
 		$UI.add_child(meter)
 	_begin_loading()
+
+
+# The endless run: the looped track, the lap the run starts on. The lap is
+# generated in the LOADING phase (a shipped or cached verdict makes that a
+# few milliseconds; without one it is validated there, behind the bar).
+func _ready_endless() -> void:
+	BeatClock.set_endless(true)
+	var stream: AudioStream = load(BeatClock.ENDLESS_MUSIC)
+	stream.loop = true
+	stream.loop_offset = BeatClock.loop_start_t
+	music.stream = stream
+	BeatClock.start_offset = BeatClock.ENDLESS_Z_ORIGIN_S
+	if Rules.START_LAP > 0:
+		# Dev: enter the course at a later lap, a short run-up before its bar 1.
+		BeatClock.start_offset = BeatClock.bar_start(Rules.START_LAP * BeatClock.loop_bars + 1) - 4.0
+	field.runup_z0 = BeatClock.z_at(BeatClock.start_offset) - field.PLAIN_LEN
+	graduated = Progress.graduated or Rules.START_LAP > 0
+	knobs = LapGen.knobs_for(Rules.START_LAP, graduated)
+	_lap_knobs[Rules.START_LAP] = knobs
+	_job = LapGen.begin(BeatClock, Rules.START_LAP, graduated)
+	_job_started_ms = Time.get_ticks_msec()
+	lives = 0
+	print("ENDLESS season %d, start lap %d (%s), %s" % [LapGen.SEASON_SEED, Rules.START_LAP,
+		String(knobs.get("variant", "")), Rules.knobs_line(knobs)])
 
 
 # Every material is drawn once before the run so no shader compiles in
@@ -151,8 +209,14 @@ func _begin_loading() -> void:
 	add_child(_warm)
 	_warm.global_position = rig.global_position
 	_warm.prepare([motion.burst(), player.creature.burst()])
+	_load_phase = 0 if endless else 2
 	if DisplayServer.get_name() == "headless":
-		_end_loading()       # nothing is drawn, so there is nothing to warm
+		# Nothing is drawn, so there is nothing to warm: just make the first lap.
+		if endless:
+			LapGen.step(_job, -1)
+			_take_lap()
+			field.build_step(-1)
+		_end_loading()
 		return
 	state = State.LOADING
 	_reveal = [rig, player, _edge_line, field]
@@ -175,6 +239,21 @@ func _begin_loading() -> void:
 
 func _tick_loading() -> void:
 	_load_frames += 1
+	# The endless run first makes its first lap: generate (+ validate when no
+	# verdict is stored), then build the nodes, LOAD_BUDGET_USEC per frame.
+	if _load_phase == 0:
+		if LapGen.step(_job, LOAD_BUDGET_USEC):
+			_take_lap()
+			_load_phase = 1
+		_bar_fill.size.x = 320.0 * 0.05
+		return
+	if _load_phase == 1:
+		var before: int = field.pending_items()
+		if field.build_step(LOAD_BUDGET_USEC):
+			FrameMeter.load_mark("nodes", "%d hazards" % field.hazards.size())
+			_load_phase = 2
+		_bar_fill.size.x = 320.0 * (0.05 + 0.45 * (1.0 - float(field.pending_items()) / maxf(float(before), 1.0)))
+		return
 	var total := float(_warm.item_count() + 4 + LOAD_SETTLE_FRAMES)
 	var done := 0.0
 	var p: float = _warm.step()
@@ -185,7 +264,8 @@ func _tick_loading() -> void:
 		else:
 			_settle += 1
 		done += (4 - _reveal.size()) + _settle
-	_bar_fill.size.x = 320.0 * clampf(done / total, 0.0, 1.0)
+	var frac := clampf(done / total, 0.0, 1.0)
+	_bar_fill.size.x = 320.0 * ((0.5 + 0.5 * frac) if endless else frac)
 	if _settle >= LOAD_SETTLE_FRAMES:
 		_end_loading()
 
@@ -202,6 +282,70 @@ func _end_loading() -> void:
 		state = State.STARTING
 		_start_delay = START_DELAY_S
 		status.text = ""
+
+
+# The generation job is done: the lap goes into the field (its nodes are
+# queued there) and its verdict is on the load line.
+func _take_lap() -> void:
+	var job = _job
+	_job = null
+	_lap_knobs[job.lap] = job.knobs
+	field.add_lap(job.lap, job.knobs, job.clock, job.plan, job.fairness, job.lap == Rules.START_LAP)
+	var note := "lap %d %s" % [job.lap, job.from]
+	if job.from == "live" or job.from == "forced":
+		note += ", %d passes, %d cleared, %.1f s cpu over %.1f s" % [job.passes, job.cleared.size(),
+			job.work_usec / 1_000_000.0, (Time.get_ticks_msec() - _job_started_ms) / 1000.0]
+	print("LAP READY " + note)
+	if state == State.LOADING:
+		FrameMeter.load_mark("validate", note, true)
+	elif FrameMeter.active:
+		FrameMeter.note("lap %d taken" % job.lap)
+
+
+# Per frame, in an endless run: which lap is being played, the next lap's
+# generation and building inside the frame budget, freeing the lap behind.
+func _tick_course(t: float, z_back: float) -> void:
+	var lap := BeatClock.lap_at(t)
+	if lap != _lap_now:
+		_lap_now = lap
+		field.set_current(lap)
+		knobs = _lap_knobs.get(lap, knobs)
+		motion.knobs = knobs
+		if lap >= 1 and not graduated:
+			# The one flag: from now on lap 0 no longer teaches.
+			graduated = true
+			Progress.set_graduated()
+	var next := maxi(lap, Rules.START_LAP) + 1
+	if _job == null and not field.has_lap(next):
+		_job = LapGen.begin(BeatClock, next, true)
+		_job_started_ms = Time.get_ticks_msec()
+	if _job != null:
+		var local_bar := BeatClock.bar_at(t) - lap * BeatClock.loop_bars
+		if local_bar >= GEN_FORCE_BAR:
+			LapGen.force_finish(_job)
+		if LapGen.step(_job, GEN_BUDGET_USEC):
+			_take_lap()
+	elif field.pending_items() > 0:
+		var hurry := BeatClock.bar_at(t) - lap * BeatClock.loop_bars >= GEN_FORCE_BAR
+		field.build_step(GEN_BUDGET_USEC * (4 if hurry else 1))
+	# The lap behind goes once the death line is well into this one.
+	if field.has_lap(lap - 1) and field.has_lap(lap) \
+			and Rules.back_edge(z_back) > field.laps[lap].z0 + FREE_AFTER_BARS * Rules.BAR_LENGTH:
+		field.free_lap(lap - 1)
+
+
+# The window's depth now. Between two laps whose bands differ it eases
+# over the new lap's first EASE_BARS bars (the camera distance follows).
+func _window_depth_at(t: float) -> float:
+	var depth := Rules.window_depth(knobs)
+	if not endless or _lap_now <= 0 or not _lap_knobs.has(_lap_now - 1):
+		return depth
+	var prev := Rules.window_depth(_lap_knobs[_lap_now - 1])
+	if is_equal_approx(prev, depth):
+		return depth
+	var first := _lap_now * BeatClock.loop_bars + 1
+	var u := clampf((t - BeatClock.bar_start(first)) / maxf(BeatClock.bar_start(first + int(EASE_BARS)) - BeatClock.bar_start(first), 0.001), 0.0, 1.0)
+	return lerpf(prev, depth, u * u * (3.0 - 2.0 * u))
 
 
 func _input(event: InputEvent) -> void:
@@ -270,7 +414,11 @@ func _tick_run(delta: float) -> void:
 	var t := BeatClock.song_time()
 	var ht := BeatClock.hazard_time()
 	var z_back := BeatClock.z_at(t)
-	var z_front := z_back + Rules.window_depth(knobs)
+	if endless:
+		_tick_course(t, z_back)
+	var depth := _window_depth_at(t)
+	rig.set_window_depth(depth)
+	var z_front := z_back + depth
 
 	player.move_dir = bot.move_dir(self) if bot != null else _move_input()
 	player.tick(delta, z_back, z_front, field)
@@ -281,13 +429,13 @@ func _tick_run(delta: float) -> void:
 	_update_demo(ht)
 	field.widen_goal(clampf((player.position.z - (field.goal_z - BeatClock.BAR_UNITS)) / BeatClock.BAR_UNITS, 0.0, 1.0))
 
-	for i in field.checkpoints.size():
-		if i > checkpoint and t >= float(field.checkpoints[i]["t"]):
-			checkpoint = i
+	for cp in field.checkpoints:
+		if float(cp["t"]) > float(checkpoint.get("t", -1.0)) and t >= float(cp["t"]):
+			checkpoint = {"t": cp["t"], "resume_t": cp["resume_t"], "x": cp["x"], "z": cp["z"], "bar": cp["bar"]}
 			FrameMeter.note("checkpoint")
-			field.mark_checkpoint(i)
-			motion.on_checkpoint(float(field.checkpoints[i]["z"]))
-			hud.lit = i + 1
+			field.mark_checkpoint(cp)
+			motion.on_checkpoint(float(cp["z"]))
+			hud.lit += 1
 			player.creature.play_glance()
 			Input.vibrate_handheld(HAPTIC_COIN_MS)
 
@@ -383,8 +531,7 @@ func _update_world(ht: float, z_back: float) -> void:
 	# the first downbeat it kills (Rules.death_line).
 	_edge_line.position = Vector3(0.0, 0.03, Rules.back_edge(z_back))
 	field.update_tiles(ht, z_back)
-	for h in field.hazards:
-		h.update_state(ht)
+	field.update_hazards(ht, z_back)
 
 
 # Nearest hazard box or plate that is lethal now or within the next beat.
@@ -548,12 +695,11 @@ func _game_over() -> void:
 func _rewind() -> void:
 	var t := BeatClock.start_offset
 	var x := 0.0
-	var z := START_Z
-	if checkpoint >= 0:
-		var cp: Dictionary = field.checkpoints[checkpoint]
-		t = float(cp["resume_t"])
-		x = float(cp["x"])
-		z = float(cp["z"])
+	var z := _start_z
+	if not checkpoint.is_empty():
+		t = float(checkpoint["resume_t"])
+		x = float(checkpoint["x"])
+		z = float(checkpoint["z"])
 	player.reset_to(x, z)
 	player.dead = false
 	player.creature.play_respawn()

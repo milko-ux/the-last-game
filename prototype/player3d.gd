@@ -54,7 +54,7 @@ func tick(delta: float, z_back: float, z_front: float, field: Node3D) -> void:
 	if v.length() > 1.0:
 		v = v.normalized()
 	# The speed is a knob of the field being run on (its lap / level).
-	var speed: float = Rules.player_speed(field.knobs)
+	var speed: float = Rules.player_speed(field.knobs_at(position.z))
 	position.x += v.x * SCREEN_X * speed * delta
 	position.z = minf(position.z + v.y * speed * delta, z_front - HALF_D)
 	# The intro carry: the window pushes an idle player forward instead of

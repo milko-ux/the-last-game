@@ -33,6 +33,17 @@ var seed := 1
 var max_deaths := 999
 var start_bar := 0            # start_bar=N: begin at bar N as if from a checkpoint
 var level := 1                # level=N: which level to play (levels/curriculum.json)
+var endless := false          # endless=1: the endless run instead (laps=N: stop after N laps; grad=1: as a graduated player)
+var laps := 1
+var grad := false
+var start_lap := 0
+# Endless: one validator path per lap. The game trusts shipped verdicts
+# and keeps no path, so the bot validates each lap itself, in slices of
+# BOT_VALIDATE_USEC per frame while the lap before it is being played.
+const BOT_VALIDATE_USEC := 6000
+var _lap_paths := {}          # lap -> {"path": [...], "first_beat": run-wide beat index}
+var _lap_jobs := {}           # lap -> Fairness.Job
+var _Fairness: GDScript = null
 var _started_at_bar := false
 var rng := RandomNumberGenerator.new()
 # Human bot knobs: see the HUMAN BOT section at the bottom.
@@ -82,6 +93,15 @@ func _process(_delta: float) -> bool:
 		min_fps = mini(min_fps, int(Engine.get_frames_per_second()))
 	var done: bool = clock.current_bar() > max_bar or test.state == test.State.WON or test.state == test.State.GAMEOVER \
 		or test.deaths >= max_deaths or (Time.get_ticks_msec() - t_wall0) > 900000
+	if endless:
+		done = clock.current_lap() >= start_lap + laps or test.state == test.State.GAMEOVER or test.deaths >= max_deaths \
+			or (Time.get_ticks_msec() - t_wall0) > 3600000
+		if done:
+			print("AUTOPLAY endless mode=%s seed=%d start_lap=%d laps=%d grad=%s deaths=%d at_bars=%s notes=%d lap_reached=%d run_s=%.0f min_fps=%d" % [
+				mode, seed, start_lap, laps, grad, test.deaths, str(death_bars), test.notes, clock.current_lap(),
+				clock.song_time() - clock.start_offset, min_fps])
+			return true
+		return false
 	if done:
 		print("AUTOPLAY mode=%s level=%d seed=%d bars<=%d deaths=%d at_bars=%s notes=%d state=%d goal=%s min_fps=%d" % [
 			mode, level, seed, max_bar, test.deaths, str(death_bars), test.notes, test.state,
@@ -105,10 +125,21 @@ func _setup() -> void:
 			start_bar = int(kv[1])
 		if kv.size() == 2 and kv[0] == "level":
 			level = int(kv[1])
+		if kv.size() == 2 and kv[0] == "endless":
+			endless = kv[1] == "1"
+		if kv.size() == 2 and kv[0] == "laps":
+			laps = int(kv[1])
+		if kv.size() == 2 and kv[0] == "grad":
+			grad = kv[1] == "1"
+		if kv.size() == 2 and kv[0] == "start_lap":
+			start_lap = int(kv[1])
 	rng.seed = 424242 + seed * 7919
 	Engine.max_fps = 30
 	Rules = load("res://prototype/rules.gd")
+	Rules.ENDLESS = endless
+	Rules.START_LAP = start_lap
 	Rules.LEVEL = level
+	_Fairness = load("res://prototype/fairness.gd")
 	Rules.LIVES_OVERRIDE = 0   # bots measure the level, never the lives
 	HazardMath = load("res://prototype/hazard_math.gd")
 	clock = root.get_node_or_null("BeatClock")
@@ -116,16 +147,31 @@ func _setup() -> void:
 		clock = load("res://prototype/beat_clock.gd").new()
 		clock.name = "BeatClock"
 		root.add_child(clock)
+	# Before the scene exists: it reads the flag in its _ready. And a bot
+	# never writes to the save file.
+	var progress = root.get_node_or_null("Progress")
+	if progress != null:
+		progress.save_enabled = false
+		progress.graduated = grad
 	var scene: PackedScene = load("res://prototype/track_test.tscn")
 	test = scene.instantiate()
 	root.add_child(test)
 	test.bot = self
 	var fair: Dictionary = test.field.fairness
-	if fair.get("cached", false) or fair["path"].is_empty():
+	if endless:
+		# (The scene made its first lap in _ready: headless skips the loading phase.)
+		_begin_lap_path(start_lap)
+		_Fairness.step(_lap_jobs[start_lap], -1)
+		_finish_lap_paths()
+		fair = {"ok": true, "path": _lap_paths[start_lap]["path"]}
+		path = fair["path"]
+		first_beat = int(_lap_paths[start_lap]["first_beat"])
+	elif fair.get("cached", false) or fair["path"].is_empty():
 		# The game reused a cached verdict; compute the path here.
-		fair = load("res://prototype/fairness.gd").validate(test.field.plan, clock, test.knobs)
-	path = fair["path"]
-	first_beat = int(fair["first_beat"])
+		fair = _Fairness.validate(test.field.plan, clock, test.knobs)
+	if not endless:
+		path = fair["path"]
+		first_beat = int(fair["first_beat"])
 	t_wall0 = Time.get_ticks_msec()
 	print("AUTOPLAY start mode=%s validator_ok=%s path_len=%d" % [mode, fair["ok"], path.size()])
 
@@ -133,6 +179,8 @@ func _setup() -> void:
 # Called by the scene every frame instead of reading the joystick.
 # Returns (screen-right, forward); world +x is screen-left.
 func move_dir(scene: Node) -> Vector2:
+	if endless:
+		_tick_lap_paths()
 	var target: Variant
 	match mode:
 		"naive":
@@ -153,6 +201,47 @@ func move_dir(scene: Node) -> Vector2:
 		return Vector2.ZERO
 	var v := d / dist
 	return Vector2(-v.x, v.y)
+
+
+# For the windowed tools (shot.gd, frame_probe.gd), which drive a scene
+# with this object as its bot: endless runs get their paths lap by lap.
+func attach_endless(scene: Node, the_clock: Node) -> void:
+	endless = true
+	test = scene
+	clock = the_clock
+	_Fairness = load("res://prototype/fairness.gd")
+
+
+func _begin_lap_path(lap: int) -> void:
+	var l = test.field.laps[lap]
+	_lap_jobs[lap] = _Fairness.begin(test.field.lap_plan_view(lap), l.clock, l.knobs)
+
+
+func _finish_lap_paths() -> void:
+	for lap in _lap_jobs.keys():
+		var job = _lap_jobs[lap]
+		if job.finished:
+			var fair: Dictionary = _Fairness.finish(job)
+			_lap_paths[lap] = {"path": fair["path"], "first_beat": int(test.field.laps[lap].first_beat) if test.field.laps.has(lap) else 0, "ok": fair["ok"]}
+			if not fair["ok"]:
+				print("AUTOPLAY lap %d: the bot's own validation FAILED: %s" % [lap, str(fair["problems"])])
+			_lap_jobs.erase(lap)
+
+
+# Endless: every lap the field holds gets a path, a slice per frame.
+func _tick_lap_paths() -> void:
+	for lap in test.field.laps:
+		if not _lap_paths.has(lap) and not _lap_jobs.has(lap) and test.field.lap_built(lap):
+			_begin_lap_path(lap)
+	for lap in _lap_jobs:
+		_Fairness.step(_lap_jobs[lap], BOT_VALIDATE_USEC)
+		break
+	_finish_lap_paths()
+	# Follow the path of the lap the hazard clock is in.
+	var lap_now: int = clock.lap_at(clock.hazard_time())
+	if _lap_paths.has(lap_now):
+		path = _lap_paths[lap_now]["path"]
+		first_beat = int(_lap_paths[lap_now]["first_beat"])
 
 
 func _validator_target(scene: Node) -> Variant:
@@ -194,7 +283,7 @@ func _naive_target(scene: Node) -> Variant:
 	var spec: Dictionary = naive_target
 	var t: float = clock.hazard_time()
 	var z_back: float = clock.z_at(clock.song_time())
-	var goal := Vector2(HazardMath.gate_opening_x(spec, t, test.knobs), float(spec["z"]) + 1.5)
+	var goal := Vector2(HazardMath.gate_opening_x(spec, t, test.field.knobs_of(spec)), float(spec["z"]) + 1.5)
 	if goal.y > z_back + Rules.window_depth(test.knobs) - 1.0:
 		return Vector2(goal.x, z_back + Rules.window_depth(test.knobs) - 1.5)
 	var p: Vector3 = scene.player.position
@@ -387,10 +476,10 @@ func _human_approach(cands: Array, here: Vector2, own: Vector2, wall_z: float, t
 	var gx: float
 	var need: float
 	if String(spec["kind"]) == "gate":
-		gx = HazardMath.gate_opening_x(spec, tp, test.knobs)
+		gx = HazardMath.gate_opening_x(spec, tp, test.field.knobs_of(spec))
 		need = 1.0
 	else:
-		gx = HazardMath.sweeper_gap_x(spec, t, test.knobs)
+		gx = HazardMath.sweeper_gap_x(spec, t, test.field.knobs_of(spec))
 		need = 4.5
 	if absf(gx - here.x) <= need:
 		return []
@@ -460,7 +549,7 @@ func _human_boxed_at(c: Vector2, tt: float, margin: float) -> bool:
 	for spec in _near_specs:
 		if String(spec["kind"]) == "gate" or absf(float(spec["z"]) - c.y) > 5.0:
 			continue
-		for b in HazardMath.boxes_at(spec, tt, test.knobs):
+		for b in HazardMath.boxes_at(spec, tt, test.field.knobs_of(spec)):
 			var bb: AABB = b
 			if bb.position.y > 1.6:
 				continue
@@ -476,7 +565,7 @@ func _human_volley_warned(c: Vector2, tt: float) -> bool:
 	for spec in _near_specs:
 		if String(spec["kind"]) != "volley" or bool(spec.get("demo", false)):
 			continue
-		if absf(float(spec["z"]) - c.y) < 1.0 and HazardMath.volley_warning(spec, tt, test.knobs):
+		if absf(float(spec["z"]) - c.y) < 1.0 and HazardMath.volley_warning(spec, tt, test.field.knobs_of(spec)):
 			return true
 	return false
 
@@ -526,7 +615,7 @@ func _human_walk_ok(field, a: Vector2, b: Vector2, t_start: float, margin: float
 		if clock.bar_at(t_cross) != clock.bar_at(seen_t):
 			return false
 		var x := lerpf(a.x, b.x, u)
-		if absf(x - HazardMath.gate_opening_x(spec, seen_t, test.knobs)) + margin > Rules.gate_gap(test.knobs) * 0.5:
+		if absf(x - HazardMath.gate_opening_x(spec, seen_t, test.field.knobs_of(spec))) + margin > Rules.gate_gap(test.field.knobs_of(spec)) * 0.5:
 			return false
 	return true
 

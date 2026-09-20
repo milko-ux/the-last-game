@@ -172,8 +172,15 @@ func _build_backdrop() -> void:
 # Called by the run scene with the knobs of what is being played: the
 # camera distance follows the window (26 at 2.2 bars, 28 at 2.5).
 func configure(k: Dictionary) -> void:
-	_window_depth = Rules.window_depth(k)
-	CAMERA_DISTANCE = CAMERA_DISTANCE_AT_2_2 + (Rules.window_bars(k) - 2.2) * CAMERA_DISTANCE_PER_BAR
+	set_window_depth(Rules.window_depth(k))
+
+
+# The window's depth in units, any value: the endless run eases it between
+# two laps whose bands differ (2.5 -> 2.2 bars, distance 28 -> 26) over the
+# new lap's first two bars, so neither the window nor the camera snaps.
+func set_window_depth(depth: float) -> void:
+	_window_depth = depth
+	CAMERA_DISTANCE = CAMERA_DISTANCE_AT_2_2 + (depth / Rules.BAR_LENGTH - 2.2) * CAMERA_DISTANCE_PER_BAR
 	set_window(window_back)
 
 

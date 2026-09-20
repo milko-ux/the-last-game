@@ -65,13 +65,31 @@ var _shown_lo := 0
 var _shown_hi := 0
 
 
-# `seed_level`: which curriculum row the course belongs to (part of the seed).
-func build(z_from: float, z_to: float, seed_level: int) -> void:
-	for model in ["building_tall", "building_stacked", "building_tall_hi", "building_stacked_hi"]:
-		_meshes[model] = Props.mesh_of(model)
+# Part of the seed: the level (the dev path) or SEASON_SEED + lap.
+var seed_level := 1
+# Monoliths are placed per 8-unit step counted from here (the first z
+# ever asked for), so a strip built later continues the same sequence.
+var _origin_z := INF
+
+
+# The level path: everything at once.
+func build(z_from: float, z_to: float, level_seed: int) -> void:
+	seed_level = level_seed
+	build_range(z_from, z_to)
+
+
+# One strip of the course (the endless run builds a lap's monoliths a
+# strip at a time, between frames). Strips may come in any order; every
+# monolith is inserted at its place in the z-sorted list.
+func build_range(z_from: float, z_to: float) -> void:
+	if _meshes.is_empty():
+		for model in ["building_tall", "building_stacked", "building_tall_hi", "building_stacked_hi"]:
+			_meshes[model] = Props.mesh_of(model)
+	if _origin_z == INF:
+		_origin_z = z_from
 	var specs := []              # [z, transform, kind, far]
 	var rng := RandomNumberGenerator.new()
-	var bar := 0
+	var bar := int(round((z_from - _origin_z) / BeatClock.BAR_UNITS))
 	var z := z_from
 	while z < z_to:
 		rng.seed = hash("monoliths-%d-%d" % [seed_level, bar])
@@ -84,7 +102,12 @@ func build(z_from: float, z_to: float, seed_level: int) -> void:
 			specs.append(_spec(rng, side, rng.randf_range(FAR_GAP_MIN, FAR_GAP_MAX), z, true))
 		z += BeatClock.BAR_UNITS
 		bar += 1
-	specs.sort_custom(func(a, b): return a[0] < b[0])
+	# The shown range is indexed: hide it, insert, and let the next
+	# set_window() show what belongs (same frame, nothing flickers).
+	for i in range(_shown_lo, _shown_hi):
+		_nodes[i].visible = false
+	_shown_lo = 0
+	_shown_hi = 0
 	for sp in specs:
 		var mi := MeshInstance3D.new()
 		mi.mesh = _meshes[sp[2]]
@@ -93,11 +116,12 @@ func build(z_from: float, z_to: float, seed_level: int) -> void:
 		mi.transform = sp[1]
 		mi.visible = false
 		add_child(mi)
-		_z.append(sp[0])
-		_nodes.append(mi)
-		_kinds.append(sp[2])
-		_far.append(1 if sp[3] else 0)
-		_detailed.append(0)
+		var at := _z.bsearch(sp[0], false)
+		_z.insert(at, sp[0])
+		_nodes.insert(at, mi)
+		_kinds.insert(at, sp[2])
+		_far.insert(at, 1 if sp[3] else 0)
+		_detailed.insert(at, 0)
 
 
 # One monolith: a model, ONE scale, a small yaw and tilt, front or back

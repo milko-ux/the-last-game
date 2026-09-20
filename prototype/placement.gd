@@ -139,7 +139,53 @@ static func _mixed_curriculum(bar_count: int) -> Array:
 # `knobs` is the lap's (or level's) knob dictionary, Rules.level(n): the
 # layout is a function of the beatmap, the re-rolls and these knobs, and
 # of nothing global (Phase E section 1).
-static func build(clock, rerolls: Dictionary, knobs: Dictionary, curriculum: Array = []) -> Dictionary:
+# Resumable (Phase E section 3): begin() does the set-up, step() places ONE
+# bar, finish() runs the hard-rule check and returns the plan. build() is
+# the three in a row and gives exactly what it always gave; the endless
+# run calls step() a bar at a time, between frames, so generating the next
+# lap never costs a visible frame.
+#
+# Three inputs arrive through `knobs` / `cleared` for the endless run and
+# are absent on the level path (so a level's layout is unchanged):
+#   knobs["seed"]        seeds the layout instead of the level number
+#                        (SEASON_SEED + lap: one course per season)
+#   knobs["plain_bar1"]  bar 1 is a plain bar with a checkpoint and the
+#                        word STAGE n (every lap after the first)
+#   cleared              bars the validator could not make fair: they are
+#                        built as open floor (a lap is fair or easier)
+class Builder:
+	var clock
+	var rerolls: Dictionary
+	var knobs: Dictionary
+	var curriculum: Array
+	var cleared: Dictionary
+	var level_n := 1
+	var seed_n := 1
+	var bars := {}
+	var hazards := []
+	var notes := []
+	var checkpoints := []
+	var demo_bars := {}
+	var curve: Array = []
+	var acc := 0.0
+	var ctx: Ctx
+	var gate_in_wave := {}
+	var orbiter_bars := {}
+	var after_gate := false
+	var bar := 1
+
+	func done() -> bool:
+		return bar > clock.bar_count()
+
+
+static func build(clock, rerolls: Dictionary, knobs: Dictionary, curriculum: Array = [], cleared: Dictionary = {}) -> Dictionary:
+	var st := begin(clock, rerolls, knobs, curriculum, cleared)
+	while not st.done():
+		step(st)
+	return finish(st)
+
+
+static func begin(clock, rerolls: Dictionary, knobs: Dictionary, curriculum: Array = [], cleared: Dictionary = {}) -> Builder:
 	var level_data := knobs
 	var level_n := Rules.level_of(knobs)
 	var mixed: bool = String(level_data.get("structure", "mixed")) != "curriculum"
@@ -173,159 +219,217 @@ static func build(clock, rerolls: Dictionary, knobs: Dictionary, curriculum: Arr
 	var orbiter_bars := {}                   # wave "from" -> orbiter bars so far
 	var after_gate := false
 
-	for bar in range(1, clock.bar_count() + 1):
-		var rng := RandomNumberGenerator.new()
-		# Hashed, not a stride: seeds one stride apart gave correlated first
-		# draws (five pit bars in a row on the first build).
-		rng.seed = hash(Vector3i(bar, int(rerolls.get(bar, 0)), level_n))
-		var e := _entry_for(curriculum, bar)
-		var wave := String(e["wave"])
-		var k: int = bar - int(e["from"])
-		ctx.rng = rng
-		ctx.bar = bar
-		ctx.z0 = clock.z_at(clock.bar_start(bar))
-		ctx.z1 = clock.z_at(clock.bar_end(bar))
-		ctx.zc = (ctx.z0 + ctx.z1) * 0.5
-		ctx.depth = ctx.z1 - ctx.z0
-		ctx.entry = {"density": "rest", "pattern": "none", "cols": [0, Rules.COLS - 1], "plates": [],
-			"plain_rows": [], "pits": [], "checkpoint": false, "demo": false, "word": ""}
-		ctx.kinds = []
-		ctx.demo = false
-		ctx.after_gate = after_gate
-		ctx.wave_index = clampi(int(e.get("index", 0)), 0, curve.size() - 1)
-		ctx.types_per_bar = Rules.types_per_bar_at(knobs, ctx.wave_index)
-		ctx.pairs_ok = Rules.orbiter_pairs_at(knobs, ctx.wave_index)
-		var mult := float(curve[ctx.wave_index])
+	var st := Builder.new()
+	st.clock = clock
+	st.rerolls = rerolls
+	st.knobs = knobs
+	st.curriculum = curriculum
+	st.cleared = cleared
+	st.level_n = level_n
+	st.seed_n = int(knobs.get("seed", level_n))
+	st.bars = bars
+	st.hazards = hazards
+	st.notes = notes
+	st.checkpoints = checkpoints
+	st.demo_bars = demo_bars
+	st.curve = curve
+	st.ctx = ctx
+	st.gate_in_wave = gate_in_wave
+	st.orbiter_bars = orbiter_bars
+	return st
 
-		if wave == "breather":
-			_breather(ctx, e, bar, checkpoints)
-			acc = 0.0
-		else:
-			acc += mult
-			var n := maxi(1, int(floor(acc)))
-			acc -= n
-			match wave:
-				"doorways":
-					# A gate every bar (bar 1 = demo); a one-tile pit in the middle
-					# rows of every second bar, where the validator lets it stand.
-					_place(ctx, "gate", k == 0)
-					if k % 2 == 1:
-						_place_pit(ctx)
-				"thrown":
-					var kind := ""
-					match k:
-						0: kind = "volley"
-						1: kind = "slammer"
-						2: kind = "volley"
-						3: kind = "slammer"
-						_: kind = "volley" if rng.randi() % 2 == 0 else "slammer"
-					_place(ctx, kind, k < 2)
-					_extra(ctx, n - 1, [kind])
-				"walls":
-					var kind := "sweeper"
-					var wf := int(e["from"])
-					if k >= 2 and not gate_in_wave.get(wf, false) and not after_gate and rng.randf() < 0.3:
-						kind = "gate"
-						gate_in_wave[wf] = true
-					_place(ctx, kind, k == 0)
-					_extra(ctx, n - 1, ["volley", "slammer"])
-				"orbiters":
-					# At least 6 of the 8 bars carry an orbiter: the two bars that may
-					# skip it are chosen up front, never the demo.
-					var wf := int(e["from"])
-					var skip: Array = orbiter_bars.get(wf, [])
-					if skip.is_empty():
-						var r2 := RandomNumberGenerator.new()
-						r2.seed = 4242 + wf + 31 * level_n
-						skip = [2 + r2.randi() % 3, 5 + r2.randi() % 3]
-						orbiter_bars[wf] = skip
-					if skip.has(k) and not gate_in_wave.get(wf, false) and not after_gate:
-						_place(ctx, "gate", false)
-						gate_in_wave[wf] = true
-					else:
-						_place(ctx, "orbiter", k == 0)
-					_extra(ctx, n - 1, ["orbiter"])
-				"floor":
-					# Each allowed (level-1) pattern gets its own demo bar, then a live bar.
-					var pats := []
-					for p in ctx.allowed_patterns:
-						if not String(p) in Rules.BEAT_PATTERNS:
-							pats.append(String(p))
-					var pattern := ""
-					if k < pats.size() * 2:
-						pattern = pats[k / 2]
-						_place_plates(ctx, pattern, k % 2 == 0)
-					else:
-						pattern = pats[rng.randi() % pats.size()]
-						_place_plates(ctx, pattern, false)
-					_extra(ctx, n - 1, ["orbiter", "volley", "slammer", "gate"])
-				"pressure", "outro":
-					# Nothing new: already-shown kinds at the ramp's density. A pit
-					# alone is not a bar's hazard; pits only come as extras.
-					var pool := _shown_pool(ctx)
-					var main := pool.filter(func(x): return x != "pit")
-					if main.is_empty():
-						_open_floor(ctx, e, bar, checkpoints)
-					else:
-						var tries := 0
-						while tries < 6 and not _place(ctx, String(main[rng.randi() % main.size()]), false):
-							tries += 1
-						_extra(ctx, n - 1, pool)
-				"mixed":
-					var pool := _mixed_pool(ctx)
-					var first := String(pool[rng.randi() % pool.size()])
-					var demo_first := Rules.demo_bars_on(knobs) and not ctx.shown.has(first) and not ctx.demoed.has(first)
-					_place(ctx, first, demo_first)
-					if not demo_first:
-						_extra(ctx, n - 1, pool)
-						if ctx.types_per_bar > 1 and rng.randf() < 0.35:
-							_place_pit(ctx)
-				_:
+
+# One bar. The locals below are the ones the loop body always used; the
+# two that are plain values (acc, after_gate) are written back at the end.
+static func step(st: Builder) -> void:
+	var clock = st.clock
+	var rerolls := st.rerolls
+	var knobs := st.knobs
+	var curriculum := st.curriculum
+	var level_n := st.level_n
+	var seed_n := st.seed_n
+	var bars := st.bars
+	var hazards := st.hazards
+	var notes := st.notes
+	var checkpoints := st.checkpoints
+	var demo_bars := st.demo_bars
+	var curve := st.curve
+	var ctx := st.ctx
+	var gate_in_wave := st.gate_in_wave
+	var orbiter_bars := st.orbiter_bars
+	var acc := st.acc
+	var after_gate := st.after_gate
+	var bar := st.bar
+	var rng := RandomNumberGenerator.new()
+	# Hashed, not a stride: seeds one stride apart gave correlated first
+	# draws (five pit bars in a row on the first build).
+	rng.seed = hash(Vector3i(bar, int(rerolls.get(bar, 0)), seed_n))
+	var e := _entry_for(curriculum, bar)
+	var wave := String(e["wave"])
+	var k: int = bar - int(e["from"])
+	ctx.rng = rng
+	ctx.bar = bar
+	ctx.z0 = clock.z_at(clock.bar_start(bar))
+	ctx.z1 = clock.z_at(clock.bar_end(bar))
+	ctx.zc = (ctx.z0 + ctx.z1) * 0.5
+	ctx.depth = ctx.z1 - ctx.z0
+	ctx.entry = {"density": "rest", "pattern": "none", "cols": [0, Rules.COLS - 1], "plates": [],
+		"plain_rows": [], "pits": [], "checkpoint": false, "demo": false, "word": ""}
+	ctx.kinds = []
+	ctx.demo = false
+	ctx.after_gate = after_gate
+	ctx.wave_index = clampi(int(e.get("index", 0)), 0, curve.size() - 1)
+	ctx.types_per_bar = Rules.types_per_bar_at(knobs, ctx.wave_index)
+	ctx.pairs_ok = Rules.orbiter_pairs_at(knobs, ctx.wave_index)
+	var mult := float(curve[ctx.wave_index])
+
+	if bar == 1 and bool(knobs.get("plain_bar1", false)):
+		# Every lap after the first opens on a plain bar with a checkpoint:
+		# no hazard spans the seam, and a rewind never reaches an earlier lap.
+		_open_floor(ctx, {"checkpoint": 1}, bar, checkpoints)
+		ctx.entry["density"] = "breather"
+		ctx.entry["word"] = "STAGE %d" % int(knobs.get("stage", 1))
+		acc = 0.0
+	elif st.cleared.has(bar):
+		# The validator could not make this bar fair within the lap's passes.
+		_open_floor(ctx, {}, bar, checkpoints)
+		ctx.entry["density"] = "breather"
+		acc = 0.0
+	elif wave == "breather":
+		_breather(ctx, e, bar, checkpoints)
+		acc = 0.0
+	else:
+		acc += mult
+		var n := maxi(1, int(floor(acc)))
+		acc -= n
+		match wave:
+			"doorways":
+				# A gate every bar (bar 1 = demo); a one-tile pit in the middle
+				# rows of every second bar, where the validator lets it stand.
+				_place(ctx, "gate", k == 0)
+				if k % 2 == 1:
+					_place_pit(ctx)
+			"thrown":
+				var kind := ""
+				match k:
+					0: kind = "volley"
+					1: kind = "slammer"
+					2: kind = "volley"
+					3: kind = "slammer"
+					_: kind = "volley" if rng.randi() % 2 == 0 else "slammer"
+				_place(ctx, kind, k < 2)
+				_extra(ctx, n - 1, [kind])
+			"walls":
+				var kind := "sweeper"
+				var wf := int(e["from"])
+				if k >= 2 and not gate_in_wave.get(wf, false) and not after_gate and rng.randf() < 0.3:
+					kind = "gate"
+					gate_in_wave[wf] = true
+				_place(ctx, kind, k == 0)
+				_extra(ctx, n - 1, ["volley", "slammer"])
+			"orbiters":
+				# At least 6 of the 8 bars carry an orbiter: the two bars that may
+				# skip it are chosen up front, never the demo.
+				var wf := int(e["from"])
+				var skip: Array = orbiter_bars.get(wf, [])
+				if skip.is_empty():
+					var r2 := RandomNumberGenerator.new()
+					r2.seed = 4242 + wf + 31 * seed_n
+					skip = [2 + r2.randi() % 3, 5 + r2.randi() % 3]
+					orbiter_bars[wf] = skip
+				if skip.has(k) and not gate_in_wave.get(wf, false) and not after_gate:
+					_place(ctx, "gate", false)
+					gate_in_wave[wf] = true
+				else:
+					_place(ctx, "orbiter", k == 0)
+				_extra(ctx, n - 1, ["orbiter"])
+			"floor":
+				# Each allowed (level-1) pattern gets its own demo bar, then a live bar.
+				var pats := []
+				for p in ctx.allowed_patterns:
+					if not String(p) in Rules.BEAT_PATTERNS:
+						pats.append(String(p))
+				var pattern := ""
+				if k < pats.size() * 2:
+					pattern = pats[k / 2]
+					_place_plates(ctx, pattern, k % 2 == 0)
+				else:
+					pattern = pats[rng.randi() % pats.size()]
+					_place_plates(ctx, pattern, false)
+				_extra(ctx, n - 1, ["orbiter", "volley", "slammer", "gate"])
+			"pressure", "outro":
+				# Nothing new: already-shown kinds at the ramp's density. A pit
+				# alone is not a bar's hazard; pits only come as extras.
+				var pool := _shown_pool(ctx)
+				var main := pool.filter(func(x): return x != "pit")
+				if main.is_empty():
 					_open_floor(ctx, e, bar, checkpoints)
+				else:
+					var tries := 0
+					while tries < 6 and not _place(ctx, String(main[rng.randi() % main.size()]), false):
+						tries += 1
+					_extra(ctx, n - 1, pool)
+			"mixed":
+				var pool := _mixed_pool(ctx)
+				var first := String(pool[rng.randi() % pool.size()])
+				var demo_first := Rules.demo_bars_on(knobs) and not ctx.shown.has(first) and not ctx.demoed.has(first)
+				_place(ctx, first, demo_first)
+				if not demo_first:
+					_extra(ctx, n - 1, pool)
+					if ctx.types_per_bar > 1 and rng.randf() < 0.35:
+						_place_pit(ctx)
+			_:
+				_open_floor(ctx, e, bar, checkpoints)
 
-		var entry := ctx.entry
-		if not ctx.kinds.is_empty() or not entry["pits"].is_empty():
-			entry["density"] = "pressure"
-		if ctx.demo:
-			entry["demo"] = true
-			entry["density"] = "demo"
-			var shown_as := String(entry["pattern"]) if ctx.kinds[0] == "plates" else String(ctx.kinds[0])
-			entry["word"] = String(DEMO_WORDS.get(shown_as, ""))
-			demo_bars[bar] = String(ctx.kinds[0])
-			if not ctx.demoed.has(shown_as):
-				ctx.demoed.append(shown_as)
-		# Once a bar is over, whatever it demoed (or, on level 1, whatever
-		# was live in it) may be used by later bars.
-		for kd in ctx.kinds:
-			var name := String(entry["pattern"]) if kd == "plates" else String(kd)
-			if not ctx.shown.has(name):
-				ctx.shown.append(name)
-		if not entry["pits"].is_empty() and not ctx.shown.has("pit"):
-			ctx.shown.append("pit")
+	var entry := ctx.entry
+	if not ctx.kinds.is_empty() or not entry["pits"].is_empty():
+		entry["density"] = "pressure"
+	if ctx.demo:
+		entry["demo"] = true
+		entry["density"] = "demo"
+		var shown_as := String(entry["pattern"]) if ctx.kinds[0] == "plates" else String(ctx.kinds[0])
+		entry["word"] = String(DEMO_WORDS.get(shown_as, ""))
+		demo_bars[bar] = String(ctx.kinds[0])
+		if not ctx.demoed.has(shown_as):
+			ctx.demoed.append(shown_as)
+	# Once a bar is over, whatever it demoed (or, on level 1, whatever
+	# was live in it) may be used by later bars.
+	for kd in ctx.kinds:
+		var name := String(entry["pattern"]) if kd == "plates" else String(kd)
+		if not ctx.shown.has(name):
+			ctx.shown.append(name)
+	if not entry["pits"].is_empty() and not ctx.shown.has("pit"):
+		ctx.shown.append("pit")
 
-		# Milko, 2026-09-15: a player who has just come through a gate has
-		# no attention to spare, so the row after every gate is plain too.
-		if after_gate and not entry["plain_rows"].has(0):
-			entry["plain_rows"].append(0)
-		var kept_plates := []
-		for tile in entry["plates"]:
-			if not entry["plain_rows"].has(int(tile[1])):
-				kept_plates.append(tile)
-		entry["plates"] = kept_plates
-		if kept_plates.is_empty() and not String(entry["pattern"]) in Rules.BEAT_PATTERNS and String(entry["pattern"]) != "none":
-			entry["pattern"] = "none"   # every tile sat on a plain row: no plates after all
-			ctx.kinds.erase("plates")
-		var kept_pits := []
-		for pit in entry["pits"]:
-			if not entry["plain_rows"].has(int(pit[1])) and not _row_has_plates(entry, int(pit[1])):
-				kept_pits.append(pit)
-		entry["pits"] = kept_pits
-		after_gate = ctx.kinds.has("gate")
-		bars[bar] = entry
+	# Milko, 2026-09-15: a player who has just come through a gate has
+	# no attention to spare, so the row after every gate is plain too.
+	if after_gate and not entry["plain_rows"].has(0):
+		entry["plain_rows"].append(0)
+	var kept_plates := []
+	for tile in entry["plates"]:
+		if not entry["plain_rows"].has(int(tile[1])):
+			kept_plates.append(tile)
+	entry["plates"] = kept_plates
+	if kept_plates.is_empty() and not String(entry["pattern"]) in Rules.BEAT_PATTERNS and String(entry["pattern"]) != "none":
+		entry["pattern"] = "none"   # every tile sat on a plain row: no plates after all
+		ctx.kinds.erase("plates")
+	var kept_pits := []
+	for pit in entry["pits"]:
+		if not entry["plain_rows"].has(int(pit[1])) and not _row_has_plates(entry, int(pit[1])):
+			kept_pits.append(pit)
+	entry["pits"] = kept_pits
+	after_gate = ctx.kinds.has("gate")
+	bars[bar] = entry
 
-	_check(bars, hazards, demo_bars, knobs)
-	return {"bars": bars, "hazards": hazards, "notes": notes, "checkpoints": checkpoints,
-		"demo_bars": demo_bars, "curriculum": curriculum}
+	st.acc = acc
+	st.after_gate = after_gate
+	st.bar = bar + 1
+
+
+static func finish(st: Builder) -> Dictionary:
+	_check(st.bars, st.hazards, st.demo_bars, st.knobs)
+	return {"bars": st.bars, "hazards": st.hazards, "notes": st.notes, "checkpoints": st.checkpoints,
+		"demo_bars": st.demo_bars, "curriculum": st.curriculum}
 
 
 # --- one bar ---------------------------------------------------------

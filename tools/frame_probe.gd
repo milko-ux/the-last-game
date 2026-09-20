@@ -27,6 +27,8 @@ extends SceneTree
 # ============================================================
 
 var level := 1
+var endless := false         # endless=1: the endless run instead of one level (start_lap=N: enter at lap N)
+var start_lap := 0
 var bars := 16
 var step_px := 1.5
 var _spike := 25.0            # spike=12: report frames over 12 ms instead of 25
@@ -55,6 +57,8 @@ func _process(_delta: float) -> bool:
 			if kv.size() == 2:
 				match kv[0]:
 					"level": level = int(kv[1])
+					"endless": endless = kv[1] == "1"
+					"start_lap": start_lap = int(kv[1])
 					"bars": bars = int(kv[1])
 					"step_px": step_px = float(kv[1])
 					"spike": _spike = float(kv[1])
@@ -124,6 +128,11 @@ func _summary() -> void:
 func _setup() -> void:
 	AudioServer.set_bus_volume_db(0, -80.0)
 	var Rules: GDScript = load("res://prototype/rules.gd")
+	Rules.ENDLESS = endless
+	var progress = root.get_node_or_null("Progress")
+	if progress != null:
+		progress.save_enabled = false
+	Rules.START_LAP = start_lap
 	if level != 1:
 		Rules.LEVEL = level
 	Rules.LIVES_OVERRIDE = 0
@@ -143,8 +152,11 @@ func _setup() -> void:
 	ap.clock = clock
 	ap.Rules = Rules
 	ap.HazardMath = load("res://prototype/hazard_math.gd")
-	var fair: Dictionary = test.field.fairness
-	if fair.get("cached", false) or fair["path"].is_empty():
-		fair = load("res://prototype/fairness.gd").validate(test.field.plan, clock, test.knobs)
-	ap.path = fair["path"]
-	ap.first_beat = int(fair["first_beat"])
+	if endless:
+		ap.attach_endless(test, clock)
+	else:
+		var fair: Dictionary = test.field.fairness
+		if fair.get("cached", false) or fair["path"].is_empty():
+			fair = load("res://prototype/fairness.gd").validate(test.field.plan, clock, test.knobs)
+		ap.path = fair["path"]
+		ap.first_beat = int(fair["first_beat"])

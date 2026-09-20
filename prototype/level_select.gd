@@ -21,7 +21,8 @@ var _flash := 0.0
 # The run scene builds its level in one blocking step (validation + the
 # field). Say so BEFORE it starts, or the phone just looks dead: the
 # tap shows LOADING, and the scene changes two frames later.
-var _loading_level := 0
+var _loading_level := 0        # > 0 a level, -1 the endless run
+var _endless_rect := Rect2()
 var _loading_frames := 0
 
 
@@ -32,7 +33,7 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	if _flash > 0.0:
 		_flash -= delta
-	if _loading_level > 0:
+	if _loading_level != 0:
 		_loading_frames += 1
 		if _loading_frames >= 3:
 			get_tree().change_scene_to_file(RUN_SCENE)
@@ -47,6 +48,12 @@ func _input(event: InputEvent) -> void:
 		pos = event.position
 	if pos == null:
 		return
+	if _endless_rect.has_point(pos) and _loading_level == 0:
+		Rules.ENDLESS = true
+		Rules.START_LAP = 0
+		_loading_level = -1
+		FrameMeter.load_begin()
+		return
 	for i in _rects.size():
 		if _rects[i].has_point(pos):
 			_tap(i + 1)
@@ -60,6 +67,7 @@ func _tap(level: int) -> void:
 		return
 	if _loading_level > 0:
 		return
+	Rules.ENDLESS = false
 	Rules.LEVEL = level
 	_loading_level = level
 	FrameMeter.load_begin()
@@ -111,9 +119,14 @@ func _draw() -> void:
 		_centre(font, sub, rect.position + Vector2(rect.size.x * 0.5, rect.size.y * 0.5 + 16), 11,
 			Color(col.r, col.g, col.b, col.a * 0.75))
 
-	if _loading_level > 0:
+	# The game itself: the endless run (this screen is the dev tool now).
+	_endless_rect = Rect2(Vector2(screen.x - 190.0, 22.0), Vector2(164.0, 44.0))
+	_glass_pill(_endless_rect, Palette.GOAL, 1.0)
+	_centre(font, "ENDLESS RUN", _endless_rect.position + _endless_rect.size * 0.5, 15, Color(1, 1, 1, 0.92))
+
+	if _loading_level != 0:
 		draw_rect(Rect2(Vector2.ZERO, screen), Color(0.04, 0.05, 0.08, 0.82), true)
-		_centre(font, "LOADING LEVEL %d" % _loading_level, screen * 0.5, 24, Palette.GOAL)
+		_centre(font, ("LOADING LEVEL %d" % _loading_level) if _loading_level > 0 else "LOADING THE RUN", screen * 0.5, 24, Palette.GOAL)
 		_centre(font, "building the level  ·  this can take a while the first time", screen * 0.5 + Vector2(0, 30), 12,
 			Color(Palette.TEXT.r, Palette.TEXT.g, Palette.TEXT.b, 0.8))
 

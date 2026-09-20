@@ -127,7 +127,7 @@
    "structure": "mixed"
   },
   {
-   "level": 4,
+   "level": 4, "reroll_passes": 24,
    "window_bars": 2.2,
    "song_tempo": 1.1,
    "player_speed": 2.3,
@@ -157,7 +157,7 @@
    "structure": "mixed"
   },
   {
-   "level": 5,
+   "level": 5, "reroll_passes": 24,
    "window_bars": 2.2,
    "song_tempo": 1.1,
    "player_speed": 2.3,

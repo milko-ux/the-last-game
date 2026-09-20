@@ -41,6 +41,34 @@ Identical, as are the validation pass counts (1, 3, 3, 7, 8, 35) and the re-roll
 - **`prototype/lap_clock.gd`:** one lap seen as a level (bars 1..72, absolute times and z) — what the generator, the validator and the field get handed in section 3.
 - **Test:** `godot --headless --path . -s tools/clock_test.gd` → `COUNTING 46054 samples over 3 laps: ok` (beat / bar / period indices step only by 0 or +1, every time inside the bar, beat and period it is given, lap 1's beats = lap 0's + one loop) · `SEAM into lap 1: 289 frames, run_time step min 6.55 ms max 7.50 ms (at most 1.01 frames' worth), negative steps 0` · rewind lap 1 → lap 0 → lap 3 follows in lap, audio place and z · `CLOCK TEST PASS`. BeatClock prints that SEAM line at every seam of a real run too.
 
+### Section 3 — the course, lap by lap (done)
+- **Band / seed / lap 0** (`prototype/lap_gen.gd`): lap k uses band `min(k + 1, 30)`; `SEASON_SEED` 20260901 + lap seeds the layout (`knobs["seed"]`, read by `placement.gd` instead of the level number). Lap 0 for a new player = level 1's curriculum, bars 1-72, its own seed: **untouched** (72 hazards, fair in 1 pass, as level 1). Lap 0 for a graduated player = band 1, `structure` mixed, no demo bars. `Progress.graduated` is set and saved the first time a run crosses into lap 1. Later bands keep their demo bars as the data says.
+- **Bar 1 of every later lap** is plain, with a checkpoint and the word `STAGE n` (`knobs["plain_bar1"]`). The validator starts such a lap FROM that bar (not from "any safe tile", which could be two bars in): the lap is proven fair from where the player really stands at the seam and after a rewind.
+- **Fair or easier, never stuck:** generate → validate → re-roll, up to the band's `reroll_passes`; bars still unfair after that are cleared to open floor and logged (`LAPGEN lap N: bar B … cleared`), and validation runs again; every round clears at least one bar. **Bands 4 and 5 got `reroll_passes` 24** in `levels/curriculum.json` (they cleared 6 and 3 bars at 10; levels 4-5 themselves settle in 7-8 passes, hashes unchanged).
+- **Resumable everything.** `Placement.begin / step / finish` (one bar per step), `Fairness.begin / step(budget) / finish` (unit = one beat's safe set, then one tile's reachability search), `LapGen.begin / step(budget)`, `field.build_step(budget)` (one bar's tiles / one hazard / one 64-unit strip of monoliths per item). `build()` / `validate()` are those in a row and give the same result: level hashes 1-5 re-checked identical after each change. **A new pass resumes from 5 bars before the first changed bar** (`Fairness.begin_from`, per-bar snapshots): a re-roll only changes that bar and later ones. Proven equal to walking the whole lap: laps 0-5, same passes, cleared bars and hashes with `incremental=0`.
+- **Live generation:** the next lap starts generating the moment a lap begins, `GEN_BUDGET_USEC` 2000 per frame (generation, then node building, share it); forced at bar 68 (`LapGen.force_finish`: unvalidated + failing bars cleared, never a stall). Measured on the Mac: slicing adds no overhead (6.56 s sliced vs 6.59 s straight for lap 1), worst slice 4.8 ms. Caveat found: in the headless bot the same work took ~4x the CPU time, because the OS parks 2 ms bursts on slow cores; a phone will do the same — which is what the shipped verdicts are for.
+- **Shipped verdicts:** `levels/verdicts.json`, made by `godot --headless --path . -s tools/lap_stats.gd -- laps=0-9 write=1` (both lap-0 variants; carries a hash of placement / rules / hazard_math / fairness / curriculum / beatmap and is ignored when that does not match; then the per-device cache, then live). With it a lap costs only its placement.
+
+| Lap | band | generate + validate (Mac) | passes | bars cleared | hazards | notes |
+|---|---|---|---|---|---|---|
+| 0 new | 1 | 1.9 s | 1 | 0 | 72 | 40 |
+| 0 graduated | 1 | 1.9 s | 1 | 0 | 53 | 34 |
+| 1 | 2 | 6.7 s | 4 | 0 | 73 | 33 |
+| 2 | 3 | 3.7 s | 4 | 0 | 62 | 36 |
+| 3 | 4 | 23.4 s | 18 | 0 | 55 | 32 |
+| 4 | 5 | 21.4 s | 15 | 0 | 53 | 35 |
+| 5 | 6 | 18.0 s | 9 | 0 | 61 | 36 |
+| 6 | 7 | 28.3 s | 10 | **9** | 45 | 22 |
+| 7 | 8 | 24.4 s | 10 | **7** | 49 | 28 |
+| 8 | 9 | 16.7 s | 10 | 0 | 60 | 30 |
+| 9 | 10 | 24.4 s | 10 | **5** | 54 | 21 |
+
+Laps 0-5: 0 cleared (target ≤ 2). Laps 6-9 run out of their 10 passes; raising `reroll_passes` on bands 7+ is the knob (Milko's call — it only costs Mac time now that verdicts ship).
+- **Nodes:** `field.gd` holds a rolling set of laps under run-wide bar numbers (the dev level is "one lap of 78 bars", built in one go). Lap k−1 is freed once the death line is 3 bars into lap k (monoliths with it); a later lap carries a hidden 12-unit lead-in slab that shows when the lap behind it goes, so a rewind to its bar-1 checkpoint never looks into a void. Hazards are posed only near the window now (`field.update_hazards`: −14 … +52 units) instead of every hazard of the level every frame.
+- **Window / camera between bands:** `track_test._window_depth_at` eases 2.5 → 2.2 bars over the new lap's first two bars; the camera distance follows (`rig.set_window_depth`).
+- **Entry:** the Phase R main scene is the run (`track_test.tscn`, `Rules.ENDLESS`); the level select is the dev tool (its ENDLESS RUN pill, or pick a level = the old path). Tools: `endless=1 [laps=N grad=1 start_lap=N]`.
+- **Validator bot (both variants so far through laps 0-2): 0 deaths, seams clean** — full acceptance run in the list below.
+
 ## Report — frame meter, the "screen jumps", the monoliths (2026-09-20)
 
 **`rules.gd`, `hazard_math.gd`, `fairness.gd`, `placement.gd` untouched.** One thing under the rules did change: the clock they read is smoothed (below). Validator bot after it: **0 deaths, goal reached on levels 1, 2, 3, 4, 5** (one level-5 run died once at bar 2 while the Mac was rendering screenshots next to it, 27 fps; alone it passes — the known starved-bot pattern).

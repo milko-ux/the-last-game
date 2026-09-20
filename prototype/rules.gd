@@ -45,6 +45,12 @@ const BACK_EDGE_MARGIN := 3.6
 # tool's level=N) chose. The run scene turns it into a knob dictionary
 # once, in its _ready, and hands that on.
 static var LEVEL := 1
+# What the run scene plays: the endless run (the game), or ONE level of
+# the curriculum (the dev path: the level select and the tools set this to
+# false and pick LEVEL). START_LAP lets the dev tools enter the endless
+# course at a later lap.
+static var ENDLESS := true
+static var START_LAP := 0
 
 # Level data (addendum 4 section 6): levels/curriculum.json, one entry
 # per level 1-30, read once. Knobs (addendum 3 section 4 + addendum 4):
@@ -420,7 +426,7 @@ static func point_lethal(field, pos: Vector3, on_ground: bool, t: float) -> bool
 			continue
 		if String(spec["kind"]) == "gate":
 			continue
-		for b in HazardMath.boxes_at(spec, t, field.knobs):
+		for b in HazardMath.boxes_at(spec, t, field.knobs_of(spec)):
 			var bb: AABB = b
 			if bb.intersects(box):
 				return true
@@ -445,10 +451,10 @@ static func death_cause(field, prev: Vector3, pos: Vector3, on_ground: bool, z_b
 			# A gate is a zero-thickness plane in the rules: you die by
 			# CROSSING it outside the opening, never by "being inside" it,
 			# so the opening jumping can never catch you in the wall.
-			if HazardMath.gate_crossed(spec, prev, pos, PLAYER_HALF_W, t_prev, t, field.knobs):
-				return {"kind": "gate", "pos": Vector3(HazardMath.gate_opening_x(spec, t, field.knobs), 0.0, float(spec["z"]))}
+			if HazardMath.gate_crossed(spec, prev, pos, PLAYER_HALF_W, t_prev, t, field.knobs_of(spec)):
+				return {"kind": "gate", "pos": Vector3(HazardMath.gate_opening_x(spec, t, field.knobs_of(spec)), 0.0, float(spec["z"]))}
 			continue
-		for b in HazardMath.boxes_at(spec, t, field.knobs):
+		for b in HazardMath.boxes_at(spec, t, field.knobs_of(spec)):
 			var bb: AABB = b
 			if bb.intersects(box):
 				return {"kind": String(spec["kind"]), "pos": bb.get_center()}
