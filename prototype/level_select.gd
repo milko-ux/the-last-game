@@ -18,6 +18,11 @@ const ROWS := 5
 var _rects: Array = []      # [Rect2] per level, filled in _draw
 var _pressed := -1
 var _flash := 0.0
+# The run scene builds its level in one blocking step (validation + the
+# field). Say so BEFORE it starts, or the phone just looks dead: the
+# tap shows LOADING, and the scene changes two frames later.
+var _loading_level := 0
+var _loading_frames := 0
 
 
 func _ready() -> void:
@@ -27,6 +32,10 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	if _flash > 0.0:
 		_flash -= delta
+	if _loading_level > 0:
+		_loading_frames += 1
+		if _loading_frames >= 3:
+			get_tree().change_scene_to_file(RUN_SCENE)
 	queue_redraw()
 
 
@@ -49,8 +58,11 @@ func _tap(level: int) -> void:
 		_pressed = level
 		_flash = 0.5
 		return
+	if _loading_level > 0:
+		return
 	Rules.LEVEL = level
-	get_tree().change_scene_to_file(RUN_SCENE)
+	_loading_level = level
+	FrameMeter.load_begin()
 
 
 func _playable(level: int) -> bool:
@@ -98,6 +110,12 @@ func _draw() -> void:
 			sub = ("best %d" % best) if best > 0 else ("cleared" if Progress.is_level_cleared(level) else "play")
 		_centre(font, sub, rect.position + Vector2(rect.size.x * 0.5, rect.size.y * 0.5 + 16), 11,
 			Color(col.r, col.g, col.b, col.a * 0.75))
+
+	if _loading_level > 0:
+		draw_rect(Rect2(Vector2.ZERO, screen), Color(0.04, 0.05, 0.08, 0.82), true)
+		_centre(font, "LOADING LEVEL %d" % _loading_level, screen * 0.5, 24, Palette.GOAL)
+		_centre(font, "building the level  ·  this can take a while the first time", screen * 0.5 + Vector2(0, 30), 12,
+			Color(Palette.TEXT.r, Palette.TEXT.g, Palette.TEXT.b, 0.8))
 
 
 func _glass_pill(rect: Rect2, tint: Color, strength: float) -> void:

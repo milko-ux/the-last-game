@@ -38,7 +38,8 @@ const DISTANCE_POINTS := 1000
 const DEATH_PENALTY := 40
 const NOTE_BONUS := 15
 
-enum State { WAIT, STARTING, RUN, DEAD, WON, GAMEOVER }
+# LOADING is last so the numbers the tools print for the other states stay the same.
+enum State { WAIT, STARTING, RUN, DEAD, WON, GAMEOVER, LOADING }
 
 @onready var music: AudioStreamPlayer = $Music
 @onready var field: Node3D = $Field
@@ -75,9 +76,20 @@ var _edge_line: MeshInstance3D
 var _demo_bar_shown := 0
 var _best_saved := 0.0
 var _end_shown := 0.0       # seconds the goal / death screen has been up
+# LOADING: the prewarm rack fills one item per frame behind a progress
+# bar with the world hidden, then the world is revealed piece by piece.
+const LOAD_SETTLE_FRAMES := 3
+var _warm: Node3D = null
+var _reveal: Array = []
+var _load_frames := 0
+var _settle := 0
+var _tap_queued := false    # a tap during LOADING is kept: the run starts the moment loading ends
+var _bar_back: ColorRect
+var _bar_fill: ColorRect
 
 
 func _ready() -> void:
+	FrameMeter.load_mark("scene")
 	# The level's knobs (addendum 3 / 4): hazards act once per period, the
 	# song starts at the level's offset. Both before the field is built,
 	# since the layout is a function of them.
@@ -88,6 +100,7 @@ func _ready() -> void:
 	lives = Rules.lives()
 	furthest_t = BeatClock.start_offset
 	print(Rules.knobs_line())
+	FrameMeter.load_mark("music")
 	motion = load("res://prototype/motion.gd").new()
 	motion.name = "Motion"
 	add_child(motion)
@@ -116,17 +129,72 @@ func _ready() -> void:
 	_update_world(BeatClock.hazard_time(), 0.0)
 	rig.set_window(0.0)
 	motion.set_window(0.0)
-	# Every material drawn once behind TAP TO START, so no shader is
-	# compiled mid-run (see prewarm.gd).
-	var warm: Node3D = load("res://prototype/prewarm.gd").new()
-	add_child(warm)
-	warm.global_position = rig.global_position
-	warm.build([motion.burst(), player.creature.burst()])
-	# Dev only: the frame-time readout (off in a release, see frame_meter.gd).
+	# Dev only: the frame-time readout and the load line (off in a release, see frame_meter.gd).
 	if FrameMeter.enabled():
 		meter = FrameMeter.new()
 		$UI.add_child(meter)
-	score_label.pivot_offset = score_label.size * 0.5
+	_begin_loading()
+
+
+# Every material is drawn once before the run so no shader compiles in
+# the middle of it (prewarm.gd) — one item per frame, behind a progress
+# bar, with the world hidden, so the screen never freezes on it.
+func _begin_loading() -> void:
+	_warm = load("res://prototype/prewarm.gd").new()
+	add_child(_warm)
+	_warm.global_position = rig.global_position
+	_warm.prepare([motion.burst(), player.creature.burst()])
+	if DisplayServer.get_name() == "headless":
+		_end_loading()       # nothing is drawn, so there is nothing to warm
+		return
+	state = State.LOADING
+	_reveal = [rig, player, _edge_line, field]
+	for n in _reveal:
+		n.visible = false
+	status.text = "LOADING"
+	_bar_back = ColorRect.new()
+	_bar_back.color = Color(1, 1, 1, 0.12)
+	_bar_back.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_bar_back.set_anchors_preset(Control.PRESET_CENTER)
+	_bar_back.position = Vector2(-160.0, -3.0)
+	_bar_back.size = Vector2(320.0, 6.0)
+	_bar_fill = ColorRect.new()
+	_bar_fill.color = WorldPalette.SAFE
+	_bar_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_bar_fill.size = Vector2(0.0, 6.0)
+	_bar_back.add_child(_bar_fill)
+	$UI.add_child(_bar_back)
+
+
+func _tick_loading() -> void:
+	_load_frames += 1
+	var total := float(_warm.item_count() + 4 + LOAD_SETTLE_FRAMES)
+	var done := 0.0
+	var p: float = _warm.step()
+	done = p * _warm.item_count()
+	if p >= 1.0:
+		if not _reveal.is_empty():
+			_reveal.pop_front().visible = true
+		else:
+			_settle += 1
+		done += (4 - _reveal.size()) + _settle
+	_bar_fill.size.x = 320.0 * clampf(done / total, 0.0, 1.0)
+	if _settle >= LOAD_SETTLE_FRAMES:
+		_end_loading()
+
+
+func _end_loading() -> void:
+	FrameMeter.load_mark("prewarm", "%d items, %d frames" % [_warm.item_count(), _load_frames], true)
+	_warm.queue_free()
+	_warm = null
+	if _bar_back != null:
+		_bar_back.queue_free()
+	state = State.WAIT
+	status.text = "TAP TO START"
+	if _tap_queued:
+		state = State.STARTING
+		_start_delay = START_DELAY_S
+		status.text = ""
 
 
 func _input(event: InputEvent) -> void:
@@ -142,6 +210,9 @@ func _input(event: InputEvent) -> void:
 	if not pressed:
 		return
 	match state:
+		State.LOADING:
+			_tap_queued = true
+			status.text = "LOADING  ·  starts when ready"
 		State.WAIT:
 			state = State.STARTING
 			_start_delay = START_DELAY_S
@@ -163,9 +234,13 @@ func _to_level_select() -> void:
 
 func _process(delta: float) -> void:
 	match state:
+		State.LOADING:
+			_tick_loading()
 		State.STARTING:
 			_start_delay -= delta
 			if _start_delay <= 0.0:
+				if meter != null:
+					meter.run_started()
 				BeatClock.start(music)
 				_run_started_ms = Time.get_ticks_msec()
 				motion.on_level_start()

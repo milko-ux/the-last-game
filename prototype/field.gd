@@ -92,6 +92,7 @@ func build() -> void:
 			_save_verdict(rerolls)
 	fairness["rerolls"] = rerolls
 	fairness["passes"] = passes
+	FrameMeter.load_mark("validate", "cached" if fairness.get("cached", false) else "NOT cached, %d passes" % passes, true)
 	if not fairness["ok"]:
 		for p in fairness["problems"]:
 			push_error("FAIRNESS: " + String(p))
@@ -118,12 +119,14 @@ func build() -> void:
 	goal_z = outro_z1 - 1.0
 	_gate_mesh(goal_z)
 
+	FrameMeter.load_mark("tiles")
 	# Brief 2: the monoliths around the field, one draw call for the level.
 	monoliths = Monoliths.new()
 	add_child(monoliths)
 	monoliths.build(runup_z0 - 2.0 * PLAIN_LEN, outro_z1 + 3.0 * PLAIN_LEN)
 	monoliths.set_window(0.0)
 
+	FrameMeter.load_mark("monoliths")
 	for spec in plan["hazards"]:
 		var h: Node3D
 		match String(spec["kind"]):
@@ -141,6 +144,7 @@ func build() -> void:
 		h.setup(spec)
 		hazards.append(h)
 
+	FrameMeter.load_mark("hazards", "%d" % hazards.size())
 	for n in plan["notes"]:
 		var mi := MeshInstance3D.new()
 		var sm := SphereMesh.new()

@@ -1,8 +1,7 @@
 extends Node3D
 # ============================================================
-# PREWARM — draws every material the level can show ONCE, behind the
-# "TAP TO START" screen, so none of them is drawn for the first time
-# in the middle of a run.
+# PREWARM — draws every material the level can show ONCE before the
+# run, so none of them is drawn for the first time in the middle of it.
 #
 # Why: the web renderer compiles a shader the first time something
 # using it is actually drawn, and that compile blocks the frame. It was
@@ -17,21 +16,28 @@ extends Node3D
 # scaled to a thousandth at the point the camera looks at: inside the
 # view, so they are drawn, and far below a pixel, so nothing is seen.
 # The two particle bursts are warmed with invisible copies of the real
-# emitters. The rack frees itself after FRAMES frames.
+# emitters.
+#
+# NEVER BLOCKS (2026-09-20, after the phone froze on it): the rack is
+# filled ONE ITEM PER FRAME. The run scene keeps the world hidden and
+# shows a progress bar while it calls step() each frame, then reveals
+# the world piece by piece (each piece: one more frame), so no single
+# frame carries more than one new shader and the screen stays alive.
 # ============================================================
 
 const Mats := preload("res://prototype/flat_mats.gd")
 const Props := preload("res://prototype/props/props.gd")
 
-const FRAMES := 8
 const TINY := 0.001
 const HAZARD_MODELS := ["gate_pillar", "sweeper_segment", "slammer", "orbiter_pillar", "volley_emitter"]
 const BUILDING_MODELS := ["building_tall", "building_stacked", "building_tall_hi", "building_stacked_hi"]
 
-var _frames := 0
+var _queue: Array[Callable] = []
+var _total := 0
 
 
-func build(bursts: Array) -> void:
+# Lists the work; nothing is created or drawn yet.
+func prepare(bursts: Array) -> void:
 	scale = Vector3.ONE * TINY
 	var white := Mats.white_flat()
 	var half := Vector3.ONE
@@ -39,31 +45,36 @@ func build(bursts: Array) -> void:
 	for m in [Mats.tile(0, half), Mats.tile(1, half), Mats.tile(2, half), Mats.cyan(),
 			Mats.flat(WorldPalette.SAFE.darkened(0.55)), Mats.amber_dim(), Mats.magenta(), Mats.magenta_dim(),
 			Mats.magenta_wall(), Mats.magenta_wall_dim(), Mats.amber(), white]:
-		_mesh(box, m)
+		_queue.append(_mesh.bind(box, m))
 	var ball := SphereMesh.new()
 	for m in [Mats.orb(true), Mats.orb(false), Mats.note(), white]:
-		_mesh(ball, m)
+		_queue.append(_mesh.bind(ball, m))
 	# The clay props: armed, live, safe, and the white flash, on each model
 	# (and mirrored, as the right-hand gate pillars and sweeper segments are).
 	for model in HAZARD_MODELS:
 		for m in [Props.clay(false), Props.clay(true), Props.clay_safe(), white]:
-			add_child(Props.make(model, Props.size_of(model), "base", m))
-		add_child(Props.make(model, Props.size_of(model), "base", Props.clay(false), 0.0, true))
+			_queue.append(_prop.bind(model, m, false))
+		_queue.append(_prop.bind(model, Props.clay(false), true))
 	# The buildings: both detail levels, the near and the far material.
 	for model in BUILDING_MODELS:
-		_mesh(Props.mesh_of(model), Props.building(false))
-		_mesh(Props.mesh_of(model), Props.building(true))
+		_queue.append(_building.bind(model, false))
+		_queue.append(_building.bind(model, true))
 	# The particle bursts: copies of the real emitters, particles too small to see.
 	for b in bursts:
-		var e: CPUParticles3D = b.duplicate()
-		e.top_level = false
-		e.position = Vector3.ZERO
-		e.scale_amount_min = TINY
-		e.scale_amount_max = TINY
-		e.scale_amount_curve = null
-		e.one_shot = false
-		add_child(e)
-		e.emitting = true
+		_queue.append(_burst.bind(b))
+	_total = _queue.size()
+
+
+# Adds the next item to the rack (it is drawn this frame). Returns the
+# progress 0..1; 1.0 = everything is on the rack.
+func step() -> float:
+	if not _queue.is_empty():
+		_queue.pop_front().call()
+	return 1.0 - float(_queue.size()) / float(maxi(_total, 1))
+
+
+func item_count() -> int:
+	return _total
 
 
 func _mesh(mesh: Mesh, mat: Material) -> void:
@@ -74,7 +85,21 @@ func _mesh(mesh: Mesh, mat: Material) -> void:
 	add_child(mi)
 
 
-func _process(_delta: float) -> void:
-	_frames += 1
-	if _frames >= FRAMES:
-		queue_free()
+func _prop(model: String, mat: Material, mirror: bool) -> void:
+	add_child(Props.make(model, Props.size_of(model), "base", mat, 0.0, mirror))
+
+
+func _building(model: String, far: bool) -> void:
+	_mesh(Props.mesh_of(model), Props.building(far))
+
+
+func _burst(source: CPUParticles3D) -> void:
+	var e: CPUParticles3D = source.duplicate()
+	e.top_level = false
+	e.position = Vector3.ZERO
+	e.scale_amount_min = TINY
+	e.scale_amount_max = TINY
+	e.scale_amount_curve = null
+	e.one_shot = false
+	add_child(e)
+	e.emitting = true
