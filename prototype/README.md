@@ -1,23 +1,45 @@
 # Phase R prototype — "an album you survive"
 
-## Where we are (2026-09-20, late evening)
+## Where we are (2026-09-21, 01:xx — end of the night session)
 
-**The game is now ONE ENDLESS RUN** (Phase E brief 1, `PHASE_E_BRIEF_1_ENDLESS.md`): how far can you get. **Stage 1 (the run) is built, sections 1-6, one commit each; Stage 2 (menu + leaderboard) is NOT started — it waits for Milko's phone test.** Report right below.
+**The game is ONE ENDLESS RUN** (`PHASE_E_BRIEF_1_ENDLESS.md`): how far can you get. **Stage 1 (the run) is built and accepted; Stage 2 (menu + leaderboard) is NOT started and must not be started until Milko has played Stage 1 on the phone.** Reports below, newest first.
 
-**What Milko should try on the phone** (`https://172.20.10.2:8443`, reload fully; the build opens straight into the run):
-- A first run as a new player: lap 0 is level 1 as you know it (no lives). Crossing into lap 1 (`STAGE 2`, ~2.5 min) makes you "graduated": from then on 3 lives, and lap 0 stops teaching.
-- **The seam by ear** at ~2:29 of music: bar 73 → bar 1. If it clicks or stumbles, `LOOP_END_BAR` moves to another 8-bar boundary and `tools/make_endless_audio.py <bar>` re-cuts the file.
-- Notes charge the ring right of the distance; full = a cyan bubble that takes one hit. `SHIELD_COST` 30.
-- Die three times as a graduated player: the end screen, RETRY (4 s run-up), MENU (= the dev level select, where ENDLESS RUN and the six old levels still are).
-- Top-right dev readout: `frame … cpu … audio ±N (±M)`. `?autoplay=1&live=1` on the URL = the bot plays and every lap is generated live: the web-build check I could not run from here.
+### First thing tomorrow
+1. **Ask Milko whether tonight's build loads on his iPhone at all.** It was hanging on LOADING for ever (my bug, `e66adf3`); the fix is `0e733e5` and it is exported, but **nothing of it has been seen in a real browser from here** — the Chrome extension will not connect on this Mac, so every web-only line is only reasoned about, not observed.
+2. **Push what is waiting.** Six commits are LOCAL and unpushed, oldest first: `30cb7f1` (reroll_passes 24 on bands 7-10 + regenerated verdicts) · `543a8fa` (GPU 1a: 3D render scale) · `e66adf3` (load instrument) · `5b0c83e` (docs + triangle BUDGET) · `0e733e5` (the hang fix) · `ff38026` (docs). Everything up to and including Stage 1 acceptance (`bbde331`) IS pushed.
+3. **Then the numbers he owes**, all from the phone: bar 11 at the default and at `?level=1&scale=1`; the three load spans on a first and a second load; whether rotation resizes the canvas now.
 
-**Open, Milko's calls:** `SHIELD_COST`; lap 7 still clears 5 bars at 24 passes (more passes, or leave it easier); the audio encoder (this Mac's ffmpeg has no libvorbis; the built-in one measured fine, a DAW export replaces the file 1:1); the human bot's blind spots at run bars 63 / 77 if a bot number is wanted before Stage 2.
+### The job in flight: the phone is GPU-bound
+iPhone, level 1 bar 11, ~22 gate pillars + near monoliths: **frame 28.7 avg / 36 worst ms with cpu only 2.5** (quiet: 16.7 / 18, cpu 0.3-1.3). So: pixels and shaders, not scripts. Steps go ONE at a time with an export after each, and **stop as soon as bar 11 holds 16.7 avg**:
+- **1a — built and exported (`543a8fa`):** the 3D world renders at 0.75 scale on web / mobile; HUD and glass controls stay full resolution. Waiting for his number.
+- **1b — measured, NOT built:** at bar 11 the gate pillars are **37 meshes / 148 000 triangles**, monoliths 70 k, creature 30 k, floor under 3 k (`tools/shot.gd` prints `BUDGET` lines). The plan, if 1a is not enough: a light pillar copy (~600-1 000 triangles) for every pillar except the two beside the opening.
+- **1c — not started:** the monolith shader (fewer noise octaves, or the baked 512 px noise tile named in the brief 2b report).
 
-**ON HOLD / superseded:** level-1 orbiter tuning (Milko called the pace right), the level-6 verdict cache (replaced by `levels/verdicts.json`).
+### Rules that bit me tonight — keep them
+- **Nothing that can raise, and no `JavaScriptBridge`, inside a `RenderingServer.frame_post_draw` callback.** They increment an int and nothing else. An error in there aborts the rest of the callback silently.
+- **Every loading gate needs a ceiling** (`FrameMeter.LABEL_TIMEOUT_MS`, 2 s, then carry on and mark the line `TIMED OUT`). Milko's rule: a gate that can wait for ever is the bug class, not just the one instance.
+- **A branch behind `OS.has_feature("web")` has been tested by nothing on this Mac.**
+- Run every Godot tool through a kill switch: a script error makes a `-s` tool spin for ever and there is no `timeout` on this Mac.
 
-**Still unmeasured from here:** anything on the phone — the load line, cpu headroom, live generation in a browser.
+### What Milko tests on the phone (`https://172.20.10.2:8443`, reload fully)
+The build opens straight into the run. `?level=N` goes to one old level instead (the fixed spot for frame numbers), `?scale=X` overrides the render scale, `?autoplay=1&live=1` lets the bot play with every lap generated live, `?grad=1` plays as a graduated player. All dev-only, behind the same switch as the readout.
+- A first run as a new player: lap 0 is level 1 as he knows it (no lives). Crossing into lap 1 (`STAGE 2`, ~2.5 min) graduates him: 3 lives from then on, and lap 0 stops teaching.
+- **The seam by ear** at ~2:29 of music (bar 73 → bar 1). If it clicks, `LOOP_END_BAR` moves to another 8-bar boundary and `tools/make_endless_audio.py <bar>` re-cuts the file.
+- Notes charge the ring right of the distance; full = a cyan bubble that absorbs one hit. `SHIELD_COST` 30.
+- Three deaths as a graduated player: the end screen, RETRY (4 s run-up), MENU (= the dev level select).
+- Readout: `frame … cpu … audio ±N (±M)`; under it the gold load line `page · tap · load [steps]`.
 
-**Models in `assets/models/`:** unchanged (creature; the five hazard props with vertex colours from the bake; the two buildings + `_hi` copies, geometry only).
+### Open, Milko's calls
+`SHIELD_COST` 30 · lap 7 still clears 5 bars at 24 passes (more passes, or leave it easier) · the audio encoder — **conditional permission already given: ONLY if he says the ogg sounds worse than the mp3 may I `brew install ffmpeg` for libvorbis and re-cut the same file at quality 6** · the human bot's blind spots at run bars 63 / 77, if a bot number is wanted before Stage 2 · whether the 0.75 render scale is visible to him at phone size.
+
+### Not to be started without him saying so
+Stage 2 (menu + leaderboard) · the walk and light briefs · any Stage-1 tuning beyond what he asks for.
+
+**ON HOLD / superseded:** level-1 orbiter tuning (he called the pace right), the level-6 verdict cache (replaced by `levels/verdicts.json`).
+
+**Still unmeasured from here:** everything about the phone and the browser — frame time, cpu headroom, the load spans, live generation in a browser, and whether the canvas resizes on rotation.
+
+**Models in `assets/models/`:** unchanged (creature; five hazard props with vertex colours from the bake; two buildings + their `_hi` copies, geometry only).
 
 
 ## GPU + load instrument job (2026-09-20, night — IN PROGRESS, waiting for Milko's bar-11 reading)
