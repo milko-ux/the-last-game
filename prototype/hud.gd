@@ -33,10 +33,20 @@ var shield_armed := false
 var shield_pop := 0.0       # 1 -> 0 after the shield was used (the ring flashes)
 const SIDE_GAP := 120.0     # from the screen's centre line to the lives / the ring
 const HUD_Y := 38.0
+# The end screen (section 6, minimal: the share / roast screen is its own
+# brief). Distance big, BEST, NEW BEST when it is, RETRY (big) and MENU.
+var end_shown := false
+var end_distance := ""
+var end_best := ""
+var end_new_best := false
+var end_alpha := 0.0
+var retry_rect := Rect2()
+var menu_rect := Rect2()
 
 
 func _process(delta: float) -> void:
 	shield_pop = maxf(0.0, shield_pop - delta * 2.5)
+	end_alpha = minf(1.0, end_alpha + delta * 3.0) if end_shown else 0.0
 	if word_alpha > 0.0 and word == "":
 		word_alpha = maxf(0.0, word_alpha - delta * 2.5)
 	queue_redraw()
@@ -58,6 +68,9 @@ func _draw() -> void:
 	var w := screen.x - MARGIN * 2.0
 	var rect := Rect2(Vector2(x0, BAR_Y), Vector2(w, BAR_H))
 
+	if endless and end_shown:
+		_draw_end_screen(screen, font)
+		return
 	if endless:
 		_draw_run_hud(screen)
 	else:
@@ -130,3 +143,41 @@ func _draw_run_hud(screen: Vector2) -> void:
 		draw_arc(rc, r, -PI * 0.5, -PI * 0.5 + TAU * maxf(f, shield_pop), 32, Color(col.r, col.g, col.b, 0.95), 3.0, true)
 	if shield_armed:
 		draw_circle(rc, 4.0, Color(col.r, col.g, col.b, 0.9))
+
+
+func show_end(distance: String, best: String, new_best: bool) -> void:
+	end_shown = true
+	end_distance = distance
+	end_best = best
+	end_new_best = new_best
+
+
+func _pill(rect: Rect2, tint: Color, a: float) -> void:
+	draw_rect(Rect2(rect.position - Vector2(3, 3), rect.size + Vector2(6, 6)), Color(tint.r, tint.g, tint.b, 0.06 * a), true)
+	draw_rect(rect, Color(1, 1, 1, 0.07 * a), true)
+	draw_rect(rect, Color(tint.r, tint.g, tint.b, 0.08 * a), true)
+	draw_rect(rect, Color(1, 1, 1, 0.28 * a), false, 1.5)
+	draw_rect(rect, Color(tint.r, tint.g, tint.b, 0.35 * a), false, 1.0)
+	draw_line(rect.position + Vector2(6, 1), rect.position + Vector2(rect.size.x - 6, 1), Color(1, 1, 1, 0.42 * a), 1.5)
+
+
+func _text(font: Font, text: String, c: Vector2, size: int, col: Color) -> void:
+	var w: float = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
+	draw_string(font, c - Vector2(w * 0.5, -size * 0.35), text, HORIZONTAL_ALIGNMENT_LEFT, -1, size, col)
+
+
+func _draw_end_screen(screen: Vector2, font: Font) -> void:
+	var a := end_alpha
+	draw_rect(Rect2(Vector2.ZERO, screen), Color(0.04, 0.05, 0.08, 0.74 * a), true)
+	var c := screen * 0.5
+	_text(font, end_distance, c + Vector2(0, -92), 72, Color(1, 1, 1, 0.96 * a))
+	if end_new_best:
+		_text(font, "NEW BEST", c + Vector2(0, -34), 20, Color(Palette.GOAL.r, Palette.GOAL.g, Palette.GOAL.b, a))
+	else:
+		_text(font, end_best, c + Vector2(0, -34), 18, Color(Palette.GOAL.r, Palette.GOAL.g, Palette.GOAL.b, 0.9 * a))
+	retry_rect = Rect2(c + Vector2(-150, 8), Vector2(300, 72))
+	_pill(retry_rect, Palette.EDGE, a)
+	_text(font, "RETRY", retry_rect.position + retry_rect.size * 0.5, 30, Color(1, 1, 1, 0.95 * a))
+	menu_rect = Rect2(c + Vector2(-90, 100), Vector2(180, 52))
+	_pill(menu_rect, Color(1, 1, 1), a * 0.8)
+	_text(font, "MENU", menu_rect.position + menu_rect.size * 0.5, 18, Color(1, 1, 1, 0.8 * a))

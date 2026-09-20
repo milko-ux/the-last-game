@@ -547,8 +547,17 @@ func _input(event: InputEvent) -> void:
 			# Out of lives. A level: the loop starts over from level 1 (the
 			# original rule). The endless run: a new run, short run-up.
 			if _end_shown > 0.6:
-				if not endless:
-					Rules.LEVEL = 1
+				if endless:
+					# RETRY (big) starts a new run with the short run-up; MENU goes to
+					# the dev level select until Stage 2's menu exists. A key = retry.
+					var pos: Variant = event.position if (event is InputEventScreenTouch or event is InputEventMouseButton) else null
+					if pos != null and hud.menu_rect.has_point(pos):
+						_to_level_select()
+					elif pos == null or hud.retry_rect.has_point(pos):
+						BeatClock.stop()
+						get_tree().reload_current_scene()
+					return
+				Rules.LEVEL = 1
 				get_tree().reload_current_scene()
 
 
@@ -874,7 +883,19 @@ func _game_over() -> void:
 	_end_shown = 0.0
 	hud.hide_word()
 	if endless:
-		status.text = "OUT OF LIVES\nTAP TO RETRY"
+		# The end screen (section 6): distance big, BEST / NEW BEST, RETRY, MENU.
+		var new_best: bool = Progress.record_distance(LapGen.SEASON_SEED, distance_m) or (distance_m > _best_m and distance_m > 0)
+		status.text = ""
+		score_label.visible = false
+		_best_label.visible = false
+		_bubble.visible = false
+		# The two lines that always draw on top would cut across the buttons.
+		_edge_line.visible = false
+		_best_line.visible = false
+		hud.show_end(metres(distance_m), "BEST " + metres(maxi(_best_m, distance_m)), new_best)
+		print("RUN OVER distance=%d m best=%d m new_best=%s laps=%d run_s=%.1f deaths=%d notes=%d shields_used=%d" % [
+			distance_m, maxi(_best_m, distance_m), new_best, BeatClock.current_lap(),
+			BeatClock.song_time() - BeatClock.start_offset, deaths, notes, shields_used])
 		return
 	score = current_score()
 	Progress.record_score(Rules.LEVEL, score)

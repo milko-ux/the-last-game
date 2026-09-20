@@ -21,6 +21,8 @@ var level := 1
 var endless := false         # endless=1: the endless run instead of one level (start_lap=N: enter at lap N)
 var start_lap := 0
 var grad := false            # grad=1: as a graduated player (lives on, no teaching lap)
+var end_screen := false      # end=1 (with endless=1 grad=1): lose every life from `bar` on, shoot the end screen
+var _end_wait := 0.0
 var scene_kind := "run"      # scene=select captures the level-select screen instead
 var _select_frames := -1
 var test: Node = null
@@ -85,6 +87,16 @@ func _process(_delta: float) -> bool:
 			return true
 		return false
 	var t: float = clock.song_time()
+	if end_screen:
+		if test.state == test.State.GAMEOVER:
+			_end_wait += _delta
+			if _end_wait > 1.0:
+				var img := root.get_viewport().get_texture().get_image()
+				print("SHOT saved=%s err=%d (end screen)" % [out, img.save_png(out)])
+				return true
+		elif test.state == test.State.RUN and clock.current_bar() >= bar:
+			test.debug_walk_into_danger()
+		return false
 	if _seq_taken > 0:
 		if t >= _seq_next_t:
 			_frames_after = 0
@@ -122,6 +134,7 @@ func _setup_args() -> void:
 			"level": level = int(kv[1])
 			"endless": endless = kv[1] == "1"
 			"grad": grad = kv[1] == "1"
+			"end": end_screen = kv[1] == "1"
 			"start_lap": start_lap = int(kv[1])
 			"scene": scene_kind = kv[1]
 			"jump": jump = kv[1] == "1"
