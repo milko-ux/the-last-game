@@ -158,6 +158,8 @@ var _shield_burst: CPUParticles3D
 
 func _ready() -> void:
 	FrameMeter.load_mark("scene")
+	_dev_url_switches()
+	_apply_render_scale()
 	endless = Rules.ENDLESS
 	if endless:
 		_ready_endless()
@@ -221,7 +223,6 @@ func _ready() -> void:
 # generated in the LOADING phase (a shipped or cached verdict makes that a
 # few milliseconds; without one it is validated there, behind the bar).
 func _ready_endless() -> void:
-	_dev_url_switches()
 	BeatClock.set_endless(true)
 	var stream: AudioStream = load(BeatClock.ENDLESS_MUSIC)
 	stream.loop = true
@@ -251,25 +252,65 @@ func _ready_endless() -> void:
 		str(lives) if _lives_on else "off", Rules.knobs_line(knobs)])
 
 
+# RENDER SCALE (2026-09-20, from the iPhone numbers: frame 28.7 ms with cpu
+# 2.5 ms at level 1 bar 11 — the GPU is the limit, not the scripts). A phone
+# browser hands the game a canvas at 3 device pixels per point (2556 x 1179
+# on the test iPhone); every one of those pixels runs the stone / clay /
+# monolith shaders. The 3D world is rendered at RENDER_SCALE_MOBILE of that
+# and scaled up (0.75 = 56 % of the pixels); the HUD and the glass touch
+# controls are 2D and stay at full resolution. The web (Compatibility)
+# renderer supports this (checked); it has no pixel-ratio cap to offer
+# instead, and one would blur the controls. Desktop stays at 1.0.
+const RENDER_SCALE_MOBILE := 0.75
+var _render_scale_override := -1.0
+
+func _apply_render_scale() -> void:
+	var sc := RENDER_SCALE_MOBILE if (OS.has_feature("web") or OS.has_feature("mobile")) else 1.0
+	if _render_scale_override > 0.0:
+		sc = _render_scale_override
+	get_viewport().scaling_3d_scale = clampf(sc, 0.25, 1.0)
+	FrameMeter.load_info = "3D %.2f of %d x %d" % [get_viewport().scaling_3d_scale, DisplayServer.window_get_size().x, DisplayServer.window_get_size().y]
+
+
 # DEV ONLY (same switch as the frame meter), web build only: URL switches
-# for measuring the web build without anyone playing it.
+# for measuring the web build on a phone, where there is no console.
+#   ?level=N      play level N of the old curriculum instead of the run
+#                 (the fixed spot for frame-time readings: level 1, bar 11)
+#   ?scale=0.6    3D render scale (see RENDER SCALE)
 #   ?live=1       ignore shipped / cached verdicts: every lap is generated
 #                 and validated live, inside the frame budget
-#   ?autoplay=1   the validator bot (tools/autoplay.gd) drives, and starts
-#                 the run without a tap (no sound: the browser wants a tap)
+#   ?autoplay=1   the validator bot (tools/autoplay.gd) drives the endless
+#                 run, and starts it without a tap (no sound: the browser
+#                 wants a tap)
 #   ?grad=1       play as a graduated player (nothing is saved)
 var _dev_autoplay := false
+
+static func _url_param(query: String, key: String) -> String:
+	for part in query.trim_prefix("?").split("&"):
+		var kv := part.split("=")
+		if kv.size() == 2 and kv[0] == key:
+			return kv[1]
+	return ""
+
 
 func _dev_url_switches() -> void:
 	if not OS.has_feature("web") or not FrameMeter.enabled():
 		return
 	var q := str(JavaScriptBridge.eval("window.location.search"))
-	if q.contains("live=1"):
+	if _url_param(q, "scale") != "":
+		_render_scale_override = float(_url_param(q, "scale"))
+	if _url_param(q, "level") != "":
+		Rules.ENDLESS = false
+		Rules.LEVEL = clampi(int(_url_param(q, "level")), 1, 6)
+		return
+	if not Rules.ENDLESS:
+		return
+	if _url_param(q, "live") == "1":
 		LapGen.ignore_verdicts = true
-	if q.contains("grad=1"):
+	if _url_param(q, "grad") == "1":
 		Progress.save_enabled = false
 		Progress.graduated = true
-	if q.contains("autoplay=1"):
+	if _url_param(q, "autoplay") == "1":
 		Progress.save_enabled = false
 		_dev_autoplay = true
 		var ap: Object = load("res://tools/autoplay.gd").new()

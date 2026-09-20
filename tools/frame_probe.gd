@@ -155,6 +155,7 @@ func _setup() -> void:
 	ap.clock = clock
 	ap.Rules = Rules
 	ap.HazardMath = load("res://prototype/hazard_math.gd")
+	ap.test = test
 	if endless:
 		ap.attach_endless(test, clock)
 	else:

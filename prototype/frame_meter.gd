@@ -59,6 +59,7 @@ static var _window_back := 0.0
 # Load timing: recorded always (a handful of clock reads per level load),
 # shown only by a live meter. [name, seconds, note, always_show]
 static var load_log: Array = []
+static var load_info := ""          # a fixed note at the end of the load line (the render size)
 static var _load_t0 := 0
 static var _load_last := 0
 
@@ -121,6 +122,8 @@ static func load_line() -> String:
 	for e in load_log:
 		if float(e[1]) >= LOAD_MIN_S or bool(e[3]):
 			parts.append("%s %.1f%s" % [e[0], e[1], "" if String(e[2]).is_empty() else " (%s)" % e[2]])
+	if load_info != "":
+		parts.append(load_info)
 	return "load %.1f s:  %s" % [float(_load_last - _load_t0) / 1000.0, "  ·  ".join(parts)]
 
 

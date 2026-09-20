@@ -21,6 +21,7 @@ var level := 1
 var endless := false         # endless=1: the endless run instead of one level (start_lap=N: enter at lap N)
 var start_lap := 0
 var grad := false            # grad=1: as a graduated player (lives on, no teaching lap)
+var render_scale := 1.0      # scale=0.75: the 3D render scale the phone uses (see track_test RENDER SCALE)
 var end_screen := false      # end=1 (with endless=1 grad=1): lose every life from `bar` on, shoot the end screen
 var _end_wait := 0.0
 var scene_kind := "run"      # scene=select captures the level-select screen instead
@@ -135,6 +136,7 @@ func _setup_args() -> void:
 			"endless": endless = kv[1] == "1"
 			"grad": grad = kv[1] == "1"
 			"end": end_screen = kv[1] == "1"
+			"scale": render_scale = float(kv[1])
 			"start_lap": start_lap = int(kv[1])
 			"scene": scene_kind = kv[1]
 			"jump": jump = kv[1] == "1"
@@ -163,6 +165,7 @@ func _setup() -> void:
 	var scene: PackedScene = load("res://prototype/track_test.tscn")
 	test = scene.instantiate()
 	root.add_child(test)
+	root.scaling_3d_scale = render_scale
 	if bar > 1 or seq > 1 or kill:
 		# Let the validator bot carry the player to the requested bar alive.
 		var ap: Object = load("res://tools/autoplay.gd").new()   # a SceneTree script, not a Node
@@ -172,6 +175,7 @@ func _setup() -> void:
 		ap.clock = clock
 		ap.Rules = Rules
 		ap.HazardMath = load("res://prototype/hazard_math.gd")
+		ap.test = test
 		if endless:
 			ap.attach_endless(test, clock)
 		else:
