@@ -361,6 +361,25 @@ static func goal_glass() -> Material:
 	return _cache["goal_glass"]
 
 
+# The shield (Phase E section 5): a thin glass bubble around the creature,
+# the hot-glass shader in SAFE cyan — nearly clear body, bright rim.
+static func shield() -> Material:
+	if not _cache.has("shield"):
+		var m := ShaderMaterial.new()
+		m.shader = _shader("glass")
+		m.set_shader_parameter("albedo", Color(WorldPalette.SAFE, 0.10))
+		m.set_shader_parameter("live", Color(WorldPalette.SAFE, 0.10))
+		m.set_shader_parameter("rim_colour", WorldPalette.SAFE.lightened(0.35))
+		m.set_shader_parameter("armed", 0.0)
+		m.set_shader_parameter("rim_strength", 0.9)
+		m.set_shader_parameter("glow_range", 0.0)
+		m.set_shader_parameter("shimmer_contrast", 0.0)
+		m.set_shader_parameter("half_height", 1.6)
+		m.render_priority = 12          # over the creature, which draws on top of the world
+		_cache["shield"] = _with_fade(m)
+	return _cache["shield"]
+
+
 # Gloss: orbs (magenta) and notes (amber), lit by the creature's light.
 static func gloss(c: Color, rim: Color, key: String) -> Material:
 	var k := "gloss_" + key

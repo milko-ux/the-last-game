@@ -44,10 +44,10 @@ func prepare(bursts: Array) -> void:
 	var box := BoxMesh.new()
 	for m in [Mats.tile(0, half), Mats.tile(1, half), Mats.tile(2, half), Mats.cyan(),
 			Mats.flat(WorldPalette.SAFE.darkened(0.55)), Mats.amber_dim(), Mats.magenta(), Mats.magenta_dim(),
-			Mats.magenta_wall(), Mats.magenta_wall_dim(), Mats.amber(), white]:
+			Mats.magenta_wall(), Mats.magenta_wall_dim(), Mats.amber(), Mats.player(WorldPalette.GOAL), white]:
 		_queue.append(_mesh.bind(box, m))
 	var ball := SphereMesh.new()
-	for m in [Mats.orb(true), Mats.orb(false), Mats.note(), white]:
+	for m in [Mats.orb(true), Mats.orb(false), Mats.note(), Mats.shield(), white]:
 		_queue.append(_mesh.bind(ball, m))
 	# The clay props: armed, live, safe, and the white flash, on each model
 	# (and mirrored, as the right-hand gate pillars and sweeper segments are).

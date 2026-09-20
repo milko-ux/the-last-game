@@ -188,6 +188,12 @@ func on_checkpoint(z: float) -> void:
 	_ripple_t = 0.0
 
 
+# The player passed their best distance: the rim goes amber for one bar.
+func on_best_crossed() -> void:
+	_amber_hold_until = BeatClock.song_time() + BeatClock.beat_interval * 4.0
+	_amber = 1.0
+
+
 func on_goal() -> void:
 	_amber_hold_until = BeatClock.song_time() + BeatClock.beat_interval * 4.0 * GOAL_AMBER_BARS
 	_amber = 1.0

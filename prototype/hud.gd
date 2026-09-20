@@ -20,9 +20,23 @@ var ticks: Array = []       # 0..1 positions
 var lit := 0                # brief 3: the first `lit` ticks have been reached
 var word := ""
 var word_alpha := 0.0
+# The endless run (Phase E section 5): no song progress bar. Top centre is
+# the distance (a Label the run scene owns); this node draws what sits
+# beside it, in the same glass language: the lives, left of the number,
+# and the shield meter, right of it — a small glass ring that fills amber
+# as notes charge it and turns cyan when the shield is armed.
+var endless := false
+var lives := 0
+var lives_max := 0          # 0 = lives are off (a new player's lap 0): nothing drawn
+var shield := 0.0           # 0..1
+var shield_armed := false
+var shield_pop := 0.0       # 1 -> 0 after the shield was used (the ring flashes)
+const SIDE_GAP := 120.0     # from the screen's centre line to the lives / the ring
+const HUD_Y := 38.0
 
 
 func _process(delta: float) -> void:
+	shield_pop = maxf(0.0, shield_pop - delta * 2.5)
 	if word_alpha > 0.0 and word == "":
 		word_alpha = maxf(0.0, word_alpha - delta * 2.5)
 	queue_redraw()
@@ -44,29 +58,32 @@ func _draw() -> void:
 	var w := screen.x - MARGIN * 2.0
 	var rect := Rect2(Vector2(x0, BAR_Y), Vector2(w, BAR_H))
 
-	# glass trough
-	draw_rect(Rect2(rect.position - Vector2(2, 2), rect.size + Vector2(4, 4)), Color(1, 1, 1, 0.05), true)
-	draw_rect(rect, Color(1, 1, 1, 0.07), true)
-	draw_rect(rect, Color(1, 1, 1, 0.22), false, 1.0)
-	draw_line(rect.position + Vector2(1, 0), rect.position + Vector2(w - 1, 0), Color(1, 1, 1, 0.35), 1.0)
+	if endless:
+		_draw_run_hud(screen)
+	else:
+		# glass trough
+		draw_rect(Rect2(rect.position - Vector2(2, 2), rect.size + Vector2(4, 4)), Color(1, 1, 1, 0.05), true)
+		draw_rect(rect, Color(1, 1, 1, 0.07), true)
+		draw_rect(rect, Color(1, 1, 1, 0.22), false, 1.0)
+		draw_line(rect.position + Vector2(1, 0), rect.position + Vector2(w - 1, 0), Color(1, 1, 1, 0.35), 1.0)
 
-	# fill (cyan = where you are)
-	var fw := w * clampf(fill, 0.0, 1.0)
-	if fw > 0.0:
-		draw_rect(Rect2(rect.position, Vector2(fw, BAR_H)), Color(Palette.EDGE.r, Palette.EDGE.g, Palette.EDGE.b, 0.55), true)
-		draw_line(rect.position + Vector2(fw, -1), rect.position + Vector2(fw, BAR_H + 1), Palette.EDGE, 1.5)
+		# fill (cyan = where you are)
+		var fw := w * clampf(fill, 0.0, 1.0)
+		if fw > 0.0:
+			draw_rect(Rect2(rect.position, Vector2(fw, BAR_H)), Color(Palette.EDGE.r, Palette.EDGE.g, Palette.EDGE.b, 0.55), true)
+			draw_line(rect.position + Vector2(fw, -1), rect.position + Vector2(fw, BAR_H + 1), Palette.EDGE, 1.5)
 
-	# checkpoint ticks (amber; a reached one is lit: wider and full)
-	for i in ticks.size():
-		var tx := x0 + w * float(ticks[i])
-		var on := i < lit
-		draw_line(Vector2(tx, BAR_Y - (5 if on else 3)), Vector2(tx, BAR_Y + BAR_H + (5 if on else 3)),
-			Color(Palette.GOAL.r, Palette.GOAL.g, Palette.GOAL.b, 1.0 if on else 0.6), 3.0 if on else 1.5)
+		# checkpoint ticks (amber; a reached one is lit: wider and full)
+		for i in ticks.size():
+			var tx := x0 + w * float(ticks[i])
+			var on := i < lit
+			draw_line(Vector2(tx, BAR_Y - (5 if on else 3)), Vector2(tx, BAR_Y + BAR_H + (5 if on else 3)),
+				Color(Palette.GOAL.r, Palette.GOAL.g, Palette.GOAL.b, 1.0 if on else 0.6), 3.0 if on else 1.5)
 
-	# best marker (white)
-	if best > 0.001:
-		var bx := x0 + w * clampf(best, 0.0, 1.0)
-		draw_line(Vector2(bx, BAR_Y - 4), Vector2(bx, BAR_Y + BAR_H + 4), Color(1, 1, 1, 0.9), 2.0)
+		# best marker (white)
+		if best > 0.001:
+			var bx := x0 + w * clampf(best, 0.0, 1.0)
+			draw_line(Vector2(bx, BAR_Y - 4), Vector2(bx, BAR_Y + BAR_H + 4), Color(1, 1, 1, 0.9), 2.0)
 
 	# demo word: a glass pill below the bar
 	if word_alpha > 0.0 and (word != "" or word_alpha > 0.0):
@@ -76,7 +93,7 @@ func _draw() -> void:
 			var tw: float = font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
 			var pw := tw + 56.0
 			var ph := 44.0
-			var c := Vector2(screen.x * 0.5, BAR_Y + BAR_H + 46.0)
+			var c := Vector2(screen.x * 0.5, (HUD_Y + 72.0) if endless else (BAR_Y + BAR_H + 46.0))
 			var prect := Rect2(c - Vector2(pw * 0.5, ph * 0.5), Vector2(pw, ph))
 			var a := word_alpha
 			draw_rect(Rect2(prect.position - Vector2(3, 3), prect.size + Vector2(6, 6)), Color(Palette.HAZ.r, Palette.HAZ.g, Palette.HAZ.b, 0.06 * a), true)
@@ -89,3 +106,27 @@ func _draw() -> void:
 		_last_word = word
 
 var _last_word := ""
+
+
+# Lives (left of the distance) and the shield ring (right of it).
+func _draw_run_hud(screen: Vector2) -> void:
+	var cx := screen.x * 0.5
+	for i in lives_max:
+		var c := Vector2(cx - SIDE_GAP - i * 22.0, HUD_Y)
+		var on := i < lives
+		draw_circle(c, 8.0, Color(1, 1, 1, 0.06))
+		draw_arc(c, 8.0, 0.0, TAU, 24, Color(1, 1, 1, 0.30), 1.5, true)
+		if on:
+			draw_circle(c, 5.0, Color(Palette.EDGE.r, Palette.EDGE.g, Palette.EDGE.b, 0.85))
+	var rc := Vector2(cx + SIDE_GAP, HUD_Y)
+	var r := 11.0 + 5.0 * shield_pop
+	draw_circle(rc, r, Color(1, 1, 1, 0.05))
+	draw_arc(rc, r, 0.0, TAU, 32, Color(1, 1, 1, 0.22), 1.5, true)
+	var col: Color = Palette.EDGE if shield_armed else Palette.GOAL
+	if shield_pop > 0.0:
+		col = Palette.EDGE.lerp(Color.WHITE, shield_pop)
+	var f := 1.0 if shield_armed else clampf(shield, 0.0, 1.0)
+	if f > 0.0 or shield_pop > 0.0:
+		draw_arc(rc, r, -PI * 0.5, -PI * 0.5 + TAU * maxf(f, shield_pop), 32, Color(col.r, col.g, col.b, 0.95), 3.0, true)
+	if shield_armed:
+		draw_circle(rc, 4.0, Color(col.r, col.g, col.b, 0.9))

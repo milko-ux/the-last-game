@@ -20,6 +20,7 @@ var after := 0.4
 var level := 1
 var endless := false         # endless=1: the endless run instead of one level (start_lap=N: enter at lap N)
 var start_lap := 0
+var grad := false            # grad=1: as a graduated player (lives on, no teaching lap)
 var scene_kind := "run"      # scene=select captures the level-select screen instead
 var _select_frames := -1
 var test: Node = null
@@ -120,6 +121,7 @@ func _setup_args() -> void:
 			"after": after = float(kv[1])
 			"level": level = int(kv[1])
 			"endless": endless = kv[1] == "1"
+			"grad": grad = kv[1] == "1"
 			"start_lap": start_lap = int(kv[1])
 			"scene": scene_kind = kv[1]
 			"jump": jump = kv[1] == "1"
@@ -136,6 +138,7 @@ func _setup() -> void:
 	var progress = root.get_node_or_null("Progress")
 	if progress != null:
 		progress.save_enabled = false
+		progress.graduated = grad
 	Rules.START_LAP = start_lap
 	if level != 1:
 		Rules.LEVEL = level

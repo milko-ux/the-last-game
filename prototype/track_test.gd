@@ -130,6 +130,31 @@ const RETRY_RUNUP_S := 4.0
 static var runs_this_session := 0
 var _lives_on := false
 
+# Distance and the shield (section 5). Distance = how far past bar 1's
+# start line the player has been, in metres (1 unit = 1 m); it never goes
+# down, a rewind takes nothing away; the best is kept per SEASON_SEED.
+# Notes no longer score: each one adds the current combo (1-4) to a meter;
+# at SHIELD_COST the shield arms and holds (one at most). An armed shield
+# absorbs ONE hazard or plate death: no life lost, no rewind, the shield
+# pops, SHIELD_GRACE_S of invulnerability to hazards and plates. Falling
+# and the death line always kill. Decided here, after Rules.death_cause():
+# rules.gd is untouched.
+const SHIELD_COST := 30
+const SHIELD_GRACE_S := 1.0
+var distance_m := 0
+var shield_meter := 0
+var shield_armed := false
+var shields_used := 0
+var _grace := 0.0
+var _furthest_z := 0.0
+var _bar1_z := 0.0
+var _best_m := 0                     # the best distance when this run began
+var _best_crossed := false
+var _best_line: MeshInstance3D
+var _best_label: Label
+var _bubble: MeshInstance3D
+var _shield_burst: CPUParticles3D
+
 
 func _ready() -> void:
 	FrameMeter.load_mark("scene")
@@ -183,6 +208,8 @@ func _ready() -> void:
 	_update_world(BeatClock.hazard_time(), z_back0)
 	rig.set_window(z_back0)
 	motion.set_window(z_back0)
+	if endless:
+		_setup_run_hud()
 	# Dev only: the frame-time readout and the load line (off in a release, see frame_meter.gd).
 	if FrameMeter.enabled():
 		meter = FrameMeter.new()
@@ -230,7 +257,10 @@ func _begin_loading() -> void:
 	_warm = load("res://prototype/prewarm.gd").new()
 	add_child(_warm)
 	_warm.global_position = rig.global_position
-	_warm.prepare([motion.burst(), player.creature.burst()])
+	var bursts := [motion.burst(), player.creature.burst()]
+	if _shield_burst != null:
+		bursts.append(_shield_burst)
+	_warm.prepare(bursts)
 	_load_phase = 0 if endless else 2
 	if DisplayServer.get_name() == "headless":
 		# Nothing is drawn, so there is nothing to warm: just make the first lap.
@@ -374,6 +404,117 @@ func _window_depth_at(t: float) -> float:
 	return lerpf(prev, depth, u * u * (3.0 - 2.0 * u))
 
 
+# The endless HUD: the distance big at the top centre, BEST under it, the
+# lives and the shield ring beside it (hud.gd); the best line on the
+# field; the shield's bubble and its pop.
+func _setup_run_hud() -> void:
+	hud.endless = true
+	_bar1_z = BeatClock.z_at(BeatClock.loop_start_t)
+	_furthest_z = _start_z
+	_best_m = Progress.best_distance_for(LapGen.SEASON_SEED)
+	score_label.add_theme_font_size_override("font_size", 34)
+	score_label.add_theme_color_override("font_color", Color(1, 1, 1, 0.95))
+	score_label.offset_top = 16.0
+	score_label.offset_bottom = 60.0
+	score_label.pivot_offset = Vector2(200.0, 22.0)
+	_best_label = Label.new()
+	_best_label.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	_best_label.offset_left = -200.0
+	_best_label.offset_right = 200.0
+	_best_label.offset_top = 58.0
+	_best_label.offset_bottom = 76.0
+	_best_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_best_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_best_label.add_theme_font_size_override("font_size", 12)
+	_best_label.add_theme_color_override("font_color", Color(1.0, 0.82, 0.24, 0.85))
+	$UI.add_child(_best_label)
+	# The best line: thin, amber (amber = goal), built like the death line.
+	_best_line = MeshInstance3D.new()
+	var bm := BoxMesh.new()
+	bm.size = Vector3(Rules.FIELD_WIDTH + 0.6, 0.06, 0.22)
+	_best_line.mesh = bm
+	_best_line.material_override = Mats.player(WorldPalette.GOAL)
+	_best_line.position = Vector3(0.0, 0.04, _bar1_z + float(_best_m))
+	_best_line.visible = _best_m > 0
+	add_child(_best_line)
+	# The shield: a thin glass bubble in SAFE cyan, and the creature's clay
+	# pop recoloured cyan for when it breaks.
+	_bubble = MeshInstance3D.new()
+	var sm := SphereMesh.new()
+	sm.radius = 1.75
+	sm.height = 3.5
+	sm.radial_segments = 24
+	sm.rings = 12
+	_bubble.mesh = sm
+	_bubble.material_override = Mats.shield()
+	_bubble.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_bubble.visible = false
+	player.add_child(_bubble)
+	_shield_burst = player.creature.burst().duplicate()
+	var ball: Mesh = _shield_burst.mesh.duplicate()
+	var mat: StandardMaterial3D = ball.material.duplicate()
+	mat.albedo_color = WorldPalette.SAFE
+	ball.material = mat
+	_shield_burst.mesh = ball
+	_shield_burst.emitting = false
+	add_child(_shield_burst)
+
+
+static func metres(m: int) -> String:
+	var txt := str(m)
+	var out := ""
+	while txt.length() > 3:
+		out = " " + txt.substr(txt.length() - 3) + out
+		txt = txt.substr(0, txt.length() - 3)
+	return txt + out + " m"
+
+
+# Per frame in a run: the distance, the best line, the shield's look.
+func _tick_distance_and_shield(delta: float) -> void:
+	_grace = maxf(0.0, _grace - delta)
+	_furthest_z = maxf(_furthest_z, player.position.z)
+	distance_m = maxi(0, int(floor(_furthest_z - _bar1_z)))
+	if _best_m > 0 and not _best_crossed and distance_m > _best_m:
+		_best_crossed = true
+		motion.on_best_crossed()
+		FrameMeter.note("best line crossed")
+	_bubble.position.y = player.y + 1.35
+	# Armed: the bubble. In the grace second after it broke: it flickers out.
+	_bubble.visible = shield_armed or (_grace > 0.0 and fmod(_grace, 0.16) > 0.08)
+
+
+# A note charges the shield with the current combo (1-4).
+func _charge_shield() -> void:
+	if shield_armed:
+		return
+	shield_meter = mini(SHIELD_COST, shield_meter + mini(maxi(streak, 1), COMBO_CAP))
+	if shield_meter >= SHIELD_COST:
+		shield_armed = true
+		FrameMeter.note("shield armed")
+
+
+# True when the death was taken by the shield (or falls in its grace).
+func _shield_takes(cause: Dictionary) -> bool:
+	var kind := String(cause["kind"])
+	if kind == "fall" or kind == "back_edge":
+		return false          # these always kill
+	if _grace > 0.0:
+		return true
+	if not shield_armed:
+		return false
+	shield_armed = false
+	shield_meter = 0
+	shields_used += 1
+	_grace = SHIELD_GRACE_S
+	hud.shield_pop = 1.0
+	_shield_burst.global_position = player.position + Vector3(0.0, player.y + 1.2, 0.0)
+	_shield_burst.restart()
+	Input.vibrate_handheld(HAPTIC_COIN_MS)
+	FrameMeter.note("shield pop")
+	print("SHIELD absorbed %s at bar %d, %d m" % [kind, BeatClock.current_bar(), distance_m])
+	return true
+
+
 # Do deaths cost lives right now?
 func lives_enabled() -> bool:
 	return _lives_on if endless else Rules.lives_enabled(knobs)
@@ -412,6 +553,8 @@ func _input(event: InputEvent) -> void:
 
 
 func _to_level_select() -> void:
+	if endless:
+		Progress.record_distance(LapGen.SEASON_SEED, distance_m)
 	BeatClock.stop()
 	get_tree().change_scene_to_file(SELECT_SCENE)
 
@@ -480,6 +623,8 @@ func _tick_run(delta: float) -> void:
 			streak += 1
 			notes += 1
 			combo_max = maxi(combo_max, mini(streak, COMBO_CAP))
+			if endless:
+				_charge_shield()
 			motion.on_pickup(n["node"], player, streak)
 			Input.vibrate_handheld(HAPTIC_COIN_MS)
 
@@ -487,6 +632,10 @@ func _tick_run(delta: float) -> void:
 	var cause := Rules.death_cause(field, player.prev_position, player.position,
 		player.on_ground, z_back, _prev_ht, ht)
 	_prev_ht = ht
+	if endless:
+		_tick_distance_and_shield(delta)
+		if not cause.is_empty() and _shield_takes(cause):
+			cause = {}
 	if not cause.is_empty():
 		FrameMeter.note("death")
 		_log_death(cause, t, ht, z_back)
@@ -710,7 +859,9 @@ func _die() -> void:
 	_death_z = player.position.z
 	_freeze = DEATH_FREEZE_LIVES_S if lives_enabled() else DEATH_FREEZE_S
 	player.creature.play_death(_freeze)
-	if not endless:
+	if endless:
+		Progress.record_distance(LapGen.SEASON_SEED, distance_m)
+	else:
 		Progress.record_best(Rules.LEVEL, BeatClock.song_time())
 	if lives_enabled() and lives <= 0:
 		_game_over()
@@ -774,7 +925,29 @@ func _win() -> void:
 		deaths, notes, combo_max, score]
 
 
+# The run's HUD: the distance, BEST, lives, the shield meter. No score, no
+# combo readout, no song progress bar.
+func _update_run_hud() -> void:
+	score_label.text = metres(distance_m) if state != State.LOADING and state != State.WAIT else ""
+	score_label.scale = Vector2.ONE
+	score_label.modulate.a = 1.0
+	var best := maxi(_best_m, distance_m)
+	_best_label.text = ("BEST " + metres(best)) if best > 0 else ""
+	hud.lives = lives
+	hud.lives_max = RUN_LIVES if lives_enabled() else 0
+	hud.shield = float(shield_meter) / float(SHIELD_COST)
+	hud.shield_armed = shield_armed
+	var lap := BeatClock.current_lap()
+	var line := "lap %d   ·   bar %d / %d   ·   %.1f s   ·   notes %d   ·   sync %+d ms" % [
+		lap, BeatClock.current_bar() - lap * BeatClock.loop_bars, BeatClock.loop_bars, BeatClock.song_time(), notes,
+		int(round(BeatClock.SYNC_OFFSET_S * 1000.0))]
+	debug.text = line if _fair_warning.is_empty() else _fair_warning + "\n" + line
+
+
 func _update_hud() -> void:
+	if endless:
+		_update_run_hud()
+		return
 	if state == State.WAIT:
 		return
 	if lives_enabled():
