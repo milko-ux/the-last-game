@@ -31,6 +31,7 @@ extends Node
 signal beat(index: int)
 signal downbeat(bar: int)
 signal section_changed(section_id: int)
+signal lap_changed(lap: int)
 
 # ONE beatmap (fuffens_beatmap.json, analysed at the original tempo). The
 # level's `song_tempo` knob picks a time-stretched mp3 (_105, _110: the
@@ -39,6 +40,40 @@ signal section_changed(section_id: int)
 const BEATMAP_PATH := "res://assets/audio/fuffens_beatmap.json"
 const MUSIC_BASE := "res://assets/audio/fuffens_instrumental_vers"
 var tempo := 1.0
+
+# ------------------------------------------------------------
+# THE ENDLESS RUN (Phase E brief 1, section 2). The song loops: the
+# intro plays once, then bars LOOP_START_BAR .. LOOP_END_BAR - 1 repeat
+# for ever (bar 73's downbeat is where the audio jumps back to bar 1's).
+# Bars 73-78, the fade-out, never play. Milko confirms the seam by ear
+# and may move LOOP_END_BAR to another 8-bar boundary (+ 1); re-cut the
+# audio with tools/make_endless_audio.py <bar> when he does.
+#
+# RUN TIME. In an endless run song_time() IS the run time: it starts at
+# the start offset and only ever grows (it is the smoothed system clock,
+# which knows nothing about the audio wrapping; the audio file loops on
+# its own, sample-exact). lap = how many times the loop has been passed.
+# Everything that takes a time `t` below folds it back into the loop, so
+# beat, bar and period numbers keep COUNTING across laps:
+#   run bar  = lap x 72 + bar         (bar_at, bar_start, bar_energy ...)
+#   run beat = lap x 288 + beat       (beat_at, beat_time, period_*)
+# and z_at(t) keeps growing: z is absolute, no re-origin.
+# With `endless` off (the dev level path) nothing here changes anything.
+# ------------------------------------------------------------
+const LOOP_START_BAR := 1
+const LOOP_END_BAR := 73
+const ENDLESS_MUSIC := "res://assets/audio/fuffens_endless.ogg"
+# The run-up the z axis is measured from (level 1's song offset). Fixed,
+# so the course sits at the same z whether the run starts with the full
+# run-up or the short retry one.
+const ENDLESS_Z_ORIGIN_S := 8.0
+var endless := false
+var loop_start_t := 0.0
+var loop_end_t := 0.0
+var loop_len := 0.0
+var loop_bars := 0
+var loop_first_beat := 0
+var loop_beats := 0
 var beatmap_path := BEATMAP_PATH   # (read by the verdict cache key)
 
 # Hazards run this much BEHIND the audio clock so the visual hit lands
@@ -78,6 +113,9 @@ var first_bar_beat := 0     # index into beats of bar 1's downbeat
 # mapping to the field (z_at / t_at) and the progress fraction subtract
 # it, so z = 0 is where the run starts. Set by the scene before start().
 var start_offset := 0.0
+# The song time at which z = 0. The level path keeps it equal to the start
+# offset (set_start_offset); the endless run pins it (ENDLESS_Z_ORIGIN_S).
+var z_origin_t := 0.0
 
 var _player: AudioStreamPlayer
 var _time_begin := 0
@@ -90,6 +128,13 @@ var _smooth_t := 0.0
 var _prev_beat := -1
 var _prev_bar := 0
 var _prev_section := 0
+var _prev_lap := 0
+# Seam log (section 2 acceptance): run time's per-frame step around a seam.
+var _seam_min := INF
+var _seam_max := -INF
+var _seam_ratio := 0.0
+var _seam_frames := 0
+var _seam_negative := 0
 
 
 func _ready() -> void:
@@ -156,8 +201,81 @@ func _load() -> void:
 		mean_bar_s = beat_interval * 4.0
 	track_speed = BAR_UNITS / (4.0 * beat_interval)
 	if not downbeats.is_empty():
-		first_bar_beat = maxi(0, beat_at(downbeats[0]))
+		first_bar_beat = maxi(0, beats.bsearch(downbeats[0], false) - 1)
+	if bars.size() >= LOOP_END_BAR:
+		loop_start_t = float(bars[LOOP_START_BAR - 1]["t"])
+		loop_end_t = float(bars[LOOP_END_BAR - 1]["t"])
+		loop_len = loop_end_t - loop_start_t
+		loop_bars = LOOP_END_BAR - LOOP_START_BAR
+		loop_first_beat = maxi(0, beats.bsearch(loop_start_t, false) - 1)
+		loop_beats = maxi(0, beats.bsearch(loop_end_t, false) - 1) - loop_first_beat
 	loaded = true
+
+
+# The level path: playback starts at `t`, and z = 0 is there.
+func set_start_offset(t: float) -> void:
+	start_offset = t
+	z_origin_t = t
+
+
+# The endless run: the looped track, tempo 1.0, z measured from the
+# standard run-up whatever this run's own start offset is.
+func set_endless(on: bool) -> void:
+	endless = on
+	if on:
+		set_tempo(1.0)
+		z_origin_t = ENDLESS_Z_ORIGIN_S
+
+
+# ------------------------------------------------------------
+# Folding run time back into the loop
+# ------------------------------------------------------------
+func lap_at(t: float) -> int:
+	if not endless or t < loop_end_t or loop_len <= 0.0:
+		return 0
+	return int(floor((t - loop_start_t) / loop_len))
+
+
+# The position inside the track that run time t corresponds to.
+func local_t(t: float) -> float:
+	return t - lap_at(t) * loop_len
+
+
+func current_lap() -> int:
+	return lap_at(song_time())
+
+
+# Run time IS song_time() in an endless run; the alias is for readers.
+func run_time() -> float:
+	return song_time()
+
+
+# Time of beat i, where i keeps counting across laps.
+func beat_time(i: int) -> float:
+	if not endless or i < loop_first_beat + loop_beats:
+		return beats[clampi(i, 0, beats.size() - 1)]
+	var j := i - loop_first_beat
+	return beats[loop_first_beat + j % loop_beats] + float(j / loop_beats) * loop_len
+
+
+# A run bar -> [lap, bar inside the loop (1-based)].
+func _fold_bar(bar: int) -> Vector2i:
+	if not endless or bar < LOOP_END_BAR:
+		return Vector2i(0, bar)
+	var j := bar - LOOP_START_BAR
+	return Vector2i(j / loop_bars, LOOP_START_BAR + j % loop_bars)
+
+
+# How far the audio really is from where the clock says it is (ms, +
+# = audio ahead). Dev read-out only; nothing is corrected with it.
+func audio_drift_ms() -> float:
+	if _player == null or not _player.playing:
+		return 0.0
+	var heard := _player.get_playback_position() + AudioServer.get_time_since_last_mix() - AudioServer.get_output_latency()
+	var d := heard - local_t(_raw_time())
+	if loop_len > 0.0 and endless:
+		d = fposmod(d + loop_len * 0.5, loop_len) - loop_len * 0.5
+	return d * 1000.0
 
 
 # ------------------------------------------------------------
@@ -185,11 +303,13 @@ func seek(t: float) -> void:
 	_paused = false
 	_time_begin = Time.get_ticks_usec()
 	_time_delay = AudioServer.get_time_to_next_mix() + AudioServer.get_output_latency()
+	# Across the seam too: the audio goes to the place INSIDE the loop, the
+	# clock (and with it the lap) to the run time asked for.
 	if _player.playing and not _player.stream_paused:
-		_player.seek(t)
+		_player.seek(local_t(t))
 	else:
 		_player.stream_paused = false
-		_player.play(t)
+		_player.play(local_t(t))
 	_resync_indices()
 
 
@@ -251,6 +371,9 @@ func hazard_time() -> float:
 
 # Index into beats of the last beat at or before t. -1 during the intro.
 func beat_at(t: float) -> int:
+	if endless and t >= loop_end_t:
+		var lap := lap_at(t)
+		return beats.bsearch(t - lap * loop_len, false) - 1 + lap * loop_beats
 	return beats.bsearch(t, false) - 1
 
 
@@ -260,6 +383,9 @@ func current_beat() -> int:
 
 # 1-based bar number of the last downbeat at or before t. 0 during the intro.
 func bar_at(t: float) -> int:
+	if endless and t >= loop_end_t:
+		var lap := lap_at(t)
+		return downbeats.bsearch(t - lap * loop_len, false) + lap * loop_bars
 	return downbeats.bsearch(t, false)
 
 
@@ -280,6 +406,9 @@ func beat_phase_at(t: float) -> float:
 	if i < first_bar_beat:
 		var anchor: float = downbeats[0] if not downbeats.is_empty() else beats[0]
 		return fposmod((t - anchor) / beat_interval, 1.0)
+	if endless:
+		var b0 := beat_time(i)
+		return clampf((t - b0) / maxf(beat_time(i + 1) - b0, 0.001), 0.0, 1.0)
 	if i >= beats.size() - 1:
 		return clampf((t - beats[i]) / beat_interval, 0.0, 1.0)
 	return clampf((t - beats[i]) / (beats[i + 1] - beats[i]), 0.0, 1.0)
@@ -307,10 +436,15 @@ func bar_count() -> int:
 
 
 func bar_start(bar: int) -> float:
+	if endless:
+		var f := _fold_bar(bar)
+		return float(bars[f.y - 1]["t"]) + f.x * loop_len
 	return float(bars[bar - 1]["t"])
 
 
 func bar_end(bar: int) -> float:
+	if endless:
+		return bar_start(bar + 1)
 	if bar < bars.size():
 		return float(bars[bar]["t"])
 	return bar_start(bar) + mean_bar_s
@@ -326,12 +460,14 @@ func bar_progress(bar: int, t: float) -> float:
 # Timestamps of the four beats inside a bar, taken from the real beat
 # list where possible so hazards sit on the drummer's beats, not a grid.
 func bar_beats(bar: int) -> PackedFloat64Array:
+	var f := _fold_bar(bar)
+	var shift := f.x * loop_len
 	var s := bar_start(bar)
 	var e := bar_end(bar)
 	var out := PackedFloat64Array()
 	for b in beats:
-		if b >= s - 0.02 and b < e - 0.02:
-			out.append(b)
+		if b + shift >= s - 0.02 and b + shift < e - 0.02:
+			out.append(b + shift)
 	if out.size() != 4:
 		out.clear()
 		for k in 4:
@@ -340,14 +476,15 @@ func bar_beats(bar: int) -> PackedFloat64Array:
 
 
 func bar_energy(bar: int) -> float:
-	return float(bars[bar - 1].get("energy", 0.0))
+	return float(bars[_fold_bar(bar).y - 1].get("energy", 0.0))
 
 
 func bar_band(bar: int, band: String) -> float:
-	return float(bars[bar - 1].get(band, 0.0))
+	return float(bars[_fold_bar(bar).y - 1].get(band, 0.0))
 
 
 func section_of_bar(bar: int) -> int:
+	bar = _fold_bar(bar).y
 	for s in sections:
 		if bar >= int(s["start_bar"]) and bar <= int(s["end_bar"]):
 			return int(s["id"])
@@ -355,6 +492,7 @@ func section_of_bar(bar: int) -> int:
 
 
 func is_section_start(bar: int) -> bool:
+	bar = _fold_bar(bar).y
 	for s in sections:
 		if int(s["start_bar"]) == bar:
 			return true
@@ -391,6 +529,8 @@ func period_index_at(t: float, pb: int) -> int:
 
 func period_start(idx: int, pb: int) -> float:
 	var b := first_bar_beat + (idx - 1) * pb
+	if idx >= 1 and endless:
+		return beat_time(b)
 	if idx >= 1 and b < beats.size():
 		return beats[b]
 	return _anchor() + (idx - 1) * period_s(pb)
@@ -428,11 +568,11 @@ func beats_float_at(t: float, beats_per: int) -> float:
 # Space <-> time
 # ------------------------------------------------------------
 func z_at(t: float) -> float:
-	return (t - start_offset) * track_speed
+	return (t - z_origin_t) * track_speed
 
 
 func t_at(z: float) -> float:
-	return z / track_speed + start_offset
+	return z / track_speed + z_origin_t
 
 
 # 0..1: how far through the run (from the start offset to the end of the
@@ -448,6 +588,7 @@ func progress_of(t: float) -> float:
 # Never from a Timer: timers drift from the audio clock.
 # ------------------------------------------------------------
 func _resync_indices() -> void:
+	_prev_lap = current_lap()
 	_prev_beat = current_beat()
 	_prev_bar = current_bar()
 	_prev_section = section_of_bar(_prev_bar) if _prev_bar > 0 else 0
@@ -456,7 +597,10 @@ func _resync_indices() -> void:
 func _process(delta: float) -> void:
 	if not _running or _paused:
 		return
+	var before := _smooth_t
 	_advance(delta)
+	if endless:
+		_watch_seam(_smooth_t - before, delta)
 	var b := current_beat()
 	if b != _prev_beat:
 		if b > _prev_beat:
@@ -471,3 +615,30 @@ func _process(delta: float) -> void:
 		if sec != _prev_section:
 			_prev_section = sec
 			section_changed.emit(sec)
+
+
+# Around every lap seam (a second either side): run time's per-frame step
+# must never be negative and never more than two frames' worth. One line
+# per seam, printed when the zone is left.
+func _watch_seam(step: float, delta: float) -> void:
+	var into := fposmod(_smooth_t - loop_start_t, loop_len)
+	var near := _smooth_t > loop_end_t - 1.0 and (into < 1.0 or into > loop_len - 1.0)
+	if near:
+		_seam_frames += 1
+		_seam_min = minf(_seam_min, step)
+		_seam_max = maxf(_seam_max, step)
+		_seam_ratio = maxf(_seam_ratio, step / maxf(delta, 0.0001))
+		if step < 0.0:
+			_seam_negative += 1
+	elif _seam_frames > 0:
+		print("SEAM into lap %d: %d frames, run_time step min %.2f ms max %.2f ms (at most %.2f frames' worth), negative steps %d, audio drift %+.1f ms" % [
+			current_lap(), _seam_frames, _seam_min * 1000.0, _seam_max * 1000.0, _seam_ratio, _seam_negative, audio_drift_ms()])
+		_seam_frames = 0
+		_seam_min = INF
+		_seam_max = -INF
+		_seam_ratio = 0.0
+		_seam_negative = 0
+	var lap := current_lap()
+	if lap != _prev_lap:
+		_prev_lap = lap
+		lap_changed.emit(lap)

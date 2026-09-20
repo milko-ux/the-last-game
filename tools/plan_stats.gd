@@ -31,7 +31,7 @@ func _initialize() -> void:
 	for L in levels:
 		var knobs: Dictionary = Rules.level(int(L))
 		clock.set_tempo(Rules.song_tempo(knobs))
-		clock.start_offset = Rules.song_offset(knobs)
+		clock.set_start_offset(Rules.song_offset(knobs))
 		print(Rules.knobs_line(knobs))
 		var rerolls := {}
 		var fair := {}

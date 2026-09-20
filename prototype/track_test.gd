@@ -101,7 +101,7 @@ func _ready() -> void:
 	# since the layout is a function of them.
 	BeatClock.set_tempo(Rules.song_tempo(knobs))
 	music.stream = load(BeatClock.music_path())
-	BeatClock.start_offset = Rules.song_offset(knobs)
+	BeatClock.set_start_offset(Rules.song_offset(knobs))
 	lives = Rules.lives(knobs)
 	furthest_t = BeatClock.start_offset
 	print(Rules.knobs_line(knobs))
