@@ -78,6 +78,12 @@ static var _t_tap := -1             # msec; -1 = this load did not start with a 
 static var _t_label := -1           # msec; the loading label's first painted frame
 static var _t_ready := -1           # msec; TAP TO START
 static var page_s := -1.0           # the page span, measured once per page
+static var label_timed_out := false
+# A wait for a PAINTED frame may never last longer than this: if the
+# frames do not come (a browser that will not paint, a stalled renderer),
+# loading carries on anyway and the line says so. A gate that can wait
+# for ever is the bug class; this ceiling is the rule for all of them.
+const LABEL_TIMEOUT_MS := 2000
 
 var _ms := PackedFloat32Array()
 var _cpu := PackedFloat32Array()
@@ -116,15 +122,35 @@ static func note_at(what: String, z: float) -> void:
 		note(what if seen else what + " (off-screen)")
 
 
-# The FIRST painted frame of the game since the page was opened (whichever
-# scene that is calls this once, after a frame_post_draw).
+# The FIRST painted frame of the game since the page was opened. Called
+# from a scene's _process — NEVER from a frame_post_draw callback.
+#
+# 2026-09-20, the iPhone hang: this used to be called from inside the
+# render step, and its web branch (the one line of the load instrument
+# that a Mac never runs, since OS.has_feature("web") is false there) read
+# the page clock through JavaScriptBridge from in there. Re-entering JS
+# from the render step wedged the engine on iOS Safari; and a bare
+# float() of what eval returns raises outright if that is ever Nil
+# ("Nonexistent 'float' constructor"). Either way the caller's next line
+# — the one that counts the painted frame — never ran, and the loading
+# screen waited for a count that could no longer grow. Hence: nothing
+# that can raise, and nothing that talks to the browser, runs inside a
+# render callback; those callbacks only add 1 to an int.
 static func first_frame_painted() -> void:
 	if page_s >= 0.0:
 		return
+	page_s = _page_ms() / 1000.0
+
+
+# Milliseconds since the page was opened (web), or since the engine
+# started (anywhere else). Never raises: a browser that hands back
+# something that is not a number falls back to the engine clock.
+static func _page_ms() -> float:
 	if OS.has_feature("web"):
-		page_s = float(JavaScriptBridge.eval("performance.now()")) / 1000.0
-	else:
-		page_s = float(Time.get_ticks_msec()) / 1000.0
+		var v = JavaScriptBridge.eval("performance.now()")
+		if typeof(v) == TYPE_FLOAT or typeof(v) == TYPE_INT:
+			return float(v)
+	return float(Time.get_ticks_msec())
 
 
 # A level / the run was TAPPED: a new load begins (everything is reset).
@@ -137,6 +163,7 @@ static func load_begin() -> void:
 
 static func _reset() -> void:
 	load_log.clear()
+	label_timed_out = false
 	_t_tap = -1
 	_t_label = -1
 	_t_ready = -1
@@ -156,10 +183,13 @@ static func load_scene_started() -> void:
 # The loading label has been PAINTED (a frame was drawn with it). Only the
 # first call of a load counts: the level select paints its own label before
 # it changes scene, the run scene paints another one.
-static func load_label_painted() -> void:
+# `timed_out`: the frames never came and the wait gave up (see
+# LABEL_TIMEOUT_MS) — the span is still recorded, and says so.
+static func load_label_painted(timed_out: bool = false) -> void:
 	if _t_label < 0:
 		_t_label = Time.get_ticks_msec()
 		_load_last = _t_label
+		label_timed_out = timed_out
 
 
 # TAP TO START is on screen.
@@ -181,10 +211,12 @@ static func load_line() -> String:
 		if float(e[1]) >= LOAD_MIN_S or bool(e[3]):
 			parts.append("%s %.1f%s" % [e[0], e[1], "" if String(e[2]).is_empty() else " (%s)" % e[2]])
 	var page := "page %.1f s" % page_s if page_s >= 0.0 else "page -"
-	var tap := "tap %.2f s" % (float(_t_label - _t_tap) / 1000.0) if _t_tap >= 0 and _t_label >= 0 else "tap -"
+	var tap := "tap %.2f s%s" % [float(_t_label - _t_tap) / 1000.0, " TIMED OUT" if label_timed_out else ""] if _t_tap >= 0 and _t_label >= 0 else "tap -"
 	var end := _t_ready if _t_ready >= 0 else Time.get_ticks_msec()
 	var load := "load %.1f s" % (float(end - _t_label) / 1000.0) if _t_label >= 0 else "load -"
 	var line := "%s   ·   %s   ·   %s  [%s]" % [page, tap, load, "  ·  ".join(parts)]
+	if label_timed_out and _t_tap < 0:
+		line += "   ·   label TIMED OUT"
 	if load_info != "":
 		line += "   ·   " + load_info
 	return line

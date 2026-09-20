@@ -90,6 +90,7 @@ var _reveal: Array = []
 var _load_frames := 0
 var _settle := 0
 var _tap_queued := false    # a tap during LOADING is kept: the run starts the moment loading ends
+var _label_wait_from := 0   # msec: when the wait for a painted LOADING label began
 var _bar_back: ColorRect
 var _bar_fill: ColorRect
 
@@ -341,6 +342,7 @@ func _begin_loading() -> void:
 		_end_loading()
 		return
 	state = State.LOADING
+	_label_wait_from = Time.get_ticks_msec()
 	_reveal = [rig, player, _edge_line, field]
 	for n in _reveal:
 		n.visible = false
@@ -359,13 +361,12 @@ func _begin_loading() -> void:
 	$UI.add_child(_bar_back)
 
 
-# Painted frames (RenderingServer.frame_post_draw): the first one of the
-# page ends the "page" span; the LOADING label counts as shown once it has
-# been drawn and one more frame has gone by.
+# Painted frames. This runs inside the render step, so it does ONE thing:
+# add 1 to an int. Nothing that can raise, and nothing that talks to the
+# browser, belongs in here — see frame_meter.first_frame_painted().
 var _painted := 0
 
 func _on_frame_drawn() -> void:
-	FrameMeter.first_frame_painted()
 	_painted += 1
 
 
@@ -383,11 +384,18 @@ func _build_level() -> void:
 
 func _tick_loading() -> void:
 	_load_frames += 1
-	# Nothing heavy before the LOADING label has really been painted.
+	# Nothing heavy before the LOADING label has really been painted — but
+	# never wait for that for ever (FrameMeter.LABEL_TIMEOUT_MS).
 	if _load_phase == -1:
-		if _painted < 2:
+		if _painted >= 1:
+			FrameMeter.first_frame_painted()
+		var waited := Time.get_ticks_msec() - _label_wait_from
+		if _painted < 2 and waited < FrameMeter.LABEL_TIMEOUT_MS:
 			return
-		FrameMeter.load_label_painted()
+		if _painted < 2:
+			push_warning("LOADING: no painted frame after %d ms; carrying on" % waited)
+			FrameMeter.first_frame_painted()
+		FrameMeter.load_label_painted(_painted < 2)
 		if not endless:
 			_build_level()
 		_load_phase = 0 if endless else 2

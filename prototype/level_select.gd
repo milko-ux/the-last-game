@@ -23,7 +23,9 @@ var _flash := 0.0
 # tap shows LOADING, and the scene changes two frames later.
 var _loading_level := 0        # > 0 a level, -1 the endless run
 var _endless_rect := Rect2()
-var _loading_frames := 0
+var _painted := 0
+var _painted_at_tap := 0
+var _loading_from := 0
 
 
 func _ready() -> void:
@@ -31,25 +33,45 @@ func _ready() -> void:
 	RenderingServer.frame_post_draw.connect(_on_frame_drawn)
 
 
-# Counts PAINTED frames. The first one of the page is the end of the "page"
-# span; while the LOADING label is up, the scene only changes (a blocking
-# step: the scene file, then the level) after the label has really been
-# drawn and one more frame has gone by, so the browser has shown it.
+# Counts PAINTED frames, and NOTHING else: this runs inside the render
+# step (see frame_meter.first_frame_painted() for what that cost once).
 func _on_frame_drawn() -> void:
-	FrameMeter.first_frame_painted()
-	if _loading_level == 0:
+	_painted += 1
+
+
+# While the LOADING label is up, the scene changes (a blocking step: the
+# scene file, then the level) only after the label has really been drawn
+# and one more frame has gone by, so the browser has shown it — or after
+# FrameMeter.LABEL_TIMEOUT_MS, if those frames never come.
+func _tick_loading() -> void:
+	var waited := Time.get_ticks_msec() - _loading_from
+	if _painted - _painted_at_tap < 2 and waited < FrameMeter.LABEL_TIMEOUT_MS:
 		return
-	_loading_frames += 1
-	if _loading_frames == 2:
-		FrameMeter.load_label_painted()
-	elif _loading_frames >= 3:
-		RenderingServer.frame_post_draw.disconnect(_on_frame_drawn)
-		get_tree().change_scene_to_file.call_deferred(RUN_SCENE)
+	if _painted - _painted_at_tap < 2:
+		push_warning("LOADING LEVEL: no painted frame after %d ms; carrying on" % waited)
+		FrameMeter.first_frame_painted()
+	FrameMeter.load_label_painted(_painted - _painted_at_tap < 2)
+	set_process(false)
+	get_tree().change_scene_to_file.call_deferred(RUN_SCENE)
+
+
+# The tap is taken: the label goes up now, and the wait for it to be
+# painted starts from this moment (with its ceiling).
+func _begin_loading(which: int) -> void:
+	_loading_level = which
+	_painted_at_tap = _painted
+	_loading_from = Time.get_ticks_msec()
+	FrameMeter.load_begin()
+	queue_redraw()
 
 
 func _process(delta: float) -> void:
 	if _flash > 0.0:
 		_flash -= delta
+	if _painted >= 1:
+		FrameMeter.first_frame_painted()
+	if _loading_level != 0:
+		_tick_loading()
 	queue_redraw()
 
 
@@ -64,8 +86,7 @@ func _input(event: InputEvent) -> void:
 	if _endless_rect.has_point(pos) and _loading_level == 0:
 		Rules.ENDLESS = true
 		Rules.START_LAP = 0
-		_loading_level = -1
-		FrameMeter.load_begin()
+		_begin_loading(-1)
 		return
 	for i in _rects.size():
 		if _rects[i].has_point(pos):
@@ -82,8 +103,7 @@ func _tap(level: int) -> void:
 		return
 	Rules.ENDLESS = false
 	Rules.LEVEL = level
-	_loading_level = level
-	FrameMeter.load_begin()
+	_begin_loading(level)
 
 
 func _playable(level: int) -> bool:
