@@ -361,6 +361,7 @@ func update_tiles(t: float, z_back: float) -> void:
 		lo = 1
 	if hi == 0:
 		hi = BeatClock.bar_count()
+	var repainted := 0
 	for bar in range(lo, hi + 1):
 		var arr: Array = _tiles[bar]
 		var states: PackedInt32Array = _tile_state[bar]
@@ -373,8 +374,11 @@ func update_tiles(t: float, z_back: float) -> void:
 				var s := _state_for(bar, col, row, t)
 				if s != states[idx]:
 					states[idx] = s
+					repainted += 1
 					mi.material_override = Mats.tile(s, mi.mesh.size * 0.5, _outer(col))
 		_tile_state[bar] = states
+	if repainted > 0 and FrameMeter.active:
+		FrameMeter.note("tile repaint", repainted)
 
 
 # Nearest tile near (x, z) that is lethal now or armed, for the eye.

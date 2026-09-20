@@ -37,6 +37,13 @@ func update_state(t: float) -> void:
 	_pose(t)
 
 
+# Dev only (frame_meter.gd): names what this hazard just did, so a slow
+# frame can be pinned on it. One static bool test when the meter is off.
+func _note(what: String) -> void:
+	if FrameMeter.active:
+		FrameMeter.note_at(kind + " " + what, position.z)
+
+
 func is_lethal() -> bool:
 	return not _boxes.is_empty()
 

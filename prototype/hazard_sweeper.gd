@@ -62,6 +62,7 @@ func _set_hot(t: float) -> void:
 	if hot != _hot or not _hot_applied:
 		_hot = hot
 		_hot_applied = true
+		_note("material swap")
 		var mat := Props.clay(hot)
 		for mi in find_children("*", "MeshInstance3D", true, false):
 			mi.material_override = mat

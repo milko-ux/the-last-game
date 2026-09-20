@@ -33,5 +33,6 @@ func _pose(t: float) -> void:
 		and not bool(spec.get("demo", false))
 	if hot != _hot:
 		_hot = hot
+		_note("material swap")
 		for mi in _mesh.find_children("*", "MeshInstance3D", true, false):
 			mi.material_override = Props.clay(hot)

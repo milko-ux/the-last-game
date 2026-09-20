@@ -191,7 +191,11 @@ func set_window(z_back: float) -> void:
 	var lo := z_back - Mats.FADE_BEHIND_END - 4.0
 	var hi := z_back + Mats.FADE_AHEAD_END + 8.0
 	for h in _chunks:
-		h.visible = float(h.get_meta("z1")) >= lo and float(h.get_meta("z0")) <= hi
+		var on: bool = float(h.get_meta("z1")) >= lo and float(h.get_meta("z0")) <= hi
+		if on != h.visible:
+			h.visible = on
+			if FrameMeter.active:
+				FrameMeter.note("building chunk " + ("on" if on else "off"))
 
 
 # One slab (plus, sometimes, a second one stacked on it with an offset).

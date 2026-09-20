@@ -51,6 +51,7 @@ enum State { WAIT, STARTING, RUN, DEAD, WON, GAMEOVER }
 @onready var hud: Node2D = $UI/Hud
 # Brief 3: everything on the beat and the weight of the moments; presentation only.
 var motion: Node = null
+var meter: FrameMeter = null   # dev only, null in a release
 
 var state := State.WAIT
 var lives := 0
@@ -115,6 +116,10 @@ func _ready() -> void:
 	_update_world(BeatClock.hazard_time(), 0.0)
 	rig.set_window(0.0)
 	motion.set_window(0.0)
+	# Dev only: the frame-time readout (off in a release, see frame_meter.gd).
+	if FrameMeter.enabled():
+		meter = FrameMeter.new()
+		$UI.add_child(meter)
 	score_label.pivot_offset = score_label.size * 0.5
 
 
@@ -191,6 +196,7 @@ func _tick_run(delta: float) -> void:
 	for i in field.checkpoints.size():
 		if i > checkpoint and t >= float(field.checkpoints[i]["t"]):
 			checkpoint = i
+			FrameMeter.note("checkpoint")
 			field.mark_checkpoint(i)
 			motion.on_checkpoint(float(field.checkpoints[i]["z"]))
 			hud.lit = i + 1
@@ -213,6 +219,7 @@ func _tick_run(delta: float) -> void:
 		player.on_ground, z_back, _prev_ht, ht)
 	_prev_ht = ht
 	if not cause.is_empty():
+		FrameMeter.note("death")
 		_log_death(cause, t, ht, z_back)
 		_die()
 		motion.on_death(_killer_node(cause), cause["pos"], player.position)
@@ -231,6 +238,7 @@ func _update_progress(t: float) -> void:
 		hud.best = BeatClock.progress_of(t)
 		if t - _best_saved > 2.0:
 			Progress.record_best(Rules.LEVEL, t)
+			FrameMeter.note("progress save")
 			_best_saved = t
 
 
@@ -462,6 +470,7 @@ func _rewind() -> void:
 	player.dead = false
 	player.creature.play_respawn()
 	motion.on_rewind(_death_z, z)
+	FrameMeter.note("rewind (song seek)")
 	BeatClock.seek(t)
 	var z_back := BeatClock.z_at(t)
 	rig.set_window(z_back)

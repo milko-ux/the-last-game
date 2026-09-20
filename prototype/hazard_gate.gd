@@ -55,6 +55,7 @@ func _pose(t: float) -> void:
 		_from_gx = _visual_gx() if t >= _last_t and _target_gx != INF else gx
 		_target_gx = gx
 		_slide_t = 0.0
+		_note("jump")
 	_slide_t += get_process_delta_time()
 	_last_t = t
 	_pose_pillars(_visual_gx(), Rules.gate_gap())

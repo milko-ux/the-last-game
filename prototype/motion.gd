@@ -172,6 +172,7 @@ func _tick_collapses(delta: float) -> void:
 			node.visible = false
 			_burst.global_position = target
 			_burst.restart()
+			FrameMeter.note("pickup burst")
 		else:
 			keep.append(c)
 	_collapsing = keep
@@ -298,6 +299,7 @@ func _flash(killer: Node) -> void:
 		_flashed.append([mi, mi.material_override])
 		mi.material_override = white
 	_flash_frames = FLASH_FRAMES
+	FrameMeter.note("killer flash")
 
 
 func _unflash() -> void:

@@ -51,12 +51,15 @@ func _build() -> void:
 
 func _pose(t: float) -> void:
 	var warn := HazardMath.volley_warning(spec, t)
-	_line.visible = warn
 	var vx: Variant = HazardMath.volley_orb_x(spec, t)
 	_orb.visible = vx != null
 	# On fire: the emitter squashes 15 % and springs back (brief 4).
 	if vx != null and not _had_orb:
 		_squash_t = 0.0
+		_note("fire")
+	if warn != _line.visible:
+		_note("warning line")
+	_line.visible = warn
 	_had_orb = vx != null
 	_squash_t += get_process_delta_time()
 	var sq := 0.0
