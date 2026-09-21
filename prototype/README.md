@@ -22,6 +22,30 @@ Milko's readings, after the four commits of 2026-09-21:
 - `audio -1372 (+0)` is the expected read-out: the device's constant offset, correctly ignored. `(+0)` on a short run is normal -- the correction only moves once drift accumulates.
 - The 49 ms worst frame on the start screen is a one-off (first-frame compile), the same one-off as before, and never lands inside a run.
 
+### Phase A brief 5, section 1 -- the baked legs are melted (2026-09-21)
+
+Screenshots: `docs/screenshots/m-body-front.png` / `-side.png` / `-below.png`, made by `tools/shot_creature.gd` (`melt=0` renders the same three with it off, for the A/B). **Section 2 (the legs) is NOT started.**
+
+**No scar from the game camera.** From directly underneath there is a faint ghost of the two old soles -- two soft circles and a slightly ragged arc on one of them -- but the game camera looks DOWN at the creature from behind (pitch ~54 degrees) and the belly is never in view, not even mid-jump with the spin: checked on a real frame (`bar=2 level=1 jump=1`). Front and side are clean: a round one-eyed body, four flippers, a smooth underside, nothing hanging down.
+
+**The brief's method could not work on this model, and the measurements say why.** It asked for a body ellipsoid, with everything below the equator and outside it projected back onto it. Three things the model does not do:
+- **The belly IS the stubs.** Excluding them, the body has NO surface at all below y -0.547 inside a horizontal radius of 0.6. There is nothing underneath to melt onto. Any ellipsoid large enough to cover the stubs either sits above the body's real underside -- tried it, it shredded the flippers, the tearing is what a hard per-vertex rule does at its own boundary -- or passes below the stubs and shortens them by 17 %, which is invisible.
+- **The model has SIX limbs**, not two: two front flippers, two rear flippers, two leg stubs.
+- **The flippers hang BELOW the equator** (y -0.475..-0.031; the fitted equator is y 0.027), so the brief's "the arms sit above the equator, exclude the tail by its z range" does not hold: a plain below-the-equator rule reaches every limb the creature has.
+
+**What was built instead** (same idea, different surface): a **cap** is closed over the stubs -- a dome that meets the body's real underside exactly where the stubs end, so there is no boundary to tear, and domes gently down from there. Solved from three measurements, not chosen:
+
+| measured | |
+|---|---|
+| the stubs live inside horizontal radius | **0.62** of (x 0.0, z 0.065) |
+| the body's real underside at that radius | **y -0.517** |
+| the new belly bottoms out at | **y -0.620** (the stubs reached -0.938) |
+| -> cap ellipsoid | centre y **-0.340**, y radius **0.280**, horizontal radius **0.800** |
+
+A vertex inside that radius and below the cap is lifted onto it, and its normal is set to the dome's, so the shading has no seam either. Checked against all 26 769 vertices of the mesh: **2 510 are lifted (median 0.150, max 0.373 units) and every one of them is inside the stub box** -- not one body or flipper vertex moves. That is what makes it seamless, and it is a property that can be re-checked rather than eyeballed.
+
+The GLB is untouched, as the brief requires; `MELT_ON := false` in `creature.gd` turns the whole thing off. **Milko's call still stands open**: if he wants the ghost on the underside gone rather than merely unseen, the brief's fallback is a regenerated body-only model.
+
 ### What those four commits were (2026-09-21, all now confirmed on the phone)
 
 1. **The verdict fingerprint an export can match** (`4d7e9f4`). `LapGen.source_hash()` no longer md5s the layout SCRIPTS -- an export ships them compiled (`placement.gdc`), so that hash could never match the one `lap_stats.gd` stamped from the readable sources, and every device rejected `levels/verdicts.json` and validated every lap live. It is now `LAYOUT_VERSION` + `Fairness.VERSION` + the two JSON data files (the only things shipped byte for byte). **Bump `LapGen.LAYOUT_VERSION` whenever placement / rules / hazard_math / fairness change what a lap looks like, then re-run `tools/lap_stats.gd -- laps=0-9 write=1`** -- and forgetting is caught, not trusted to memory: where the sources are readable (the editor and every tool, i.e. everywhere a verdict is made) `stored_verdict()` also compares the scripts and refuses the file if they moved without a bump. Verified both ways: `FROM shipped` on every lap tested and `validate 0.0 (cached)` on the load line; tampering the recorded script hash makes it refuse and fall back to live. The regenerated file is byte-identical except the fingerprint.

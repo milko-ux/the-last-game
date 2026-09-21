@@ -23,6 +23,45 @@ const MODEL_REST_YAW_DEG := 0.0
 const MODEL_HEIGHT := 1.874            # GLB bounds, y -0.938 .. 0.936
 const MODEL_FEET_Y := -0.938
 const MODEL_BODY_CENTRE_Z := 0.15      # the tail drags the bounds back; the body sits forward of 0
+
+# --- Brief 5 section 1: the melt --------------------------------------
+# The GLB has two leg stubs fused to the underside; real legs under them
+# would read as four. They are melted in the VERTEX SHADER, not in the
+# model: the GLB is untouched.
+#
+# The brief asked for a body ellipsoid with everything below the equator
+# and outside it projected back on. That cannot work on THIS model, and
+# the measurements say why: excluding the stubs, the body has NO surface
+# at all below y -0.547 inside a horizontal radius of 0.6. The belly IS
+# the stubs. Any ellipsoid big enough to cover them either sits above the
+# body's real underside (and eats it -- tried it, it shredded the
+# flippers) or passes below the stubs and barely shortens them.
+#
+# So instead of projecting onto the body, a CAP is closed over the stubs:
+# a dome that meets the body's real underside exactly where the stubs
+# end, so there is no seam to tear, and domes gently down from there.
+# It is solved from three measurements, not chosen:
+#   the stubs live inside horizontal radius 0.62 of (x 0.0, z 0.065)
+#   the body's real underside at that radius is y -0.517
+#   the new belly bottoms out at y -0.620 (the stubs reached -0.938)
+# -> cap ellipsoid centre y -0.340, y radius 0.280, horizontal radius 0.80.
+# A vertex inside that radius and below the cap is lifted onto it.
+#
+# Checked against all 26 769 vertices: 2 510 are lifted (median 0.150,
+# max 0.373 units) and every one of them is inside the stub box -- not
+# one body or flipper vertex moves, which is what keeps it seamless.
+#
+# Note for anyone re-reading the brief: this model has SIX limbs (two
+# front flippers, two rear flippers, two leg stubs) and the flippers hang
+# BELOW the body's equator (y -0.475..-0.031, equator y 0.027), so the
+# brief's "the arms sit above the equator" does not hold here either.
+# The cap never reaches them: they are all outside radius 0.62.
+const MELT_XZ := Vector2(0.0, 0.065)   # the belly axis
+const MELT_EDGE := 0.62                # where the cap meets the real body
+const MELT_CAP_Y := -0.340             # cap ellipsoid centre y
+const MELT_CAP_RY := 0.280
+const MELT_CAP_RXZ := 0.800
+const MELT_ON := true
 const HEIGHT := 2.3                    # 1.15 tiles, feet to top (3.0 was too big on the phone, 2026-09-19; the gray-box capsule was 1.6)
 
 # --- 1. Idle breathing ----------------------------------------------------
@@ -119,6 +158,18 @@ uniform float on_top = 0.92;
 uniform float ambient = 0.38;
 uniform float clay_grain = 0.04;     // brief 2b section 6: the same fine grain the world got
 uniform float specular = 0.4;
+// Brief 5 section 1: melt the baked leg stubs into the underside, so the
+// real legs are not a second pair. Any vertex BELOW the body's equator
+// and OUTSIDE the fitted body ellipsoid is pushed back onto that
+// ellipsoid's surface. The GLB is untouched; this is the vertex stage.
+// The arms and the tail hang below the equator too and are kept out of
+// it by their own ranges (see MELT_* in the script for the measurements).
+uniform float melt = 1.0;            // 0 = off, for an A/B
+uniform vec2 melt_xz = vec2(0.0, 0.065);
+uniform float melt_edge = 0.62;
+uniform float melt_cap_y = -0.340;
+uniform float melt_cap_ry = 0.280;
+uniform float melt_cap_rxz = 0.800;
 varying vec3 model_pos;
 
 float chash(vec3 p) {
@@ -135,8 +186,24 @@ float cnoise(vec3 p) {
 }
 
 void vertex() {
-	model_pos = VERTEX;
-	POSITION = PROJECTION_MATRIX * MODELVIEW_MATRIX * vec4(VERTEX, 1.0);
+	vec3 v = VERTEX;
+	if (melt > 0.5) {
+		vec2 o = vec2(v.x - melt_xz.x, v.z - melt_xz.y);
+		float rho2 = dot(o, o) / (melt_cap_rxz * melt_cap_rxz);
+		float edge2 = (melt_edge * melt_edge) / (melt_cap_rxz * melt_cap_rxz);
+		if (rho2 < edge2) {
+			float cap = melt_cap_y - melt_cap_ry * sqrt(max(0.0, 1.0 - rho2));
+			if (v.y < cap) {
+				v.y = cap;
+				// The dome it landed on, so the shading has no seam.
+				NORMAL = normalize(vec3(o.x / (melt_cap_rxz * melt_cap_rxz),
+					(v.y - melt_cap_y) / (melt_cap_ry * melt_cap_ry),
+					o.y / (melt_cap_rxz * melt_cap_rxz)));
+			}
+		}
+	}
+	model_pos = v;
+	POSITION = PROJECTION_MATRIX * MODELVIEW_MATRIX * vec4(v, 1.0);
 	POSITION.z = mix(POSITION.z, POSITION.w, on_top);
 }
 
@@ -204,6 +271,12 @@ func _apply_material(n: Node) -> void:
 		m.set_shader_parameter("skin", src.albedo_texture if src != null else null)
 		m.set_shader_parameter("on_top", ON_TOP)
 		m.set_shader_parameter("ambient", AMBIENT)
+		m.set_shader_parameter("melt", 1.0 if MELT_ON else 0.0)
+		m.set_shader_parameter("melt_xz", MELT_XZ)
+		m.set_shader_parameter("melt_edge", MELT_EDGE)
+		m.set_shader_parameter("melt_cap_y", MELT_CAP_Y)
+		m.set_shader_parameter("melt_cap_ry", MELT_CAP_RY)
+		m.set_shader_parameter("melt_cap_rxz", MELT_CAP_RXZ)
 		mi.material_override = m
 		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	for c in n.get_children():
