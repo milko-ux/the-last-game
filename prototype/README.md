@@ -22,6 +22,34 @@ Milko's readings, after the four commits of 2026-09-21:
 - `audio -1372 (+0)` is the expected read-out: the device's constant offset, correctly ignored. `(+0)` on a short run is normal -- the correction only moves once drift accumulates.
 - The 49 ms worst frame on the start screen is a one-off (first-frame compile), the same one-off as before, and never lands inside a run.
 
+### Phase A brief 5, sections 2-5 -- the creature walks (2026-09-21)
+
+`rules.gd` and `player3d.gd` are untouched, and so are `fairness.gd`, `placement.gd`, `hazard_math.gd`, `lap_gen.gd` and every level file. The only game file besides `creature.gd` is one line in `track_test.gd` adding the dust emitter to the prewarm list. **Section 6 (the tail) is NOT done -- it needs Milko's call, see below.**
+
+**The no-slide number: MAX FOOT DRIFT DURING STANCE = 0.000000 units**, walking straight, turning and strafing (`tools/shot_walk.gd -- slide=1`, 45 stances each). Not "small": zero, and zero by construction -- nothing in the stance branch writes the foot's position at all.
+
+Screenshots: `docs/screenshots/m-walk-cycle.png` (eight stills across one stride, sampled by PHASE so it really is one stride end to end), `m-walk-game.png` (the game camera), `m-jump-tuck.png`, `m-idle-feet.png`.
+
+**How it works.** The cycle is driven by DISTANCE TRAVELLED, never by a timer. A planted foot does not move while it is planted, and standing still cannot run the cycle because standing still covers no distance. Two consequences fall out for free: the hit-stop needs no special case (a frozen world moves the player nowhere, so the legs hold by themselves), and the creature can never moonwalk.
+
+**Measured, then sized to fit.** The brief's starting numbers do not close on this model, and the rig says why:
+
+| | brief | built | why |
+|---|---|---|---|
+| ground speed at full input | assumed | **3.9 units/s** | measured in the real game |
+| stride at full speed | 1.8 | **1.4** | gives 2.8 cycles/s = **5.6 footfalls/s**, the "fast scurry" asked for |
+| plant point | half a stride ahead of the hip | **a quarter** | a foot is planted for half the cycle and the body covers half a stride in that time, so a quarter ahead is what sits it symmetrically about its hip. Half would put the foot always in front and never behind |
+| leg / hip height | 0.42 / at the belly | **0.52 / 0.52** | at full speed the foot ends 0.44 from its hip; a 0.42 leg from a 0.44 hip has to span 0.68 = 1.6 rest lengths, and the capsule visibly comes off the body |
+| stretch clamp | 1.3 | **1.45** | a safety net now, not a working limit: the gait needs 1.31 and never reaches it |
+
+**Two bugs the rig caught, both from the cycle being distance-driven:**
+- **A corrective step could never finish.** Stopping is when the feet tidy up under the hips -- but the step that takes them there was driven by distance, and a stopped creature has none. The foot hung in mid-air for ever. The settle now runs on its own 0.18 s clock.
+- **The parked cycle fought the settle.** With the phase frozen, the stride loop kept dragging the swinging foot back onto its arc and undid the corrective step the moment it finished. Standing still now PARKS the cycle instead of merely stalling it.
+
+**Acceptance:** layout hashes of levels 1-6 **identical** (`4db8f95b…`, `55a53537…`, `ac320116…`, `5701d3f6…`, `70ba1a40…`, `489da92b…`) · **validator bot deaths=0** both on level 1 (`level=1 fps=60`) and across laps 0-2 of the endless run (`endless=1 laps=3 fps=60`, min_fps 59) · at bar 2 of level 1 the frame carries **8 more draw calls** than before the brief (two legs and the dust emitter) and slightly fewer triangles.
+
+**Section 6, the tail -- Milko's call, not started.** The brief wants tail vertices pushed sideways by a damped spring. This model has no tail: it has **two rear flippers** (the same surprise as section 1, where the "arms above the equator" turned out to be four flippers below it). A z-range sway would swing both flippers together, which is a different idea from the one the brief describes and worth deciding rather than improvising.
+
 ### Phase A brief 5, section 1 -- the baked legs are melted (2026-09-21)
 
 Screenshots: `docs/screenshots/m-body-front.png` / `-side.png` / `-below.png`, made by `tools/shot_creature.gd` (`melt=0` renders the same three with it off, for the A/B). **Section 2 (the legs) is NOT started.**

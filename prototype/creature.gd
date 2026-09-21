@@ -75,8 +75,8 @@ const PULSE_OUT_S := 0.18
 const LEAN_DEG := 12.0
 const LEAN_LERP := 0.2                 # per frame at 60 fps (made framerate-independent below)
 # --- 4. Run bob -------------------------------------------------------------
-const BOB_AMOUNT := 0.03               # of HEIGHT
-const BOB_HZ := 4.0
+# (The timed bob that used to live here, BOB_AMOUNT / BOB_HZ, is gone:
+# brief 5 section 3 replaced it with a bob that comes from the feet.)
 # --- 5. Jump ----------------------------------------------------------------
 const JUMP_STRETCH := 0.15
 const JUMP_STRETCH_S := 0.10
@@ -105,6 +105,69 @@ const RESPAWN_S := 0.15
 const PARTICLES := 12
 const CLAY := Color(0.62, 0.52, 0.66)
 # --- 9. Goal ----------------------------------------------------------------
+# --- Brief 5 section 2: the legs ---------------------------------------
+# Two stubby clay legs, separate from the body. A leg is a LINE between
+# two points: its foot (on the floor, in world space) and its hip (a
+# fixed point on the body's underside, so it travels with every lean,
+# bob and spin the body does). Each frame the capsule is put at the foot,
+# aimed at the hip and stretched to reach it. The top of the leg is
+# inside the body, so the joint is never visible and a leg can never come
+# off. No skeleton, no animation data, two draw calls.
+# The brief's starting sizes were 0.34 x 0.44 x 0.42 with the hip at the
+# belly. Measured against the real gait they do not close: at full speed
+# the foot ends up 0.44 from its hip (logged), so a 0.42 leg from a hip
+# 0.44 up has to span 0.68 -- 1.6 rest lengths -- and the capsule visibly
+# comes off the body. The leg is 0.52 and the hip 0.52 instead, which
+# reaches the floor at rest and spans that gait at 1.31. Still stubby:
+# 23 % of the creature's height.
+const LEG_W := 0.34                    # at HEIGHT 2.3
+const LEG_D := 0.44
+const LEG_H := 0.52                    # rest length, floor to hip
+const HIP_WIDTH := 0.46                # centre to centre
+# The belly after the section-1 melt bottoms out at model y -0.620, which
+# is 0.39 above the feet at this scale; the hip sits just inside it.
+const HIP_Y := 0.52
+const HIP_Z := -0.10                   # the belly axis, in the player's frame
+const LEG_STRETCH_MIN := 0.8
+# A safety net, not a working limit: with the sizes above the gait needs
+# 1.31 and never reaches this. It matters only if someone raises
+# STRIDE_MAX -- past about 1.55 the capsule stops short of the hip and a
+# gap opens at the joint, which is the one thing section 2 forbids.
+const LEG_STRETCH_MAX := 1.45
+# The body texture's median is (0.651, 0.576, 0.651); the legs are 8 %
+# darker so they read against it.
+const LEG_TINT := Color(0.599, 0.530, 0.599)
+
+# --- Brief 5 section 3: the step cycle ---------------------------------
+# The cycle is driven by DISTANCE TRAVELLED, never by a timer. A planted
+# foot does not move at all while it is planted, so the creature cannot
+# slide; and standing still cannot run the cycle, because standing still
+# covers no distance. (It also means a hit-stop needs no special case:
+# a frozen world moves the player nowhere, so the legs hold by
+# themselves.)
+# Measured ground speed at full input is 3.9 units/s (tools/shot_walk.gd),
+# so STRIDE_MAX 1.4 gives 2.8 cycles a second = 5.6 footfalls a second --
+# the "fast scurry" the brief asks for, a little quicker than its guess
+# of 4-5 because the creature really does travel 1.7 body lengths a
+# second. Raising it slows the cadence and lengthens the reach; see
+# LEG_STRETCH_MAX before going past about 1.55.
+const STRIDE_MIN := 0.6                # units per step at a crawl
+const STRIDE_MAX := 1.4                # at full player speed
+const STEP_HEIGHT := 0.28              # arc at mid-swing
+const FOOT_PITCH_DEG := 20.0           # heel off first, toe down last
+const IDLE_SPEED := 0.3                # of full speed
+const IDLE_SETTLE_S := 0.15
+const FOOT_HOME_TOL := 0.35            # further than this and it steps home
+const BODY_BOB := 0.05                 # of HEIGHT, lowest at each footfall
+const BODY_ROLL_DEG := 4.0             # toward the stance leg
+const FOOT_SQUASH := 0.04              # on each footfall, multiplied with the beat
+const TURN_CUT_DEG := 90.0             # a sharper turn than this plants early
+const SETTLE_STEP_S := 0.18            # the one corrective step home, see _settle_feet
+const TELEPORT_UNITS := 2.0            # a jump bigger than this is not a stride
+const JUMP_TUCK := 0.25                # of LEG_H, how far the feet tuck up
+const JUMP_TUCK_LERP := 0.25
+const LAND_SPLAY := 0.15               # feet splay outward during the squash
+
 const GOAL_HOPS := 3
 const GOAL_HOP_S := 0.32
 const GOAL_HOP_HEIGHT := 1.1
@@ -232,7 +295,6 @@ var _ring: MeshInstance3D
 var _t := 0.0
 var _pulse_t := 99.0
 var _lean := Vector2.ZERO              # x: roll, y: pitch (radians)
-var _bob_phase := 0.0
 var _speed := 0.0
 var _jump_t := -1.0                    # seconds since take-off, -1 = not in a jump
 var _airtime := 0.67
@@ -243,6 +305,26 @@ var _look_target: Variant = null
 var _alarm := 1.0
 var _mode_t := 0.0
 var _death_s := 0.35
+
+# --- legs (brief 5) ---
+var _legs: Array[MeshInstance3D] = []  # 0 = left (-x), 1 = right (+x)
+var _foot: Array[Vector3] = [Vector3.ZERO, Vector3.ZERO]   # world, on the floor
+var _foot_from: Array[Vector3] = [Vector3.ZERO, Vector3.ZERO]
+var _foot_to: Array[Vector3] = [Vector3.ZERO, Vector3.ZERO]
+var _down := [true, true]              # planted this frame
+var _stride := 0.0                     # 0..1, the whole cycle
+var _last_lp := [0.0, 0.5]
+var _ground := Vector3.ZERO            # last frame's feet position, world
+var _has_ground := false
+var _idle_t := 0.0
+var _settling := -1                    # which foot is stepping home, -1 = none
+var _settle_u := 0.0
+var _foot_t := [99.0, 99.0]            # seconds since this foot last landed
+var _face := Vector2(0.0, 1.0)         # the direction the feet point
+
+var _dust_p: CPUParticles3D = null
+
+signal footfall(side: int, strength: float)
 
 
 func _ready() -> void:
@@ -256,6 +338,8 @@ func _ready() -> void:
 	_apply_material(_model)
 	_build_burst()
 	_build_ring()
+	_build_legs()
+	_build_dust()
 	BeatClock.downbeat.connect(func(_bar: int) -> void: _pulse_t = 0.0)
 
 
@@ -300,6 +384,365 @@ func _build_ring() -> void:
 	_ring.material_override = m
 	_ring.top_level = true             # not scaled, tilted or lifted with the body
 	add_child(_ring)
+
+
+# ------------------------------------------------------------
+# Brief 5 section 3 — the step cycle
+# ------------------------------------------------------------
+# Called first thing in _process, before the pose: the pose's bob, roll
+# and footfall squash come out of where the feet are.
+func _step_cycle(delta: float) -> void:
+	var here := global_position
+	if not _has_ground:
+		_ground = here
+		_has_ground = true
+		_feet_home()
+	var moved := Vector3(here.x - _ground.x, 0.0, here.z - _ground.z)
+	var d := moved.length()
+	# A teleport is not a stride (section 4): reset_to, a rewind, or the
+	# carry line yanking the player. A leg must never swim across the
+	# field to catch up.
+	if d > TELEPORT_UNITS:
+		_ground = here
+		_feet_home()
+		_stride = 0.0
+		_last_lp = [0.0, 0.5]
+		return
+	_ground = here
+
+	var airborne := not _on_ground()
+	if airborne or mode != Mode.ALIVE:
+		_tuck_feet(delta)
+		return
+
+	# The direction the feet point, and how fast we are going.
+	var speed := 0.0
+	if _player != null:
+		speed = _player.move_dir.limit_length(1.0).length()
+	if d > 0.0001:
+		var want := Vector2(moved.x, moved.z).normalized()
+		# A sharp turn cuts the swinging foot's arc short and plants it.
+		if _face.dot(want) < cos(deg_to_rad(TURN_CUT_DEG)):
+			_plant_swinging_foot()
+		_face = want
+	if speed > IDLE_SPEED:
+		_idle_t = 0.0
+	else:
+		_idle_t += delta
+
+	# Distance, not time. No movement, no phase.
+	var stride_len := lerpf(STRIDE_MIN, STRIDE_MAX, clampf(speed, 0.0, 1.0))
+	_stride = fposmod(_stride + d / maxf(stride_len, 0.0001), 1.0)
+
+	# The one corrective step home runs on TIME, not on distance: the
+	# creature has stopped, so there is no distance left to drive it, and
+	# a foot frozen mid-air on the way home is worse than no step at all.
+	if _settling >= 0:
+		_settle_u += delta / SETTLE_STEP_S
+		var i := _settling
+		if _settle_u >= 1.0:
+			_foot[i] = _foot_to[i]
+			_foot[i].y = _floor_y()
+			_down[i] = true
+			_foot_t[i] = 0.0
+			_settling = -1
+			footfall.emit(i, 0.35)
+		else:
+			var q := _foot_from[i].lerp(_foot_to[i], _ease_in_out(_settle_u))
+			q.y += sin(PI * _settle_u) * STEP_HEIGHT * 0.5
+			_foot[i] = q
+			_down[i] = false
+		return
+
+	# Standing still: the cycle is PARKED, not merely stalled. Leaving the
+	# stride loop running on a frozen phase kept dragging the swinging
+	# foot back onto its arc, which undid the corrective step the moment
+	# it finished -- the two fought each other for ever.
+	if _idle_t > IDLE_SETTLE_S and speed <= IDLE_SPEED:
+		_settle_feet()
+		return
+
+	# A foot can never be stranded. The carry line can pull the player
+	# forward hard, and a leg swimming across the field to catch up is
+	# exactly what this brief exists to stop.
+	for i in 2:
+		var hh := _hip(i)
+		if Vector2(_foot[i].x - hh.x, _foot[i].z - hh.z).length() > LEG_H * 2.0:
+			_foot[i] = _plant_point(i, stride_len)
+			_down[i] = true
+	for i in 2:
+		_foot_t[i] += delta
+		var lp := fposmod(_stride + (0.5 if i == 1 else 0.0), 1.0)
+		var was: float = _last_lp[i]
+		_last_lp[i] = lp
+		if lp < 0.5:
+			# STANCE. The foot does not move. This is the no-slide
+			# guarantee, and it is a guarantee because nothing here
+			# writes to _foot[i].
+			if was >= 0.5:
+				_land_foot(i, speed)
+			_down[i] = true
+		else:
+			# SWING: from where it lifted to its next plant point, in an
+			# arc. The target is re-aimed every frame, so a direction
+			# change mid-step still lands correctly.
+			if was < 0.5:
+				_foot_from[i] = _foot[i]
+				_down[i] = false
+			_foot_to[i] = _plant_point(i, stride_len)
+			var u := (lp - 0.5) * 2.0
+			var p := _foot_from[i].lerp(_foot_to[i], u)
+			p.y += sin(PI * u) * STEP_HEIGHT
+			_foot[i] = p
+			_down[i] = false
+
+
+
+# Where this foot should land. The brief says half a stride ahead of the
+# hip; that is out by a factor of two and would put the foot always in
+# front and never behind. A foot is planted for half the cycle, and the
+# body covers half a stride in that time, so to sit symmetrically about
+# its hip it has to land a QUARTER of a stride ahead and leave a quarter
+# behind. That is also what keeps the leg within its stretch limit.
+func _plant_point(i: int, stride_len: float) -> Vector3:
+	var hip := _hip(i)
+	var ahead := Vector3(_face.x, 0.0, _face.y) * stride_len * 0.25
+	var p := hip + ahead
+	p.y = _floor_y()
+	return p
+
+
+func _land_foot(i: int, strength: float) -> void:
+	_foot[i] = _foot_to[i]
+	_foot[i].y = _floor_y()
+	_foot_t[i] = 0.0
+	_down[i] = true
+	footfall.emit(i, strength)
+	_dust(_foot[i], DUST_STEP if strength > 0.5 else 0)
+
+
+# A turn sharper than TURN_CUT_DEG: whichever foot is in the air stops
+# where it is and plants; the cycle restarts from that plant.
+func _plant_swinging_foot() -> void:
+	for i in 2:
+		if not _down[i]:
+			_foot[i].y = _floor_y()
+			_down[i] = true
+			_foot_t[i] = 0.0
+			footfall.emit(i, 0.5)
+			_stride = fposmod(0.5 if i == 1 else 0.0, 1.0)
+			_last_lp = [fposmod(_stride, 1.0), fposmod(_stride + 0.5, 1.0)]
+			return
+
+
+# Stopping: the feet end up side by side under the hips. A foot that is
+# already close enough just stays; one that is too far takes ONE small
+# step home. It never slides there.
+func _settle_feet() -> void:
+	for i in 2:
+		var home := _hip(i)
+		home.y = _floor_y()
+		# A foot caught in mid-swing when the creature stopped has to come
+		# home too. Skipping it (because it is "not planted yet") left it
+		# hanging in the air for ever: the swing that would have finished
+		# it is driven by distance, and there is no distance any more.
+		if not _down[i] or _foot[i].distance_to(home) > FOOT_HOME_TOL:
+			_foot_from[i] = _foot[i]
+			_foot_to[i] = home
+			_down[i] = false
+			_settling = i
+			_settle_u = 0.0
+			return
+
+
+# Brief 5 section 4 — in the air both feet tuck up under the body and
+# travel with it, so they turn with the spin instead of being left on the
+# floor. Landing is handled by the cycle: the feet are already home.
+func _tuck_feet(delta: float) -> void:
+	for i in 2:
+		var hip := _hip(i)
+		var target := hip - global_transform.basis.y.normalized() * (LEG_H * (1.0 - JUMP_TUCK))
+		_foot[i] = _foot[i].lerp(target, _rate(JUMP_TUCK_LERP, delta * 60.0))
+		_down[i] = false
+		_foot_t[i] += delta
+
+
+# What the pose asks the feet for (brief 5 section 3, "body follows the
+# feet"): lowest at each footfall, highest mid-stance.
+func _feet_lift() -> float:
+	return absf(sin(TAU * _stride)) * BODY_BOB * HEIGHT
+
+
+func _feet_roll() -> float:
+	return sin(TAU * _stride) * deg_to_rad(BODY_ROLL_DEG)
+
+
+func _feet_squash() -> float:
+	var f := 0.0
+	for i in 2:
+		f = maxf(f, _punch(_foot_t[i], 0.04, 0.16))
+	return f * FOOT_SQUASH
+
+
+# Brief 5 section 5 — footfall dust. ONE shared emitter, restarted at the
+# foot that just landed. CPU particles, like the death burst: GPU
+# particles are the usual thing to misbehave in a web export.
+#
+# Budget: DUST_AMOUNT is the emitter's size, so the most dust that can
+# exist at once is 8, plus the death burst's 12 = 20 particles, well
+# inside the 200 the brief allows.
+const DUST_AMOUNT := 8
+const DUST_STEP := 3                   # per footfall, above half speed
+const DUST_LAND := 8                   # on a landing
+const DUST_COLOUR := Color(0.55, 0.55, 0.58)
+
+
+func _build_dust() -> void:
+	_dust_p = CPUParticles3D.new()
+	_dust_p.emitting = false
+	_dust_p.one_shot = true
+	_dust_p.amount = DUST_AMOUNT
+	_dust_p.lifetime = 0.35
+	_dust_p.explosiveness = 1.0
+	_dust_p.direction = Vector3.UP
+	_dust_p.spread = 70.0
+	_dust_p.initial_velocity_min = 0.6
+	_dust_p.initial_velocity_max = 1.6
+	_dust_p.gravity = Vector3(0.0, -4.0, 0.0)
+	_dust_p.scale_amount_min = 0.25
+	_dust_p.scale_amount_max = 0.5
+	var curve := Curve.new()
+	curve.add_point(Vector2(0.0, 1.0))
+	curve.add_point(Vector2(1.0, 0.0))
+	_dust_p.scale_amount_curve = curve
+	var ball := SphereMesh.new()
+	ball.radius = 0.1
+	ball.height = 0.2
+	ball.radial_segments = 6
+	ball.rings = 3
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.albedo_color = DUST_COLOUR
+	ball.material = mat
+	_dust_p.mesh = ball
+	_dust_p.top_level = true
+	add_child(_dust_p)
+
+
+func _dust(at: Vector3, count: int) -> void:
+	if _dust_p == null or count <= 0 or mode != Mode.ALIVE:
+		return
+	_dust_p.amount = count
+	_dust_p.global_position = at
+	_dust_p.restart()
+
+
+# The dust emitter, for prewarm.gd (every material must be drawn once
+# before the run starts, or its first use is a hitch).
+func dust() -> CPUParticles3D:
+	return _dust_p
+
+
+# --- read by tools/shot_walk.gd, and by nothing in the game ---
+func stride_phase() -> float:
+	return _stride
+
+
+func foot_planted(i: int) -> bool:
+	return _down[i]
+
+
+func foot_pos(i: int) -> Vector3:
+	return _foot[i]
+
+
+# Brief 5 section 2. Capsules in the creature's own shader, with the melt
+# off (they are not the body) and the same "drawn on top" depth squeeze,
+# so they never z-fight with the belly they are tucked into.
+func _build_legs() -> void:
+	var mesh := CapsuleMesh.new()
+	mesh.radius = LEG_W * 0.5
+	mesh.height = LEG_H
+	mesh.radial_segments = 10
+	mesh.rings = 4
+	var img := Image.create_empty(1, 1, false, Image.FORMAT_RGB8)
+	img.fill(Color.WHITE)
+	var white := ImageTexture.create_from_image(img)
+	for i in 2:
+		var leg := MeshInstance3D.new()
+		leg.mesh = mesh
+		var sh := Shader.new()
+		sh.code = SHADER
+		var m := ShaderMaterial.new()
+		m.shader = sh
+		m.set_shader_parameter("skin", white)
+		m.set_shader_parameter("base_tint", LEG_TINT)
+		m.set_shader_parameter("on_top", ON_TOP)
+		m.set_shader_parameter("ambient", AMBIENT)
+		m.set_shader_parameter("melt", 0.0)
+		leg.material_override = m
+		leg.top_level = true           # the feet live in the world, not on the body
+		add_child(leg)
+		_legs.append(leg)
+	_feet_home()
+
+
+# Both feet directly under their hips, on the floor. Used at birth and
+# every time the player teleports (section 4).
+func _feet_home() -> void:
+	_settling = -1
+	for i in 2:
+		_foot[i] = _hip(i)
+		_foot[i].y = _floor_y()
+
+
+func _floor_y() -> float:
+	return global_position.y - (_player.y if _player != null else 0.0)
+
+
+# The hip: a fixed point on the body's underside, carried by whatever the
+# body is doing this frame (lean, bob, spin, squash).
+func _hip(i: int) -> Vector3:
+	var side := -1.0 if i == 0 else 1.0
+	return global_transform * Vector3(side * HIP_WIDTH * 0.5, HIP_Y, HIP_Z)
+
+
+# A leg is the segment foot -> hip: put the capsule at the midpoint, aim
+# it along the segment, stretch it to reach (clamped), and keep its own
+# width. Never faded, never scaled by the body's squash except through
+# the hip moving.
+func _place_legs(uniform: float) -> void:
+	for i in 2:
+		var leg := _legs[i]
+		if leg == null:
+			continue
+		if mode == Mode.GONE or uniform <= 0.001:
+			leg.visible = false
+			continue
+		leg.visible = true
+		var hip := _hip(i)
+		var foot: Vector3 = _foot[i]
+		# Brief 5 section 4: the feet splay outward through the landing
+		# squash, then come back as the squash releases.
+		var splay := _punch(_land_t, LAND_IN_S, LAND_OUT_S) * LAND_SPLAY
+		if splay > 0.0:
+			var out_dir := global_transform.basis.x.normalized() * (-1.0 if i == 0 else 1.0)
+			foot += out_dir * LEG_H * splay
+		var seg := hip - foot
+		var len_now := seg.length()
+		if len_now < 0.0001:
+			seg = Vector3.UP * LEG_H
+			len_now = LEG_H
+		var stretch := clampf(len_now / LEG_H, LEG_STRETCH_MIN, LEG_STRETCH_MAX)
+		var up := seg / len_now
+		# Any basis whose Y is the leg direction; the capsule is round in
+		# x/z, so the remaining spin only matters for the depth squash.
+		var ref := Vector3.BACK if absf(up.z) < 0.9 else Vector3.RIGHT
+		var right := ref.cross(up).normalized()
+		var fwd := up.cross(right)
+		var b := Basis(right, up, fwd)
+		b = b.scaled_local(Vector3(1.0, stretch, LEG_D / LEG_W) * uniform)
+		leg.global_transform = Transform3D(b, foot + up * (LEG_H * stretch * 0.5))
 
 
 # CPU particles: twelve of them, and GPU particles are the usual thing to
@@ -368,6 +811,11 @@ func play_respawn() -> void:
 	_mode_t = 0.0
 	_jump_t = -1.0
 	_land_t = 99.0
+	# Brief 5 section 4: a respawn is a teleport. Both feet come home
+	# rather than swimming across the field after the body.
+	_feet_home()
+	_stride = 0.0
+	_last_lp = [0.0, 0.5]
 	_look = Vector2.ZERO
 	_lean = Vector2.ZERO
 	_alarm = 1.0
@@ -401,6 +849,7 @@ func _process(delta: float) -> void:
 	_land_t += delta
 	_mode_t += delta
 	var k60 := delta * 60.0
+	_step_cycle(delta)
 
 	var scale_y := 1.0
 	var scale_xz := 1.0
@@ -422,11 +871,14 @@ func _process(delta: float) -> void:
 	_speed = v.length()
 	var lean_to := Vector2(v.x, v.y) * deg_to_rad(LEAN_DEG)
 	_lean = _lean.lerp(lean_to, _rate(LEAN_LERP, k60))
-	if _speed > 0.01 and _on_ground():
-		_bob_phase += delta * BOB_HZ * TAU
-		lift += absf(sin(_bob_phase * 0.5)) * BOB_AMOUNT * HEIGHT * _speed
-	else:
-		_bob_phase = 0.0
+	# The body follows the feet (brief 5 section 3). The old timed bob is
+	# gone: a bob on a timer is exactly what "it floats" looked like.
+	if _on_ground() and mode == Mode.ALIVE:
+		lift += _feet_lift()
+		_lean.x += _feet_roll()
+		var fs := _feet_squash()
+		scale_y *= 1.0 - fs
+		scale_xz *= 1.0 + fs * 0.5
 
 	# 5. jump: stretch, the full turn, the landing squash
 	if mode == Mode.ALIVE:
@@ -440,6 +892,8 @@ func _process(delta: float) -> void:
 			spin_angle = TAU * SPIN_TURNS * _ease_in_out(u)
 			spin_tilt = -deg_to_rad(SPIN_TILT_DEG) * pow(sin(PI * _ease_in_out(u)), 2.0)
 		if grounded and not _was_on_ground:
+			_dust(_foot[0].lerp(_foot[1], 0.5), DUST_LAND)
+			footfall.emit(-1, 1.0)
 			_land_t = 0.0
 			_jump_t = -1.0
 			spin_angle = 0.0
@@ -514,6 +968,8 @@ func _process(delta: float) -> void:
 		var feet: Vector3 = _player.global_position
 		_ring.global_position = Vector3(feet.x, minf(feet.y, 0.0) + 0.02, feet.z)
 		_ring.visible = mode != Mode.GONE
+	# The legs last: the hips are read off the pose that was just set.
+	_place_legs(maxf(uniform, 0.0))
 
 
 # (yaw, pitch) that turn the eye to the active camera.

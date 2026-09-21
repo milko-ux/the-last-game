@@ -326,7 +326,10 @@ func _begin_loading() -> void:
 	_warm = load("res://prototype/prewarm.gd").new()
 	add_child(_warm)
 	_warm.global_position = rig.global_position
-	var bursts := [motion.burst(), player.creature.burst()]
+	# Every particle material has to be drawn once before the run, or its
+	# first use is a hitch (the standing rule at the top of prewarm.gd).
+	# The footfall dust of brief 5 is one of them.
+	var bursts := [motion.burst(), player.creature.burst(), player.creature.dust()]
 	if _shield_burst != null:
 		bursts.append(_shield_burst)
 	_warm.prepare(bursts)
