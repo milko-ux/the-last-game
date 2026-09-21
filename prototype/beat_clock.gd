@@ -105,7 +105,7 @@ const DRIFT_SETTLE_S := 3.0          # after a start / seek: measure the baselin
 const DRIFT_FILTER_TAU_S := 4.0
 const DRIFT_DEADBAND_S := 0.008
 const DRIFT_MAX_SLEW := 0.002        # seconds of correction per second
-const DRIFT_IGNORE_S := 0.25         # a gap this big is a glitch, not drift
+const DRIFT_IGNORE_S := 0.25         # a CHANGE this big (vs the baseline) is a glitch, not drift
 var _drift_lp := 0.0
 var _drift_base := 0.0
 var _drift_age := 0.0
@@ -679,11 +679,19 @@ func _follow_audio(delta: float) -> void:
 	if AudioServer.get_driver_name() == "Dummy":
 		return                       # the headless tools: no audio device, nothing to follow
 	var d := audio_drift_ms() / 1000.0
-	if absf(d) > DRIFT_IGNORE_S:
-		return
 	_drift_age += delta
 	if _drift_age < 0.5:
 		_drift_lp = d
+		return
+	# The glitch gate measures the gap against the BASELINE, not against
+	# zero. Only the change is drift: the constant offset a device
+	# reports is not (an iPhone reports -1374 ms, 2026-09-21), and
+	# against zero that constant tripped this gate on every frame and
+	# switched the whole correction off on the one device it is for --
+	# silently, because this Mac reports 15-60 ms and never trips it.
+	# (A real gap of more than DRIFT_IGNORE_S from the baseline is still
+	# treated as a glitch and left alone, as before.)
+	if _drift_age >= DRIFT_SETTLE_S and absf(d - _drift_base) > DRIFT_IGNORE_S:
 		return
 	_drift_lp += (d - _drift_lp) * (1.0 - exp(-delta / DRIFT_FILTER_TAU_S))
 	if _drift_age < DRIFT_SETTLE_S:
