@@ -85,14 +85,58 @@ static func verdict_key(k: Dictionary) -> String:
 	return "v%d_s%d_%s_lap%d" % [Fairness.VERSION, SEASON_SEED, String(k.get("variant", "lap")), int(k.get("lap", 0))]
 
 
-# The scripts and data a layout depends on: a verdict made with other
-# ones must never be trusted (it would skip validation of a changed lap).
+# A verdict made with other layout code or other data must never be
+# trusted: it would skip the validation of a lap that has changed.
+#
+# This USED to md5 the four layout scripts. That can never match in an
+# exported build: the exporter ships GDScript compiled (placement.gdc
+# beside the name placement.gd, script_export_mode=2), so the phone
+# hashed compiled bytes while tools/lap_stats.gd had stamped the file
+# with the hash of the readable sources. Every device rejected
+# levels/verdicts.json and validated every lap live -- 4.6 s of a 6.5 s
+# load on Milko's iPhone, 2026-09-21, and invisible here because the Mac
+# reads the sources and matches itself.
+#
+# So the shipped hash is built only from things the exporter ships
+# BYTE FOR BYTE -- the two JSON data files (verified in the pck) -- plus
+# version numbers bumped by hand. LAYOUT_VERSION is that hand:
+# ** bump it whenever placement.gd / rules.gd / hazard_math.gd /
+#    fairness.gd change what a lap LOOKS like, then re-run
+#    tools/lap_stats.gd -- laps=0-9 write=1 **
+# Forgetting is caught, not trusted to memory: where the sources are
+# readable (the editor and every headless tool, i.e. everywhere a verdict
+# is ever MADE) stored_verdict() also checks the scripts themselves and
+# refuses the file if they moved without a bump.
+const LAYOUT_VERSION := 1
+const LAYOUT_SCRIPTS := ["res://prototype/placement.gd", "res://prototype/rules.gd",
+		"res://prototype/hazard_math.gd", "res://prototype/fairness.gd"]
+const LAYOUT_DATA := ["res://levels/curriculum.json", "res://assets/audio/fuffens_beatmap.json"]
+
+
 static func source_hash() -> String:
-	var src := ""
-	for f in ["res://prototype/placement.gd", "res://prototype/rules.gd", "res://prototype/hazard_math.gd",
-			"res://prototype/fairness.gd", "res://levels/curriculum.json", "res://assets/audio/fuffens_beatmap.json"]:
+	var src := "L%d_F%d" % [LAYOUT_VERSION, Fairness.VERSION]
+	for f in LAYOUT_DATA:
 		src += FileAccess.get_md5(f)
 	return src.md5_text().substr(0, 12)
+
+
+# The layout scripts as they read on disk. Only meaningful where the
+# sources are readable: an exported build has the compiled .gdc instead,
+# and get_md5 there hashes something else entirely (see above).
+static func script_hash() -> String:
+	var src := ""
+	for f in LAYOUT_SCRIPTS:
+		src += FileAccess.get_md5(f)
+	return src.md5_text().substr(0, 12)
+
+
+# True in the editor and in every headless tool run, false in an export.
+static func sources_readable() -> bool:
+	return OS.has_feature("editor")
+
+
+static func fairness_version() -> int:
+	return Fairness.VERSION
 
 
 static func _device_path(k: Dictionary) -> String:
@@ -119,9 +163,18 @@ static func stored_verdict(k: Dictionary) -> Dictionary:
 		var f := FileAccess.open(SHIPPED_PATH, FileAccess.READ)
 		var data = JSON.parse_string(f.get_as_text()) if f != null else null
 		if typeof(data) == TYPE_DICTIONARY and String(data.get("source", "")) == source_hash():
-			_shipped = data.get("verdicts", {})
+			# The hash above cannot see the layout scripts in an export.
+			# Where it CAN (here, and in every tool that makes a verdict)
+			# check them for real: a script that moved without a
+			# LAYOUT_VERSION bump would otherwise ship a lap that was
+			# validated as a different lap.
+			var rec := String(data.get("scripts", ""))
+			if sources_readable() and rec != "" and rec != script_hash():
+				push_error("LapGen: levels/verdicts.json was made with DIFFERENT layout scripts (%s, now %s) but the same LAYOUT_VERSION %d. Bump LapGen.LAYOUT_VERSION and re-run: godot --headless --path . -s tools/lap_stats.gd -- laps=0-9 write=1" % [rec, script_hash(), LAYOUT_VERSION])
+			else:
+				_shipped = data.get("verdicts", {})
 		elif typeof(data) == TYPE_DICTIONARY:
-			push_warning("LapGen: levels/verdicts.json was made with other scripts / data; ignoring it (re-run tools/lap_stats.gd)")
+			push_warning("LapGen: levels/verdicts.json was made with other data / another version; ignoring it (re-run tools/lap_stats.gd)")
 	var key := verdict_key(k)
 	if _shipped.has(key):
 		var v := _parse(_shipped[key])

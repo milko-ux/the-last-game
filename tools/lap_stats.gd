@@ -12,8 +12,12 @@ extends SceneTree
 # in levels/verdicts.json (laps 0-9 of this SEASON_SEED): with that file
 # in the build a phone never validates the first ~25 minutes of a run.
 # Re-run it whenever placement.gd, rules.gd, hazard_math.gd, fairness.gd,
-# the curriculum or the beatmap change (the file carries their hash and
-# is ignored when it does not match).
+# the curriculum or the beatmap change -- and when it is one of the four
+# SCRIPTS, bump LapGen.LAYOUT_VERSION first: an exported build cannot
+# hash the scripts (it ships them compiled), so that number is the only
+# thing that tells a phone the layout moved. Change a script without
+# bumping it and the next run of this tool refuses the old file loudly
+# instead of trusting it.
 # ============================================================
 
 func _initialize() -> void:
@@ -65,7 +69,9 @@ func _initialize() -> void:
 		verdicts[LapGen.verdict_key(job.knobs)] = LapGen.verdict_json(job.rerolls, job.cleared)
 	if write:
 		var f := FileAccess.open(LapGen.SHIPPED_PATH, FileAccess.WRITE)
-		f.store_string(JSON.stringify({"_readme": "Shipped fairness verdicts of the endless course (tools/lap_stats.gd). Ignored when `source` does not match the scripts / data in the build.",
-			"season_seed": LapGen.SEASON_SEED, "source": LapGen.source_hash(), "verdicts": verdicts}, "\t"))
+		f.store_string(JSON.stringify({"_readme": "Shipped fairness verdicts of the endless course (tools/lap_stats.gd). Ignored when `source` does not match this build: LapGen.LAYOUT_VERSION + Fairness.VERSION + the JSON data (the only things an export ships byte for byte). `scripts` is the md5 of the four layout scripts as they read on disk -- checked wherever the sources are readable, so a changed script with no LAYOUT_VERSION bump is refused instead of trusted.",
+			"season_seed": LapGen.SEASON_SEED, "source": LapGen.source_hash(),
+			"layout_version": LapGen.LAYOUT_VERSION, "fairness_version": LapGen.fairness_version(),
+			"scripts": LapGen.script_hash(), "verdicts": verdicts}, "\t"))
 		print("WROTE %s (%d verdicts, source %s)" % [LapGen.SHIPPED_PATH, verdicts.size(), LapGen.source_hash()])
 	quit()

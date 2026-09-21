@@ -1,7 +1,10 @@
 {
-	"_readme": "Shipped fairness verdicts of the endless course (tools/lap_stats.gd). Ignored when `source` does not match the scripts / data in the build.",
+	"_readme": "Shipped fairness verdicts of the endless course (tools/lap_stats.gd). Ignored when `source` does not match this build: LapGen.LAYOUT_VERSION + Fairness.VERSION + the JSON data (the only things an export ships byte for byte). `scripts` is the md5 of the four layout scripts as they read on disk -- checked wherever the sources are readable, so a changed script with no LAYOUT_VERSION bump is refused instead of trusted.",
+	"fairness_version": 10,
+	"layout_version": 1,
+	"scripts": "8540eae16766",
 	"season_seed": 20260901,
-	"source": "ec646cf3540a",
+	"source": "d3625cc49574",
 	"verdicts": {
 		"v10_s20260901_grad_lap0": {
 			"cleared": [],
