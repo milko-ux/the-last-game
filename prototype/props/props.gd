@@ -154,6 +154,7 @@ void fragment() {
 static var _scenes := {}
 static var _mats := {}
 static var _shaders := {}
+static var _low := {}
 
 
 static func _shader(kind: String) -> Shader:
@@ -261,4 +262,172 @@ static func make(name: String, size: Vector3, pivot: String, mat: Material, yaw_
 		mi.material_override = mat
 		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	root.add_child(model)
+	return root
+
+
+# ============================================================
+# CHEAP COPIES (2026-09-21, GPU step 1b)
+# ============================================================
+# A gate is a row of up to 37 pillars and every one of them was the full
+# 4 000-triangle model: 148 000 triangles of the 220 000 in frame at bar
+# 11, and the phone is GPU-bound (28.7 ms a frame with the CPU using
+# 2.5). Only the two pillars beside the opening are read as shapes -- the
+# rest are a wall.
+#
+# Godot's own mesh LOD cannot do this here: generate_lods=true is on in
+# the .import, but mesh LOD does not run in the Compatibility renderer,
+# which is what the web build uses. So the cheap copy is built here, at
+# load, FROM THE REAL MESH -- not modelled by hand and not guessed:
+#
+#   for each of `rings` heights, take the model's own vertices near that
+#   height and find, for each of `sides` directions, how far the shape
+#   reaches that way (the support distance). Intersecting neighbouring
+#   directions gives one convex ring that hugs the real cross-section;
+#   stacking the rings gives the real silhouette, faceted.
+#
+# The vertex colours come from the same vertices (the bake's colour is
+# what the clay shader reads), so it keeps the model's own colouring and
+# needs no new material -- nothing to add to prewarm.gd.
+#
+# 8 sides x 7 rings = 108 triangles against about 4 000. If the art is
+# ever replaced this needs no attention: it is measured, not written down.
+static func low_mesh(name: String, sides: int = 8, rings: int = 7) -> Mesh:
+	var key := "%s_%d_%d" % [name, sides, rings]
+	if _low.has(key):
+		return _low[key]
+	var src := mesh_of(name)
+	if src == null or src.get_surface_count() == 0:
+		_low[key] = null
+		return null
+	var arrays := src.surface_get_arrays(0)
+	var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var cols: PackedColorArray = arrays[Mesh.ARRAY_COLOR] if arrays[Mesh.ARRAY_COLOR] != null else PackedColorArray()
+	if verts.is_empty():
+		_low[key] = null
+		return null
+
+	var y_lo := INF
+	var y_hi := -INF
+	for v in verts:
+		y_lo = minf(y_lo, v.y)
+		y_hi = maxf(y_hi, v.y)
+	var span := maxf(y_hi - y_lo, 0.0001)
+
+	# The directions the support is measured along.
+	var dirs: Array[Vector2] = []
+	for i in sides:
+		var a := TAU * float(i) / float(sides)
+		dirs.append(Vector2(cos(a), sin(a)))
+
+	# ring -> polygon in xz, and the colour of the model around it.
+	var ring_poly: Array = []
+	var ring_col: Array = []
+	for r in rings:
+		var y := y_lo + span * float(r) / float(rings - 1)
+		var window := span / float(rings - 1)
+		var sup := PackedFloat32Array()
+		sup.resize(sides)
+		for i in sides:
+			sup[i] = -INF
+		var csum := Color(0, 0, 0, 0)
+		var cn := 0
+		for j in verts.size():
+			var v := verts[j]
+			if absf(v.y - y) > window:
+				continue
+			var xz := Vector2(v.x, v.z)
+			for i in sides:
+				sup[i] = maxf(sup[i], xz.dot(dirs[i]))
+			if j < cols.size():
+				csum += cols[j]
+				cn += 1
+		# A ring with nothing near it (a gap in the model): borrow the
+		# one below rather than collapsing to a point.
+		var empty := false
+		for i in sides:
+			if sup[i] == -INF:
+				empty = true
+		if empty and r > 0:
+			ring_poly.append(ring_poly[r - 1].duplicate())
+			ring_col.append(ring_col[r - 1])
+			continue
+		elif empty:
+			for i in sides:
+				sup[i] = 0.001
+		var poly: Array[Vector3] = []
+		for i in sides:
+			var d0: Vector2 = dirs[i]
+			var d1: Vector2 = dirs[(i + 1) % sides]
+			# The corner where the two supporting lines meet.
+			var det := d0.x * d1.y - d0.y * d1.x
+			var p: Vector2
+			if absf(det) < 0.0001:
+				p = d0 * sup[i]
+			else:
+				p = Vector2((sup[i] * d1.y - sup[(i + 1) % sides] * d0.y) / det,
+					(d0.x * sup[(i + 1) % sides] - d1.x * sup[i]) / det)
+			poly.append(Vector3(p.x, y, p.y))
+		ring_poly.append(poly)
+		ring_col.append((csum / float(cn)) if cn > 0 else Color(1, 1, 1))
+
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	# Sides. Each triangle gets its own vertices, so generate_normals()
+	# leaves the facets hard -- the same chiselled read as the model.
+	for r in rings - 1:
+		var lo: Array = ring_poly[r]
+		var hi: Array = ring_poly[r + 1]
+		var c_lo: Color = ring_col[r]
+		var c_hi: Color = ring_col[r + 1]
+		for i in sides:
+			var j := (i + 1) % sides
+			_tri(st, lo[i], lo[j], hi[j], c_lo, c_lo, c_hi)
+			_tri(st, lo[i], hi[j], hi[i], c_lo, c_hi, c_hi)
+	# Caps, as fans.
+	var bot: Array = ring_poly[0]
+	var top: Array = ring_poly[rings - 1]
+	for i in range(1, sides - 1):
+		_tri(st, bot[0], bot[i + 1], bot[i], ring_col[0], ring_col[0], ring_col[0])
+		_tri(st, top[0], top[i], top[i + 1], ring_col[rings - 1], ring_col[rings - 1], ring_col[rings - 1])
+	st.generate_normals()
+	var m := st.commit()
+	_low[key] = m
+	return m
+
+
+static func _tri(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, ca: Color, cb: Color, cc: Color) -> void:
+	st.set_color(ca)
+	st.add_vertex(a)
+	st.set_color(cb)
+	st.add_vertex(b)
+	st.set_color(cc)
+	st.add_vertex(c)
+
+
+# make(), but with the cheap copy of the model. Same box, same pivot,
+# same material, same node name (so tools/shot.gd's BUDGET lines still
+# group it with the real ones).
+static func make_low(name: String, size: Vector3, pivot: String, mat: Material, yaw_deg: float = 0.0, mirror_x: bool = false) -> Node3D:
+	var mesh := low_mesh(name)
+	if mesh == null:
+		return make(name, size, pivot, mat, yaw_deg, mirror_x)
+	var root := Node3D.new()
+	root.name = name
+	var mi := MeshInstance3D.new()
+	# The MESH carries the name, not just the root: Godot renames a
+	# colliding sibling to @Node3D@N, so a row of pillars keeps the name
+	# on the first one only -- and tools/shot.gd's BUDGET walk (which
+	# starts at the MeshInstance3D) then files the rest under "other".
+	mi.name = name + "_low"
+	mi.mesh = mesh
+	mi.material_override = mat
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var msize: Vector3 = size_of(name)
+	var sc := Vector3(size.x / msize.x, size.y / msize.y, size.z / msize.z)
+	if mirror_x:
+		sc.x = -sc.x
+	var b := Basis(Vector3.UP, deg_to_rad(MODELS[name][1] + yaw_deg)).scaled_local(sc)
+	var pivot_y := -msize.y * 0.5 if pivot == "base" else msize.y * 0.5
+	mi.transform = Transform3D(b, -(b * Vector3(0.0, pivot_y, 0.0)))
+	root.add_child(mi)
 	return root

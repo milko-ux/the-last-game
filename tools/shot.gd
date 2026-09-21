@@ -69,6 +69,13 @@ func _process(_delta: float) -> bool:
 		test.start_now()
 		return false
 	if _frames_after >= 0:
+		# The three frames between deciding to shoot and shooting are not
+		# guaranteed: an unattended run can die in them, and the retry
+		# hides the world again -- which is how this tool saved a black
+		# LOADING screen. Cancel and wait for the world to be up again.
+		if test.state != test.State.RUN and not (kill or end_screen):
+			_frames_after = -1
+			return false
 		_frames_after += 1
 		if _frames_after >= 3:
 			var img := root.get_viewport().get_texture().get_image()
@@ -110,6 +117,12 @@ func _process(_delta: float) -> bool:
 		var img := root.get_viewport().get_texture().get_image()
 		print("SHOT saved=%s err=%d size=%dx%d t=%.2f bar=%d (death frame)" % [out, img.save_png(out), img.get_width(), img.get_height(), clock.song_time(), clock.current_bar()])
 		return true
+	# Only once the world is actually on screen. The loading phase hides
+	# rig / player / field, and since the shipped verdicts started being
+	# used (2026-09-21) a cached level can reach the target bar while the
+	# prewarm rack is still filling -- which shot a black frame.
+	if test.state != test.State.RUN:
+		return false
 	if clock.current_bar() >= bar and t >= clock.bar_start(bar) + after:
 		if kill:
 			# Walk into the nearest lethal box once something is lethal.

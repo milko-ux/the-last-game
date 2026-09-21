@@ -15,15 +15,37 @@
 
 **1a helped and did not finish it: 28.7 -> 21.9 avg, cpu still only 2.8. Target is 16.7. Still GPU-bound, so step 1b is next** (Milko's call, and the right one: brief 6 adds lights and shadows, which re-render the same geometry again -- triangles cost double there, shader octaves do not). Caveats on the comparison: he read bar **12 of the endless run**, not bar 11 of `?level=1`, and no `?scale=1` back-to-back was taken, so "0.75 did it" is inference from last night's 28.7, not a paired reading. Direction is clear enough; not worth another trip. The 163 ms worst frame is a one-off on the start screen (first-frame compile), only worth chasing if it ever lands inside a run.
 
-### Three findings from that test -- all diagnosed, NONE fixed yet
+### Built on 2026-09-21, after that test (four commits, not yet seen on a phone)
+
+1. **The verdict fingerprint an export can match** (`4d7e9f4`). `LapGen.source_hash()` no longer md5s the layout SCRIPTS -- an export ships them compiled (`placement.gdc`), so that hash could never match the one `lap_stats.gd` stamped from the readable sources, and every device rejected `levels/verdicts.json` and validated every lap live. It is now `LAYOUT_VERSION` + `Fairness.VERSION` + the two JSON data files (the only things shipped byte for byte). **Bump `LapGen.LAYOUT_VERSION` whenever placement / rules / hazard_math / fairness change what a lap looks like, then re-run `tools/lap_stats.gd -- laps=0-9 write=1`** -- and forgetting is caught, not trusted to memory: where the sources are readable (the editor and every tool, i.e. everywhere a verdict is made) `stored_verdict()` also compares the scripts and refuses the file if they moved without a bump. Verified both ways: `FROM shipped` on every lap tested and `validate 0.0 (cached)` on the load line; tampering the recorded script hash makes it refuse and fall back to live. The regenerated file is byte-identical except the fingerprint.
+2. **LOADING is said under the rotate prompt** (`bd79823`). `ui.gd` gained one optional line (`portrait_note`) drawn below ROTATE YOUR PHONE; `track_test` sets and clears it. **The glass controls cannot be touched by this**: the portrait branch of `_draw()` returns before the HUD and the controls are drawn at all.
+3. **The drift gate measures the change, not the raw gap** (`115eef3`). `DRIFT_IGNORE_S` tested the absolute number, so the phone's constant -1374 ms tripped it every frame and the correction was off on the only device it is for. Now gated against the settled baseline, as its own comment always claimed.
+4. **GPU step 1b: cheap pillar copies** (see below).
+
+### GPU step 1b -- measured, before / after at level 1 bar 11
+
+| | before | after |
+|---|---|---|
+| gate pillars | 37 meshes, **148 000** triangles | 37 meshes, **42 916** |
+| in the frame | 130 660 triangles, 331 draw calls | **87 958 triangles, 171 draw calls** |
+
+Only `i == 0` -- the pillar forming the edge of the opening, the one whose inner face IS the gap -- keeps the full model. Everything further out is wall and gets a cheap copy: **108 triangles instead of about 4 000**, and the draw calls roughly halve as a bonus.
+
+The copy is not modelled or guessed, it is **measured from the real mesh at load** (`Props.low_mesh`): for each of 7 heights it takes the model's own vertices near that height and asks how far the shape reaches in each of 8 directions, then intersects those to get one convex ring that hugs the real cross-section. Stacking the rings gives the real silhouette, faceted. Vertex colours come from the same vertices, so it keeps the bake's colouring and needs **no new material -- nothing to add to `prewarm.gd`**. If the art is replaced it needs no attention.
+
+Why not Godot's own mesh LOD: `generate_lods=true` is on in the `.import`, but mesh LOD does not run in the **Compatibility** renderer, which is what the web build uses. Another "works here, does nothing on the phone" trap.
+
+**Known, not fixed: `tools/shot.gd` is flaky now that loads are fast.** Its clock and the run's clock disagree after a cached load, so it can report `bar=11` while the run is at bar 0, and it used to save a black LOADING frame. It now refuses to save unless the world is actually up (`state == RUN`), which stops the black frames; the wrong-bar mismatch is untouched and older than today. The triangle figures above are safe from it -- they are counted by walking the scene, not read off a frame.
+
+### The three findings from that test (all now fixed above; kept for the diagnosis)
 
 1. **The shipped verdicts can never be trusted in an exported build.** `LapGen.source_hash()` md5s four `.gd` files; the exporter ships them COMPILED (`placement.gdc` is in the pck next to the name `placement.gd`, `script_export_mode=2`). So the hash the phone computes can never equal the hash `tools/lap_stats.gd` stamped into `levels/verdicts.json` from the readable sources -- the file is rejected on every device and every lap validates live. **That is 4.6 s of the 6.5 s load**, and the live result was identical to the shipped one (1 pass, 0 cleared). The check itself is correct and must not be weakened (a stale verdict = an unproven lap). Fix: fingerprint what survives export -- the two JSON data files (verified byte-identical in the pck) + a hand-bumped layout version, with `lap_stats.gd` failing loudly if the scripts changed without a bump. On the Mac the hash matches (`ec646cf3540a`), which is why nothing ever caught it -- another instance of the standing rule: **a path that only runs in an export has been tested by nothing here.**
 2. **The LOADING word is on screen but nowhere near the eye.** Nothing covers it: `ui.gd`'s portrait branch draws only two lines of text and returns, and `Status` is a sibling label that draws after it. But ROTATE YOUR PHONE is big, cyan and centred while LOADING is small, gold and 70 px from the top edge -- and the whole 6.5 s ran in portrait (the load line recorded 1179x2379). Fix: say it under the rotate message, where the eye already is. **That edits `ui/ui.gd` = the glass-controls file, so it needs Milko's go-ahead** (one line inside the portrait branch, nothing near the controls).
 3. **The drift correction is switched OFF on the phone, silently.** `audio -1374` is the device's CONSTANT reported offset and is meant to be ignored (SYNC_OFFSET_S was tuned by ear on top of whatever the device reports) -- that part is by design, and is why nothing sounded wrong. But `DRIFT_IGNORE_S` (0.25 s, "a gap this big is a glitch, not drift") tests the RAW gap, not the change since the baseline, so 1.374 s trips it on every frame and `_follow_audio` returns before correcting anything (`(+0)` confirms it). The thing it protects against -- audio slipping over a long deathless run -- is exactly what an endless run is. On the Mac the offset is 15-60 ms, so the gate never fired here. Fix: gate on `d - _drift_base`, one line.
 
-### Next, in Milko's order
-1. **Step 1b: cheap pillar copies.** At bar 11 the gate pillars are **37 meshes / 148 000 triangles** (`tools/shot.gd` prints `BUDGET`); monoliths 70 k, creature 30 k, tiles 3 k. Plan: a light copy (~600-1 000 triangles) for every pillar except the two beside the opening. **Step 1c (monolith shader) stays parked.**
-2. The three findings above, when he says so. Finding 1 is the cheapest win on the board (6.5 s load -> ~2 s).
+### Next
+1. **Milko reads the phone**: does the load line drop from 6.5 s to about 2 s, does LOADING show, and what is the frame average at bar 12. Nothing built on 2026-09-21 has been seen in a browser from here.
+2. **Step 1c (monolith shader) stays parked** -- monoliths are now the biggest item in frame (69 880 triangles) but 1b may already be enough; his number decides.
 
 ### Rules that bit me -- keep them
 - **Nothing that can raise, and no `JavaScriptBridge`, inside a `RenderingServer.frame_post_draw` callback.** They increment an int and nothing else. An error in there aborts the rest of the callback silently.

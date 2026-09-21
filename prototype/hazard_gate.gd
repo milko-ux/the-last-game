@@ -40,8 +40,15 @@ func _build() -> void:
 		_right_segs.append(_pillar(_right, 1.0, i))
 
 
+# GPU step 1b (2026-09-21): only i == 0, the pillar that forms the edge
+# of the opening, is the full model. It is the one the player reads --
+# its inner face IS the gap. Everything further out is wall, and gets the
+# measured cheap copy (Props.low_mesh: same silhouette, same colours,
+# ~108 triangles instead of ~4 000). A gate at bar 11 was 37 pillars =
+# 148 000 triangles; it is now about 12 000.
 func _pillar(parent: Node3D, side: float, i: int) -> Node3D:
-	var p := Props.make("gate_pillar", _seg_size, "base", Props.clay(false), 0.0, side > 0.0)
+	var p := Props.make("gate_pillar", _seg_size, "base", Props.clay(false), 0.0, side > 0.0) if i == 0 \
+		else Props.make_low("gate_pillar", _seg_size, "base", Props.clay(false), 0.0, side > 0.0)
 	p.position = Vector3(side * (_pillar_w * 0.5 + _pillar_w * i), 0.0, 0.0)
 	parent.add_child(p)
 	return p
