@@ -108,12 +108,14 @@ func _process(_delta: float) -> bool:
 		done = clock.current_lap() >= start_lap + laps or test.state == test.State.GAMEOVER or test.deaths >= max_deaths \
 			or (Time.get_ticks_msec() - t_wall0) > 3600000
 		if done:
+			_print_leash()
 			print("AUTOPLAY endless mode=%s seed=%d start_lap=%d laps=%d grad=%s deaths=%d at_bars=%s notes=%d lap_reached=%d run_s=%.0f min_fps=%d" % [
 				mode, seed, start_lap, laps, grad, test.deaths, str(death_bars), test.notes, clock.current_lap(),
 				clock.song_time() - clock.start_offset, min_fps])
 			return true
 		return false
 	if done:
+		_print_leash()
 		print("AUTOPLAY mode=%s level=%d seed=%d bars<=%d deaths=%d at_bars=%s notes=%d state=%d goal=%s min_fps=%d" % [
 			mode, level, seed, max_bar, test.deaths, str(death_bars), test.notes, test.state,
 			"yes" if test.state == test.State.WON else "no", min_fps])
@@ -191,6 +193,12 @@ func _setup() -> void:
 		first_beat = int(fair["first_beat"])
 	t_wall0 = Time.get_ticks_msec()
 	print("AUTOPLAY start mode=%s validator_ok=%s path_len=%d" % [mode, fair["ok"], path.size()])
+	# The leash counters describe PLAY. Before the run starts the creature
+	# has not been placed yet -- its feet are still at the world origin
+	# while the player is at z=10, which is a 9.9-unit reading that says
+	# nothing about walking.
+	if test != null and test.player != null:
+		test.player.creature.reset_reach_seen()
 
 
 # Called by the scene every frame instead of reading the joystick.
@@ -681,3 +689,13 @@ func _human_reasons(field, here: Vector2, own: Vector2, t: float, line: float, z
 					r = "walk"
 				out.append("(%.0f,%.1f)=%s" % [c.x, c.y, r])
 	return " ".join(out)
+
+
+# Brief 5A's leash, over a whole clean run: a bot never dies, so nothing
+# here is a reload or a respawn transition.
+func _print_leash() -> void:
+	var c = test.player.creature if test != null and test.player != null else null
+	if c == null:
+		return
+	print("LEASH over the run: max foot-to-hip as drawn %.4f (planted %.4f) of reach %.4f; unclamped worst %.4f" % [
+		c.max_reach_seen(), c.max_reach_planted(), c.reach(), c.max_raw()])

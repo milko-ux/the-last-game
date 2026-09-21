@@ -67,6 +67,9 @@ func _process(_delta: float) -> bool:
 		if _pending_bot != null:
 			_give_bot_its_path()
 		test.start_now()
+		# The leash number should describe PLAY. Before this point the
+		# scene is still being set up and a foot can sit anywhere.
+		test.player.creature.reset_reach_seen()
 		return false
 	if _frames_after >= 0:
 		# The three frames between deciding to shoot and shooting are not
@@ -96,10 +99,12 @@ func _process(_delta: float) -> bool:
 			print("SHOT monoliths=%s" % [test.field.monolith_counts()])
 			# Brief 5's leash, measured in the REAL game (the carry line can
 			# pull the player in ways the walk rig cannot).
-			print("LEASH max foot-to-hip as drawn %.4f (planted %.4f) of reach %.4f" % [
+			print("LEASH max foot-to-hip as drawn %.4f (planted %.4f) of reach %.4f  ground %.2f u/s" % [
 				test.player.creature.max_reach_seen(),
 				test.player.creature.max_reach_planted(),
-				test.player.creature.reach()])
+				test.player.creature.reach(),
+				test.player.creature.ground_speed()])
+			print("LEASH unclamped worst %.4f" % test.player.creature.max_raw())
 			_print_triangle_budget()
 			return true
 		return false

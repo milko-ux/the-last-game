@@ -58,8 +58,8 @@ const MODEL_BODY_CENTRE_Z := 0.15      # the tail drags the bounds back; the bod
 # The cap never reaches them: they are all outside radius 0.62.
 const MELT_XZ := Vector2(0.0, 0.065)   # the belly axis
 const MELT_EDGE := 0.62                # where the cap meets the real body
-const MELT_CAP_Y := -0.340             # cap ellipsoid centre y
-const MELT_CAP_RY := 0.280
+const MELT_CAP_Y := -0.4174            # cap ellipsoid centre y
+const MELT_CAP_RY := 0.1576
 const MELT_CAP_RXZ := 0.800
 const MELT_ON := true
 const HEIGHT := 2.3                    # 1.15 tiles, feet to top (3.0 was too big on the phone, 2026-09-19; the gray-box capsule was 1.6)
@@ -120,23 +120,38 @@ const CLAY := Color(0.62, 0.52, 0.66)
 # comes off the body. The leg is 0.52 and the hip 0.52 instead, which
 # reaches the floor at rest and spans that gait at 1.31. Still stubby:
 # 23 % of the creature's height.
-const LEG_W := 0.34                    # at HEIGHT 2.3
-const LEG_D := 0.44
-const LEG_H := 0.52                    # rest length, floor to hip
-const HIP_WIDTH := 0.46                # centre to centre
+const LEG_W := 0.50                    # at HEIGHT 2.3
+const LEG_D := 0.56
+const LEG_H := 0.62                    # rest length, floor to hip
+const HIP_WIDTH := 0.60                # centre to centre
 # The belly after the section-1 melt bottoms out at model y -0.620, which
 # is 0.39 above the feet at this scale; the hip sits just inside it.
-const HIP_Y := 0.52
+const HIP_Y := 0.62
 const HIP_Z := -0.10                   # the belly axis, in the player's frame
 const LEG_STRETCH_MIN := 0.8
-# A safety net, not a working limit: with the sizes above the gait needs
-# 1.31 and never reaches this. It matters only if someone raises
-# STRIDE_MAX -- past about 1.55 the capsule stops short of the hip and a
-# gap opens at the joint, which is the one thing section 2 forbids.
-const LEG_STRETCH_MAX := 1.45
-# The body texture's median is (0.651, 0.576, 0.651); the legs are 8 %
-# darker so they read against it.
-const LEG_TINT := Color(0.599, 0.530, 0.599)
+# 1.8, not 1.45, and the reason is the BOB. The hip rides on the body, so
+# a bob of BODY_BOB * HEIGHT = 0.20 units is 0.20 of leg spent on height
+# before the foot can reach forward at all -- and brief 5B makes the bob
+# bigger on purpose. At 1.45 the leg ran out mid-stance, the leash pulled
+# the foot in, and the cycle restarted: 15 footfalls a second of thrash.
+# Worst case now is a hip 0.82 up with the foot a quarter-stride (0.475)
+# out = 0.94, against a reach of 1.12.
+const LEG_STRETCH_MAX := 1.8
+# Brief 5B (2026-09-21): from the GAME camera the legs did not read at
+# all -- what you saw were the flippers. Nothing about them was wrong,
+# they were just small, pale and tucked under the widest part of a body
+# seen from above. So: thicker (0.34 -> 0.50 wide), set wider apart
+# (HIP_WIDTH 0.46 -> 0.60) so they clear the body's silhouette instead of
+# hiding under it, and darker -- the body texture's median is
+# (0.651, 0.576, 0.651) and the legs are now 22 % below it, not 8 %.
+#
+# "Longer" is not free: the visible part of a leg is the gap between the
+# belly and the floor, so the only way to lengthen it is to raise the
+# belly. The section-1 cap was raised from -0.620 to -0.575 (0.390 ->
+# 0.445 above the floor, 14 % more leg). Re-checked against all 26 769
+# vertices: 2 556 lifted, every one still inside the stub box, so the
+# melt is as clean as Milko accepted it.
+const LEG_TINT := Color(0.508, 0.449, 0.508)
 
 # --- Brief 5 section 3: the step cycle ---------------------------------
 # The cycle is driven by DISTANCE TRAVELLED, never by a timer. A planted
@@ -145,24 +160,32 @@ const LEG_TINT := Color(0.599, 0.530, 0.599)
 # covers no distance. (It also means a hit-stop needs no special case:
 # a frozen world moves the player nowhere, so the legs hold by
 # themselves.)
-# Measured ground speed at full input is 3.9 units/s (tools/shot_walk.gd),
-# so STRIDE_MAX 1.4 gives 2.8 cycles a second = 5.6 footfalls a second --
-# the "fast scurry" the brief asks for, a little quicker than its guess
-# of 4-5 because the creature really does travel 1.7 body lengths a
-# second. Raising it slows the cadence and lengthens the reach; see
-# LEG_STRETCH_MAX before going past about 1.55.
+# The stride comes from how fast the creature is REALLY travelling, not
+# from how far the stick is pushed. Sizing it off the input was the cause
+# of the feet being at full stretch all the time in the real game: the
+# carry line and the level's player_speed knob move the player faster
+# than a constant walk, the cycle could not keep up at a fixed stride,
+# and every foot ended up on the leash. Cadence is what gives instead --
+# a small creature moving faster takes quicker steps, not impossibly long
+# ones -- and the stride is capped at what the leg can actually cover.
+const CADENCE_HZ := 2.8                # cycles a second = 5.6 footfalls
 const STRIDE_MIN := 0.6                # units per step at a crawl
-const STRIDE_MAX := 1.4                # at full player speed
+# The longest stride the leg can cover with room for the leash to work:
+# the foot sits a quarter of a stride either side of a hip 0.62 up, so at
+# 1.9 that is sqrt(0.475^2 + 0.62^2) = 0.78 against a reach of 0.90.
+const STRIDE_MAX := 1.9
+const GSPEED_TAU := 0.18               # smoothing on the measured speed
 const STEP_HEIGHT := 0.28              # arc at mid-swing
 const FOOT_PITCH_DEG := 20.0           # heel off first, toe down last
 const IDLE_SPEED := 0.3                # of full speed
 const IDLE_SETTLE_S := 0.15
 const FOOT_HOME_TOL := 0.35            # further than this and it steps home
-const BODY_BOB := 0.05                 # of HEIGHT, lowest at each footfall
+const BODY_BOB := 0.085                # of HEIGHT, lowest at each footfall
 const BODY_ROLL_DEG := 4.0             # toward the stance leg
-const FOOT_SQUASH := 0.04              # on each footfall, multiplied with the beat
+const FOOT_SQUASH := 0.065             # on each footfall, multiplied with the beat
 const TURN_CUT_DEG := 90.0             # a sharper turn than this plants early
 const SETTLE_STEP_S := 0.18            # the one corrective step home, see _settle_feet
+const RECOVER_STEP_S := 0.09           # the leash's step: a flick, not a stride
 # THE LEASH (2026-09-21, after Milko's phone test). "Zero drift during
 # stance" was true and measured the wrong thing: nothing said how far a
 # planted foot was allowed to be from its hip, so at speed and after a
@@ -184,7 +207,14 @@ const REACH := LEG_H * LEG_STRETCH_MAX
 # (= 0.69) leaves the walk alone and still catches a real stranding well
 # before the leg runs out at 0.754.
 const LEASH_STEP := 0.92
-const TELEPORT_UNITS := 2.0            # a jump bigger than this is not a stride
+# A move bigger than this in ONE frame is not a stride, it is the player
+# being put somewhere: a rewind, a checkpoint, the carry line catching
+# up. 2.0 was far too generous -- the creature really travels 5.9 units a
+# second, which is 0.10 a frame at 60 and 0.20 at 30, so a yank of a
+# whole unit sailed under it and was walked off as if it were a step,
+# leaving the foot a unit behind. That is what Milko saw. 0.5 is still
+# four times any honest frame.
+const TELEPORT_UNITS := 0.5
 const JUMP_TUCK := 0.25                # of LEG_H, how far the feet tuck up
 const JUMP_TUCK_LERP := 0.25
 const LAND_SPLAY := 0.15               # feet splay outward during the squash
@@ -340,12 +370,17 @@ var _has_ground := false
 var _idle_t := 0.0
 var _settling := -1                    # which foot is stepping home, -1 = none
 var _settle_u := 0.0
+var _settle_dur := SETTLE_STEP_S
 var _foot_t := [99.0, 99.0]            # seconds since this foot last landed
 var _face := Vector2(0.0, 1.0)         # the direction the feet point
+var _gspeed := 0.0                     # measured ground speed, units/s, smoothed
+var _stride_len := 0.0                 # this frame's stride, shared with the recovery step
 
 var _dust_p: CPUParticles3D = null
 var _max_reach_seen := 0.0             # the leash, measured where the leg is DRAWN
 var _max_reach_planted := 0.0          # ... and the half of it that matters
+var _max_raw := 0.0                    # what it WOULD have been without the clamp
+var _ported := false                   # this frame the feet were teleported home
 
 signal footfall(side: int, strength: float)
 
@@ -415,11 +450,13 @@ func _build_ring() -> void:
 # Called first thing in _process, before the pose: the pose's bob, roll
 # and footfall squash come out of where the feet are.
 func _step_cycle(delta: float) -> void:
+	_ported = false
 	var here := global_position
 	if not _has_ground:
 		_ground = here
 		_has_ground = true
 		_feet_home()
+		_ported = true
 	var moved := Vector3(here.x - _ground.x, 0.0, here.z - _ground.z)
 	var d := moved.length()
 	# A teleport is not a stride (section 4): reset_to, a rewind, or the
@@ -428,6 +465,7 @@ func _step_cycle(delta: float) -> void:
 	if d > TELEPORT_UNITS:
 		_ground = here
 		_feet_home()
+		_ported = true
 		_stride = 0.0
 		_last_lp = [0.0, 0.5]
 		return
@@ -455,36 +493,31 @@ func _step_cycle(delta: float) -> void:
 		_idle_t += delta
 
 	# Distance, not time. No movement, no phase.
-	var stride_len := lerpf(STRIDE_MIN, STRIDE_MAX, clampf(speed, 0.0, 1.0))
+	if delta > 0.0:
+		_gspeed = lerpf(_gspeed, d / delta, clampf(delta / GSPEED_TAU, 0.0, 1.0))
+	# The stride is also capped by how much leg is left after the hip's
+	# CURRENT height has been paid for -- which the bob changes every
+	# frame. Without this the cycle asks for a stride the leg cannot
+	# cover at the top of a bob, and the leash has to clean up after it.
+	var hip_h := maxf((_hip(0).y + _hip(1).y) * 0.5 - _floor_y(), 0.01)
+	var room := sqrt(maxf(REACH * REACH * 0.85 - hip_h * hip_h, 0.01))
+	var stride_len := clampf(_gspeed / CADENCE_HZ, STRIDE_MIN, minf(STRIDE_MAX, 4.0 * room))
+	_stride_len = stride_len
 	_stride = fposmod(_stride + d / maxf(stride_len, 0.0001), 1.0)
 
 	# The one corrective step home runs on TIME, not on distance: the
 	# creature has stopped, so there is no distance left to drive it, and
 	# a foot frozen mid-air on the way home is worse than no step at all.
-	if _settling >= 0:
-		_settle_u += delta / SETTLE_STEP_S
-		var i := _settling
-		if _settle_u >= 1.0:
-			_foot[i] = _foot_to[i]
-			_foot[i].y = _floor_y()
-			_down[i] = true
-			_foot_t[i] = 0.0
-			_settling = -1
-			footfall.emit(i, 0.35)
-		else:
-			var q := _foot_from[i].lerp(_foot_to[i], _ease_in_out(_settle_u))
-			q.y += sin(PI * _settle_u) * STEP_HEIGHT * 0.5
-			_foot[i] = q
-			_down[i] = false
-		_leash()
-		return
 
 	# Standing still: the cycle is PARKED, not merely stalled. Leaving the
 	# stride loop running on a frozen phase kept dragging the swinging
 	# foot back onto its arc, which undid the corrective step the moment
 	# it finished -- the two fought each other for ever.
 	if _idle_t > IDLE_SETTLE_S and speed <= IDLE_SPEED:
-		_settle_feet()
+		if _settling >= 0:
+			_advance_settle(_settling, delta)
+		else:
+			_settle_feet()
 		_leash()
 		return
 
@@ -493,11 +526,25 @@ func _step_cycle(delta: float) -> void:
 	# LEG_H * 2.0 = 1.04 units -- well past the 0.75 the leg can actually
 	# span -- measured only horizontally, and TELEPORTED the foot instead
 	# of stepping it. That was the foot Milko saw left behind.
+	# ANTICIPATED, not reacted to: the body will have moved by the time
+	# this is drawn, and at 5.85 units/s in the real game that is a tenth
+	# of a unit -- enough on its own to put a foot past the leash. Adding
+	# where the hip is going is what keeps the planted foot inside it
+	# rather than riding the limit every frame.
+	var lead := _gspeed * delta
 	for i in 2:
-		if _down[i] and _foot[i].distance_to(_hip(i)) > REACH * LEASH_STEP:
+		if _down[i] and _foot[i].distance_to(_hip(i)) + lead > REACH * LEASH_STEP:
 			_step_now(i, stride_len)
 	for i in 2:
 		_foot_t[i] += delta
+		# One foot may be in a corrective step, on its own clock. The
+		# other one must carry on REGARDLESS -- this used to return out of
+		# the whole cycle, which left the other foot frozen in the world
+		# while the body walked away from it. Over a clean bot run that
+		# reached 9.9 units: the foot Milko watched get left behind.
+		if _settling == i:
+			_advance_settle(i, delta)
+			continue
 		var lp := fposmod(_stride + (0.5 if i == 1 else 0.0), 1.0)
 		var was: float = _last_lp[i]
 		_last_lp[i] = lp
@@ -548,13 +595,44 @@ func _land_foot(i: int, strength: float) -> void:
 	_dust(_foot[i], DUST_STEP if strength > 0.5 else 0)
 
 
+# One step of the time-driven corrective step (the leash's flick, and the
+# tidy-up when stopping). Only ever one foot at a time.
+func _advance_settle(i: int, delta: float) -> void:
+	_settle_u += delta / maxf(_settle_dur, 0.001)
+	# Re-aim at the hip every frame. The body keeps moving while the foot
+	# is on its way, so a target fixed when the step began lands where the
+	# hip USED to be -- and the foot arrives already behind, which starts
+	# the next recovery, and the next.
+	if _settle_dur <= RECOVER_STEP_S + 0.001:
+		_foot_to[i] = _plant_point(i, _stride_len if _stride_len > 0.0 else STRIDE_MIN)
+	if _settle_u >= 1.0:
+		_foot[i] = _foot_to[i]
+		_foot[i].y = _floor_y()
+		_down[i] = true
+		_foot_t[i] = 0.0
+		_settling = -1
+		footfall.emit(i, 0.35)
+	else:
+		var q := _foot_from[i].lerp(_foot_to[i], _ease_in_out(_settle_u))
+		q.y += sin(PI * _settle_u) * STEP_HEIGHT * 0.5
+		_foot[i] = q
+		_down[i] = false
+
+
 # Put this foot into its swing immediately, wherever the cycle is, and
 # move the cycle to match so the other foot keeps its half.
+# The leash's step is a FLICK, not a stride. Giving it half a cycle (the
+# normal swing) meant the body travelled another unit while the foot was
+# still on its way, so the leash fired again and the foot spent its life
+# being dragged at the limit. It runs on the settle's own clock, which is
+# time-driven, so it finishes whatever the body is doing.
 func _step_now(i: int, stride_len: float) -> void:
 	_foot_from[i] = _foot[i]
 	_foot_to[i] = _plant_point(i, stride_len)
 	_down[i] = false
-	_settling = -1
+	_settling = i
+	_settle_u = 0.0
+	_settle_dur = RECOVER_STEP_S
 	_stride = fposmod(0.5 - (0.5 if i == 1 else 0.0), 1.0)
 	_last_lp = [fposmod(_stride, 1.0), fposmod(_stride + 0.5, 1.0)]
 
@@ -568,6 +646,17 @@ func _leash() -> void:
 		var hip := _hip(i)
 		var seg := _foot[i] - hip
 		var d := seg.length()
+		if not _ported:
+			_max_raw = maxf(_max_raw, d)
+		if d > REACH * 1.5:
+			_ported = true
+			# Not a stride that went wrong -- the foot is nowhere near the
+			# creature. It happens on the first frame of a scene, before
+			# anything has moved and the pose is still being set up.
+			# Stretching the leg to the limit and leaving it there is the
+			# wrong answer; both feet just come home.
+			_feet_home()
+			return
 		if d > REACH and d > 0.0001:
 			_foot[i] = hip + seg * (REACH / d)
 			_foot[i].y = maxf(_foot[i].y, _floor_y())
@@ -605,6 +694,7 @@ func _settle_feet() -> void:
 			_down[i] = false
 			_settling = i
 			_settle_u = 0.0
+			_settle_dur = SETTLE_STEP_S
 			return
 
 
@@ -721,13 +811,22 @@ func max_reach_seen() -> float:
 	return _max_reach_seen
 
 
+func ground_speed() -> float:
+	return _gspeed
+
+
 func max_reach_planted() -> float:
 	return _max_reach_planted
+
+
+func max_raw() -> float:
+	return _max_raw
 
 
 func reset_reach_seen() -> void:
 	_max_reach_seen = 0.0
 	_max_reach_planted = 0.0
+	_max_raw = 0.0
 
 
 # Brief 5 section 2. Capsules in the creature's own shader, with the melt
@@ -801,6 +900,11 @@ func _place_legs(uniform: float) -> void:
 		# from outside, it is always a frame stale -- the body moves after
 		# the creature has posed itself -- which reads as a false failure.
 		var to_hip := foot.distance_to(hip)
+		# A frame on which the creature was PUT somewhere is not a frame
+		# of walking: the body moves before the feet hear about it, and
+		# measuring it says 9.9 units about a 1.1-unit leg.
+		if _ported:
+			continue
 		_max_reach_seen = maxf(_max_reach_seen, to_hip)
 		if _down[i]:
 			_max_reach_planted = maxf(_max_reach_planted, to_hip)
@@ -931,7 +1035,6 @@ func _process(delta: float) -> void:
 	_land_t += delta
 	_mode_t += delta
 	var k60 := delta * 60.0
-	_step_cycle(delta)
 
 	var scale_y := 1.0
 	var scale_xz := 1.0
@@ -1057,13 +1160,14 @@ func _process(delta: float) -> void:
 		var feet: Vector3 = _player.global_position
 		_ring.global_position = Vector3(feet.x, minf(feet.y, 0.0) + 0.02, feet.z)
 		_ring.visible = mode != Mode.GONE
-	# The leash again, now that the pose is final. _step_cycle has to run
-	# BEFORE the pose (its bob and roll are inputs to it), so the clamp it
-	# does in there is against last frame's hip -- and the hip moves every
-	# frame. This is the one that makes the invariant true of what is
-	# actually drawn.
-	if mode == Mode.ALIVE:
-		_leash()
+	# THE STEP CYCLE RUNS HERE, after the pose, not before it. It used to
+	# go first because its bob and roll are inputs to the pose -- which
+	# meant every hip it read was from LAST frame's transform, while the
+	# legs were drawn against this one. A foot planted a healthy 0.70 from
+	# its hip measured 1.78 by the time it was drawn. The pose now uses
+	# the previous frame's bob (a frame of lag on a wobble, invisible) and
+	# everything that touches a foot sees the same hip.
+	_step_cycle(delta)
 	# The legs last: the hips are read off the pose that was just set.
 	_place_legs(maxf(uniform, 0.0))
 

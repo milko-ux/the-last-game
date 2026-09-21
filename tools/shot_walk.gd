@@ -186,6 +186,18 @@ func _drive(delta: float) -> void:
 
 func _aim() -> void:
 	var p: Vector3 = _rig.global_position
+	if cam_kind == "game":
+		# The game's own camera angle and lens (camera_rig.gd), at the
+		# distance the player is really seen from, so "does it read at
+		# phone size" can be answered without the live scene.
+		_cam.fov = 55.0
+		var yaw := deg_to_rad(24.0)
+		var pitch := deg_to_rad(54.0)
+		var dist := 26.0
+		var dir3 := Vector3(sin(yaw) * cos(pitch), sin(pitch), -cos(yaw) * cos(pitch))
+		_cam.global_position = Vector3(p.x, 0.0, p.z) + dir3 * dist
+		_cam.look_at(Vector3(p.x, 1.0, p.z), Vector3.UP)
+		return
 	var off := Vector3(8.5, 1.3, 0.0)
 	if cam_kind == "front":
 		off = Vector3(0.0, 1.3, 8.5)

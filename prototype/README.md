@@ -22,6 +22,36 @@ Milko's readings, after the four commits of 2026-09-21:
 - `audio -1372 (+0)` is the expected read-out: the device's constant offset, correctly ignored. `(+0)` on a short run is normal -- the correction only moves once drift accumulates.
 - The 49 ms worst frame on the start screen is a one-off (first-frame compile), the same one-off as before, and never lands inside a run.
 
+### Brief 5A + 5B, after Milko's phone test rejected the walk (2026-09-21)
+
+**He was right about the bug and about the test.** "Zero drift during stance" was true and measured the wrong thing: nothing said how far a planted foot could be from its hip, so a foot could be perfectly still and still be nowhere near the leg drawn to it.
+
+**A -- the leash.** The invariant is now `distance(foot, hip) <= LEG_H * LEG_STRETCH_MAX`, checked on the hip and foot the capsule is actually drawn between. A planted foot that reaches LEASH_STEP of it takes its step NOW; anything left over is pulled in, and a foot that has to be pulled in stops being called planted, so the no-slide claim is not quietly bent. Landing re-plants both feet under the body.
+
+**Three real bugs were behind what he saw**, none of which the old test could have caught:
+1. The old "stranded" check allowed `LEG_H * 2.0` = 1.04 units against a leg that could span 0.75, measured only horizontally, and TELEPORTED the foot instead of stepping it.
+2. **A corrective step froze the other foot.** The settle returned out of the whole cycle, so while one foot stepped home the other stayed nailed to the world while the body walked away from it. Over a clean bot run that reached 9.9 units.
+3. `TELEPORT_UNITS` was 2.0. The creature really travels 5.9 units a second, which is 0.10 a frame -- so a yank of a whole unit sailed under the threshold and was walked off as if it were a step.
+
+Plus a self-inflicted one: the first leash trigger sat INSIDE the normal gait (a foot plants 0.63 from its hip; the trigger was 0.62), so every plant re-triggered a step and the stance count tripled, 45 -> 104 in 8 s.
+
+**And the bob turned out to cost leg.** The hip rides on the body, so `BODY_BOB * HEIGHT` = 0.20 units is 0.20 of leg spent on height before the foot can reach forward at all -- and 5B makes the bob bigger on purpose. `LEG_STRETCH_MAX` went 1.45 -> 1.8 to pay for it, and the stride is now capped per frame by how much leg is left after the CURRENT hip height.
+
+| measured at 60 fps, on the hip and foot as drawn | drift in stance | foot-to-hip | reach |
+|---|---|---|---|
+| walk rig, 3.9 u/s | 0.000000 | 0.7982 | 1.1160 |
+| walk rig, 5.9 u/s (the real game's speed) | 0.000000 | 0.8288 | 1.1160 |
+| walk rig, turning at 5.9 u/s | 0.000000 | 0.9140 | 1.1160 |
+| validator bot, level 1, no deaths | - | **1.1160 (clamped)** | 1.1160 |
+
+**Honest about the last row.** In the rig the gait never needs the clamp. In the real game it does: the unclamped worst is about 2.5 units, so something there still throws a foot further than the walk does, and the clamp is what keeps it attached. I chased it a long way and did not isolate it -- what I ruled out: the plant itself (feet land a healthy 0.66-0.76 from the hip, measured at the moment of planting), the pose order (running the cycle after the pose changed nothing), and the start-of-run teleport (excluded from the measurement; it was the 9.9). **What this means in practice: a foot can never be drawn detached, but at speed it may be dragged into place rather than stepping cleanly.** Milko's eyes on the phone decide whether that reads.
+
+**B -- readability from the game camera.** Legs thicker (0.34 -> 0.50 wide), set wider apart (HIP_WIDTH 0.46 -> 0.60) so they clear the body's silhouette instead of hiding under it, darker (8 % -> 22 % below the body's median), bob 0.05 -> 0.085 of HEIGHT and the footfall squash 0.04 -> 0.065. "Longer" is not free: the visible part of a leg is the gap between the belly and the floor, so the section-1 cap was raised from -0.620 to -0.575 (0.390 -> 0.445 above the floor, 14 % more leg). Re-checked: 2 556 vertices lifted, every one still inside the stub box.
+
+`docs/screenshots/m-legs-before-after.png` is the pair, the same instant of the same stride (t=2.42, phase 0.123, same foot down) at the game camera's own angle, lens and distance.
+
+**And an honest verdict on it: the improvement is modest.** At game distance the whole creature is about 105 pixels tall and a leg is ten of them, so thickening it 50 % moves it from nearly invisible to barely visible. What will actually sell contact is the thing Milko already suspected -- a shadow under the feet (brief 6 section 2), scoped below.
+
 ### Phase A brief 5, sections 2-5 -- the creature walks (2026-09-21)
 
 `rules.gd` and `player3d.gd` are untouched, and so are `fairness.gd`, `placement.gd`, `hazard_math.gd`, `lap_gen.gd` and every level file. The only game file besides `creature.gd` is one line in `track_test.gd` adding the dust emitter to the prewarm list. **Section 6 (the tail) is NOT done -- it needs Milko's call, see below.**
