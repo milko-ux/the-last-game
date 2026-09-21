@@ -347,6 +347,10 @@ func _begin_loading() -> void:
 	for n in _reveal:
 		n.visible = false
 	status.text = "LOADING"
+	# Say it under the rotate prompt too: a phone loading in portrait has
+	# the rotate text in the middle of the screen and this label 70 px
+	# from the top edge, where it goes unread (Milko, 2026-09-21).
+	ui.portrait_note = "LOADING"
 	_bar_back = ColorRect.new()
 	_bar_back.color = Color(1, 1, 1, 0.12)
 	_bar_back.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -440,6 +444,7 @@ func _end_loading() -> void:
 		_bar_back.queue_free()
 	state = State.WAIT
 	status.text = "TAP TO START"
+	ui.portrait_note = ""
 	if _tap_queued or _dev_autoplay:
 		state = State.STARTING
 		_start_delay = START_DELAY_S
@@ -646,6 +651,7 @@ func _input(event: InputEvent) -> void:
 		State.LOADING:
 			_tap_queued = true
 			status.text = "LOADING  ·  starts when ready"
+			ui.portrait_note = "LOADING  ·  starts when ready"
 		State.WAIT:
 			state = State.STARTING
 			_start_delay = START_DELAY_S

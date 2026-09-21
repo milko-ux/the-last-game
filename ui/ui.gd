@@ -30,6 +30,15 @@ const CTRL_MARGIN := Vector2(125.0, 118.0)
 # and draws its own HUD; it turns the text HUD off here. Default on.
 var show_hud := true
 
+# One extra line under the rotate prompt, set by whoever is loading.
+# The Phase R run's own LOADING label sits 70 px from the TOP edge, and
+# in portrait the eye is on the centred rotate prompt instead -- Milko
+# held the phone through a 6.5 s load on 2026-09-21 and never saw it.
+# Empty = nothing extra is drawn. This is only ever read inside the
+# portrait branch of _draw(), which returns BEFORE the HUD and the glass
+# controls, so it cannot reach either of them.
+var portrait_note := ""
+
 # --- Status shown in the HUD, pushed in by main.gd ---
 var level_index := 0
 var level_count := 1
@@ -357,6 +366,9 @@ func _draw() -> void:
 			Vector2(screen.x * 0.5, screen.y * 0.5 - 24), 26, Palette.EDGE)
 		centre_text(font, "This one is played sideways",
 			Vector2(screen.x * 0.5, screen.y * 0.5 + 18), 16, Palette.TEXT)
+		if portrait_note != "":
+			centre_text(font, portrait_note,
+				Vector2(screen.x * 0.5, screen.y * 0.5 + 62), 16, Palette.GOAL)
 		return
 
 	if showing_menu:
