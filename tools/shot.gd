@@ -94,6 +94,12 @@ func _process(_delta: float) -> bool:
 				RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_PRIMITIVES_IN_FRAME),
 				RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME)])
 			print("SHOT monoliths=%s" % [test.field.monolith_counts()])
+			# Brief 5's leash, measured in the REAL game (the carry line can
+			# pull the player in ways the walk rig cannot).
+			print("LEASH max foot-to-hip as drawn %.4f (planted %.4f) of reach %.4f" % [
+				test.player.creature.max_reach_seen(),
+				test.player.creature.max_reach_planted(),
+				test.player.creature.reach()])
 			_print_triangle_budget()
 			return true
 		return false

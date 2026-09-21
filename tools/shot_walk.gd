@@ -37,6 +37,9 @@ var _plant := [Vector3.ZERO, Vector3.ZERO]
 var _planted := [false, false]
 var _max_drift := 0.0
 var _stances := 0
+var _max_hip := 0.0             # the leash number: worst foot-to-hip distance
+var _max_hip_planted := 0.0
+var _jumps := 0
 var _vy := 0.0
 
 
@@ -108,6 +111,7 @@ func _process(delta: float) -> bool:
 	_drive(delta)
 	_aim()
 	if _t < _warm:
+		_creature.reset_reach_seen()
 		return false
 	if slide:
 		return _measure()
@@ -169,6 +173,7 @@ func _drive(delta: float) -> void:
 	if jump and _t > _warm + 1.0 and _rig.on_ground:
 		_vy = 6.5
 		_rig.on_ground = false
+		_jumps += 1
 		_creature.on_jump(1.3)
 	if not _rig.on_ground:
 		_vy -= 18.0 * delta
@@ -196,6 +201,13 @@ func _measure() -> bool:
 	for i in 2:
 		var down: bool = _creature.foot_planted(i)
 		var pos: Vector3 = _creature.foot_pos(i)
+		# The leash, checked EVERY frame -- the number the zero-drift test
+		# was missing: a foot can be perfectly still and still be half a
+		# body behind where the leg could reach.
+		var to_hip: float = (pos - _creature.hip_pos(i)).length()
+		_max_hip = maxf(_max_hip, to_hip)
+		if down:
+			_max_hip_planted = maxf(_max_hip_planted, to_hip)
 		if down and not _planted[i]:
 			_plant[i] = pos
 			_stances += 1
@@ -203,7 +215,13 @@ func _measure() -> bool:
 			_max_drift = maxf(_max_drift, (pos - _plant[i]).length())
 		_planted[i] = down
 	if _t > _warm + 8.0:
-		print("SLIDE dir=%s speed=%.2f stances=%d  MAX FOOT DRIFT DURING STANCE = %.6f units" % [
-			dir, speed, _stances, _max_drift])
+		var reach: float = _creature.reach()
+		print("SLIDE dir=%s%s speed=%.2f stances=%d jumps=%d" % [
+			dir, " +jump" if jump else "", speed, _stances, _jumps])
+		print("  MAX FOOT DRIFT DURING STANCE   = %.6f units" % _max_drift)
+		var drawn: float = _creature.max_reach_seen()
+		print("  MAX FOOT-TO-HIP AS DRAWN       = %.4f units   reach %.4f   %s" % [
+			drawn, reach, "OK" if drawn <= reach + 0.0005 else "OVER THE LEASH"])
+		print("  ... of which PLANTED           = %.4f units" % _creature.max_reach_planted())
 		return true
 	return false

@@ -163,6 +163,27 @@ const BODY_ROLL_DEG := 4.0             # toward the stance leg
 const FOOT_SQUASH := 0.04              # on each footfall, multiplied with the beat
 const TURN_CUT_DEG := 90.0             # a sharper turn than this plants early
 const SETTLE_STEP_S := 0.18            # the one corrective step home, see _settle_feet
+# THE LEASH (2026-09-21, after Milko's phone test). "Zero drift during
+# stance" was true and measured the wrong thing: nothing said how far a
+# planted foot was allowed to be from its hip, so at speed and after a
+# jump a foot could sit most of a body length behind the creature,
+# visibly off the body, and catch up late. The invariant now is the one
+# that matters and it is checked every frame:
+#
+#     distance(foot, hip) <= LEG_H * LEG_STRETCH_MAX, always
+#
+# A planted foot that reaches LEASH_STEP of that takes its next step NOW
+# instead of waiting for its turn in the cycle; if it somehow still ends
+# up outside, it is pulled in on the spot rather than left hanging.
+const REACH := LEG_H * LEG_STRETCH_MAX
+# Of REACH, the point at which a planted foot must step NOW. It has to
+# sit ABOVE the normal gait or it fires inside it: a foot plants a
+# quarter of a stride ahead (0.35) of a hip 0.52 up, which is already
+# 0.63 from the hip, and the same at lift-off. At 0.82 (= 0.62) every
+# single plant re-triggered a step and the stance count tripled. 0.92
+# (= 0.69) leaves the walk alone and still catches a real stranding well
+# before the leg runs out at 0.754.
+const LEASH_STEP := 0.92
 const TELEPORT_UNITS := 2.0            # a jump bigger than this is not a stride
 const JUMP_TUCK := 0.25                # of LEG_H, how far the feet tuck up
 const JUMP_TUCK_LERP := 0.25
@@ -323,6 +344,8 @@ var _foot_t := [99.0, 99.0]            # seconds since this foot last landed
 var _face := Vector2(0.0, 1.0)         # the direction the feet point
 
 var _dust_p: CPUParticles3D = null
+var _max_reach_seen := 0.0             # the leash, measured where the leg is DRAWN
+var _max_reach_planted := 0.0          # ... and the half of it that matters
 
 signal footfall(side: int, strength: float)
 
@@ -413,6 +436,7 @@ func _step_cycle(delta: float) -> void:
 	var airborne := not _on_ground()
 	if airborne or mode != Mode.ALIVE:
 		_tuck_feet(delta)
+		_leash()
 		return
 
 	# The direction the feet point, and how fast we are going.
@@ -452,6 +476,7 @@ func _step_cycle(delta: float) -> void:
 			q.y += sin(PI * _settle_u) * STEP_HEIGHT * 0.5
 			_foot[i] = q
 			_down[i] = false
+		_leash()
 		return
 
 	# Standing still: the cycle is PARKED, not merely stalled. Leaving the
@@ -460,16 +485,17 @@ func _step_cycle(delta: float) -> void:
 	# it finished -- the two fought each other for ever.
 	if _idle_t > IDLE_SETTLE_S and speed <= IDLE_SPEED:
 		_settle_feet()
+		_leash()
 		return
 
-	# A foot can never be stranded. The carry line can pull the player
-	# forward hard, and a leg swimming across the field to catch up is
-	# exactly what this brief exists to stop.
+	# The leash. A planted foot that has run out of leg steps NOW rather
+	# than waiting for its half of the cycle. The old test here allowed
+	# LEG_H * 2.0 = 1.04 units -- well past the 0.75 the leg can actually
+	# span -- measured only horizontally, and TELEPORTED the foot instead
+	# of stepping it. That was the foot Milko saw left behind.
 	for i in 2:
-		var hh := _hip(i)
-		if Vector2(_foot[i].x - hh.x, _foot[i].z - hh.z).length() > LEG_H * 2.0:
-			_foot[i] = _plant_point(i, stride_len)
-			_down[i] = true
+		if _down[i] and _foot[i].distance_to(_hip(i)) > REACH * LEASH_STEP:
+			_step_now(i, stride_len)
 	for i in 2:
 		_foot_t[i] += delta
 		var lp := fposmod(_stride + (0.5 if i == 1 else 0.0), 1.0)
@@ -495,6 +521,7 @@ func _step_cycle(delta: float) -> void:
 			p.y += sin(PI * u) * STEP_HEIGHT
 			_foot[i] = p
 			_down[i] = false
+	_leash()
 
 
 
@@ -519,6 +546,32 @@ func _land_foot(i: int, strength: float) -> void:
 	_down[i] = true
 	footfall.emit(i, strength)
 	_dust(_foot[i], DUST_STEP if strength > 0.5 else 0)
+
+
+# Put this foot into its swing immediately, wherever the cycle is, and
+# move the cycle to match so the other foot keeps its half.
+func _step_now(i: int, stride_len: float) -> void:
+	_foot_from[i] = _foot[i]
+	_foot_to[i] = _plant_point(i, stride_len)
+	_down[i] = false
+	_settling = -1
+	_stride = fposmod(0.5 - (0.5 if i == 1 else 0.0), 1.0)
+	_last_lp = [fposmod(_stride, 1.0), fposmod(_stride + 0.5, 1.0)]
+
+
+# The last word on the invariant: after everything else has had its say,
+# no foot is further from its hip than the leg can span. A foot that has
+# to be pulled in was not really standing on anything, so it is no longer
+# called planted -- which keeps "a planted foot never moves" true.
+func _leash() -> void:
+	for i in 2:
+		var hip := _hip(i)
+		var seg := _foot[i] - hip
+		var d := seg.length()
+		if d > REACH and d > 0.0001:
+			_foot[i] = hip + seg * (REACH / d)
+			_foot[i].y = maxf(_foot[i].y, _floor_y())
+			_down[i] = false
 
 
 # A turn sharper than TURN_CUT_DEG: whichever foot is in the air stops
@@ -656,6 +709,27 @@ func foot_pos(i: int) -> Vector3:
 	return _foot[i]
 
 
+func hip_pos(i: int) -> Vector3:
+	return _hip(i)
+
+
+func reach() -> float:
+	return REACH
+
+
+func max_reach_seen() -> float:
+	return _max_reach_seen
+
+
+func max_reach_planted() -> float:
+	return _max_reach_planted
+
+
+func reset_reach_seen() -> void:
+	_max_reach_seen = 0.0
+	_max_reach_planted = 0.0
+
+
 # Brief 5 section 2. Capsules in the creature's own shader, with the melt
 # off (they are not the body) and the same "drawn on top" depth squeeze,
 # so they never z-fight with the belly they are tucked into.
@@ -722,6 +796,14 @@ func _place_legs(uniform: float) -> void:
 		leg.visible = true
 		var hip := _hip(i)
 		var foot: Vector3 = _foot[i]
+		# The acceptance number, taken here and nowhere else: this is the
+		# hip and the foot the capsule is actually drawn between. Measured
+		# from outside, it is always a frame stale -- the body moves after
+		# the creature has posed itself -- which reads as a false failure.
+		var to_hip := foot.distance_to(hip)
+		_max_reach_seen = maxf(_max_reach_seen, to_hip)
+		if _down[i]:
+			_max_reach_planted = maxf(_max_reach_planted, to_hip)
 		# Brief 5 section 4: the feet splay outward through the landing
 		# squash, then come back as the squash releases.
 		var splay := _punch(_land_t, LAND_IN_S, LAND_OUT_S) * LAND_SPLAY
@@ -892,6 +974,13 @@ func _process(delta: float) -> void:
 			spin_angle = TAU * SPIN_TURNS * _ease_in_out(u)
 			spin_tilt = -deg_to_rad(SPIN_TILT_DEG) * pow(sin(PI * _ease_in_out(u)), 2.0)
 		if grounded and not _was_on_ground:
+			# Landing re-plants both feet UNDER THE BODY. They used to
+			# resume from wherever the cycle left them before take-off,
+			# which is the other half of the foot-left-behind report.
+			_feet_home()
+			_stride = 0.0
+			_last_lp = [0.0, 0.5]
+			_foot_t = [0.0, 0.0]
 			_dust(_foot[0].lerp(_foot[1], 0.5), DUST_LAND)
 			footfall.emit(-1, 1.0)
 			_land_t = 0.0
@@ -968,6 +1057,13 @@ func _process(delta: float) -> void:
 		var feet: Vector3 = _player.global_position
 		_ring.global_position = Vector3(feet.x, minf(feet.y, 0.0) + 0.02, feet.z)
 		_ring.visible = mode != Mode.GONE
+	# The leash again, now that the pose is final. _step_cycle has to run
+	# BEFORE the pose (its bob and roll are inputs to it), so the clamp it
+	# does in there is against last frame's hip -- and the hip moves every
+	# frame. This is the one that makes the invariant true of what is
+	# actually drawn.
+	if mode == Mode.ALIVE:
+		_leash()
 	# The legs last: the hips are read off the pose that was just set.
 	_place_legs(maxf(uniform, 0.0))
 
