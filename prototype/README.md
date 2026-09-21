@@ -1,21 +1,28 @@
 # Phase R prototype — "an album you survive"
 
-## Where we are (2026-09-21, after Milko's phone test)
+## Where we are (2026-09-21, the performance job is DONE)
 
 **The game is ONE ENDLESS RUN** (`PHASE_E_BRIEF_1_ENDLESS.md`): how far can you get. **Stage 1 (the run) is built and accepted; Stage 2 (menu + leaderboard) is NOT started and must not be started until Milko says so.** Reports below, newest first.
 
-### The phone test, 2026-09-21 (iPhone, fresh reload, build `ac4bbfb`)
+### THE PHONE HITS 60 FPS. The GPU job is closed (2026-09-21, iPhone, build `5648f06`)
 
-**IT LOADS. The hang is gone.** Sequence: ROTATE YOUR PHONE -> TAP TO START -> playable, everything working. **The 0.75 render scale is KEPT** -- Milko: "looks good and feels very smooth".
+Milko's readings, after the four commits of 2026-09-21:
 
 | | reading |
 |---|---|
-| Start screen | `page 2.5 s · tap - · load 6.5 s [validate 4.6 (lap 0 live, 1 passes, 0 cleared, 2.7 s cpu over 4.8 s), prewarm 1.8 (54 items, 340 frames)]`, 3D 0.75 of 1179x2379; frame 20.2 avg / 163.0 worst |
-| Bar 12, lap 0 | frame **21.9 avg / 24.0 worst, cpu 2.8 / 4.0**, audio -1374 (+0), sync +30 ms |
+| Load (landscape) | **2.2 s** `[validate 0.0 (lap 0 shipped), prewarm 2.0 (54 items, 71 frames)]` |
+| Start screen | 17.1 avg / 49 worst |
+| **Play, lap 0 bar 17** | **16.7 avg / 22.0 worst, cpu 1.1 / 2.0** · audio -1372 (+0) |
+| Portrait | LOADING shows under ROTATE YOUR PHONE |
+| Faceted pillars | "not noticeable, keep them" |
 
-**1a helped and did not finish it: 28.7 -> 21.9 avg, cpu still only 2.8. Target is 16.7. Still GPU-bound, so step 1b is next** (Milko's call, and the right one: brief 6 adds lights and shadows, which re-render the same geometry again -- triangles cost double there, shader octaves do not). Caveats on the comparison: he read bar **12 of the endless run**, not bar 11 of `?level=1`, and no `?scale=1` back-to-back was taken, so "0.75 did it" is inference from last night's 28.7, not a paired reading. Direction is clear enough; not worth another trip. The 163 ms worst frame is a one-off on the start screen (first-frame compile), only worth chasing if it ever lands inside a run.
+**16.7 ms is 60 fps -- the target exactly**, and the CPU at 1.1 ms means nothing is straining. The road there: 28.7 avg (2026-09-20) -> 21.9 (the 0.75 render scale) -> **16.7** (the cheap pillars). The load: 6.5 s -> **2.2 s**, and `validate 0.0 (lap 0 shipped)` is the verdict fingerprint working on a real device -- the words to look for if it ever regresses.
 
-### Built on 2026-09-21, after that test (four commits, not yet seen on a phone)
+- **Step 1c (the monolith shader) is PARKED FOR GOOD unless brief 6 needs it.** Monoliths are now the biggest single item in frame (69 880 triangles), so if lights and shadows cost more than they can afford, this is the lever that already has a plan: fewer noise octaves, or the baked 512 px noise tile from the brief 2b report.
+- `audio -1372 (+0)` is the expected read-out: the device's constant offset, correctly ignored. `(+0)` on a short run is normal -- the correction only moves once drift accumulates.
+- The 49 ms worst frame on the start screen is a one-off (first-frame compile), the same one-off as before, and never lands inside a run.
+
+### What those four commits were (2026-09-21, all now confirmed on the phone)
 
 1. **The verdict fingerprint an export can match** (`4d7e9f4`). `LapGen.source_hash()` no longer md5s the layout SCRIPTS -- an export ships them compiled (`placement.gdc`), so that hash could never match the one `lap_stats.gd` stamped from the readable sources, and every device rejected `levels/verdicts.json` and validated every lap live. It is now `LAYOUT_VERSION` + `Fairness.VERSION` + the two JSON data files (the only things shipped byte for byte). **Bump `LapGen.LAYOUT_VERSION` whenever placement / rules / hazard_math / fairness change what a lap looks like, then re-run `tools/lap_stats.gd -- laps=0-9 write=1`** -- and forgetting is caught, not trusted to memory: where the sources are readable (the editor and every tool, i.e. everywhere a verdict is made) `stored_verdict()` also compares the scripts and refuses the file if they moved without a bump. Verified both ways: `FROM shipped` on every lap tested and `validate 0.0 (cached)` on the load line; tampering the recorded script hash makes it refuse and fall back to live. The regenerated file is byte-identical except the fingerprint.
 2. **LOADING is said under the rotate prompt** (`bd79823`). `ui.gd` gained one optional line (`portrait_note`) drawn below ROTATE YOUR PHONE; `track_test` sets and clears it. **The glass controls cannot be touched by this**: the portrait branch of `_draw()` returns before the HUD and the controls are drawn at all.
@@ -44,8 +51,7 @@ Why not Godot's own mesh LOD: `generate_lods=true` is on in the `.import`, but m
 3. **The drift correction is switched OFF on the phone, silently.** `audio -1374` is the device's CONSTANT reported offset and is meant to be ignored (SYNC_OFFSET_S was tuned by ear on top of whatever the device reports) -- that part is by design, and is why nothing sounded wrong. But `DRIFT_IGNORE_S` (0.25 s, "a gap this big is a glitch, not drift") tests the RAW gap, not the change since the baseline, so 1.374 s trips it on every frame and `_follow_audio` returns before correcting anything (`(+0)` confirms it). The thing it protects against -- audio slipping over a long deathless run -- is exactly what an endless run is. On the Mac the offset is 15-60 ms, so the gate never fired here. Fix: gate on `d - _drift_base`, one line.
 
 ### Next
-1. **Milko reads the phone**: does the load line drop from 6.5 s to about 2 s, does LOADING show, and what is the frame average at bar 12. Nothing built on 2026-09-21 has been seen in a browser from here.
-2. **Step 1c (monolith shader) stays parked** -- monoliths are now the biggest item in frame (69 880 triangles) but 1b may already be enough; his number decides.
+**Phase A brief 5, the walk** (`PHASE_A_BRIEF_5_WALK.md`) -- Milko started it on 2026-09-21, **section 1 only**, and section 2 does not begin until he says so.
 
 ### Rules that bit me -- keep them
 - **Nothing that can raise, and no `JavaScriptBridge`, inside a `RenderingServer.frame_post_draw` callback.** They increment an int and nothing else. An error in there aborts the rest of the callback silently.
