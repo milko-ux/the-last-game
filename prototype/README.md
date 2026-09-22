@@ -11,25 +11,49 @@
 | Performance | **DONE and closed.** The phone holds 60 fps. |
 | Phase A brief 5 (the walk) | **Sections 1-5 done**, accepted by Milko "for now" on 2026-09-21. Pushed: `25a2445`, `fe2e784`, `8ff427b`, `f460f67`. |
 | Brief 5 section 6 (the tail) | **SKIPPED on purpose.** This model has no tail, it has two rear flippers, so the brief's z-range sway would swing both together. Milko: handle it when the model is regenerated. |
+| Code health check | **DONE 2026-09-22.** Read-only pass, then six commits of housekeeping. See below. |
 | Brief 6 (light) | Not started. Sections 1+2 are the agreed next build. |
+
+### 2026-09-22 — the housekeeping session (no gameplay or art changed)
+
+A read-only health check first, then the fixes Milko approved. **No game code was touched**: not `creature.gd`, not `rules.gd`, not `placement.gd`, nothing under `prototype/` except this file. Layout hashes and the verdict fingerprint are untouched by construction — re-checked anyway, `LAP READY lap 0 shipped` and the validator bot still clears level 1 with `deaths=0`.
+
+- **The build was shipping the documentation.** Godot imports every PNG under `res://`, so 41 screenshots and 10 concept images were being converted to compressed textures and packed into `index.pck` — 21.5 MB, downloaded by the phone on every fresh load. `docs/` is now in the Phase R preset's `exclude_filter`. **`index.pck` 43 MB -> 22.8 MB, 358 packed files -> 176.**
+- **Builds now export OUTSIDE the project**, to `../the-last-game-build/`. A build folder inside `res://` is scanned by Godot, which is why each export was packing the *previous* export's icons into itself. `build/` and `game test 1/` are deleted; `tools/package_web.sh` needed no change (it reads the path from the preset) and `tools/serve.py` defaults to the new location. The one hand-made file in there, the original 2026-08-08 itch.io zip, was kept at `../the-last-game-build/archive/`.
+- **The Godot MCP plugin is OFF.** Three dev bridges were starting with the game on the phone; two checked the filesystem for a command file on *every frame* and one injected synthetic input if it found one. Deleting the autoload lines does not work — `plugin.gd` re-injects them and saves `project.godot` every time it starts — so the *plugin* is disabled, which makes its own `_exit_tree()` remove them. `addons/*` is now excluded too. To get it back: enable `godot_mcp` in the editor's Plugins tab, and remember to turn it off again.
+- **Three hooks now enforce the rules that used to be prose** (`.claude/settings.json`, scripts in `.claude/hooks/`): a push gate that raises a permission prompt carrying the staged diff and the outgoing commits; a guard that speaks up when a layout source is edited without a `LapGen.LAYOUT_VERSION` bump; and a 0.95 s GDScript parse check on every `.gd` write, which filters the false "Identifier not found" that `--check-only` reports for the seven autoloads.
+- **This file lost 60 KB.** The closed-phase reports moved to `docs/PHASE_LOG.md`; "Where we are", the current phase and the reference sections stayed. 100 KB -> 40 KB.
+- **`CLAUDE.md` was rewritten.** It still described the pre-pivot synthwave maze game. It now describes the endless run, the current art direction, and Milko's hard rules as rules.
+
+**Known warnings, deliberately left** (full list in the session's report): two real footguns in the legacy 2D files — a parameter named `scale` in `entities/board.gd:160` and a local named `tr` in `ui/account_panel.gd:447`, both shadowing Godot built-ins. Not biting anything today. The ~30 "return value discarded" warnings are Godot noise. The integer divisions in `beat_clock.gd` and `rules.gd` were each checked and are all deliberate floor divisions.
 
 ### KNOWN ISSUE — a foot can still be dragged in the real game
 
-The leash (brief 5A) guarantees `distance(foot, hip) <= LEG_H * LEG_STRETCH_MAX` on the hip and foot the capsule is actually drawn between, so **a foot can never be drawn detached from the body again**. In the walk rig the gait never even reaches the clamp (0.83 of 1.12 at the real game's speed, 0.91 turning).
+The leash (brief 5A) guarantees `distance(foot, hip) <= LEG_H * LEG_STRETCH_MAX` on the hip and foot the capsule is actually drawn between, so **a foot can never be drawn detached from the body again**. In the walk rig the gait never even reaches the clamp.
 
-**But in the real game the clamp is active**: something throws a foot to about **2.5 units** from its hip, and the clamp is what pulls it back to 1.116. The visible result is a foot that is *dragged* into place rather than stepping cleanly at speed. Milko accepted the legs with this known.
+**But in the real game the clamp is active**, and it is worse than the 2.5 units recorded earlier: **the unclamped worst reproduces at 3.22** (`tools/autoplay.gd -- level=1 fps=60`, `deaths=0`). It varies run to run — 1.80 at three bars, 3.22 at six, 2.79 at twelve, 2.10 for the human bot — so it is a repeating *spike*, not something cumulative.
 
-**Already ruled out — do not re-check these:**
-- **The plant itself.** Measured at the moment of planting, feet land a healthy **0.66-0.76** from the hip. The gait is not what is wrong.
-- **The pose order.** The step cycle used to run before the body pose, so it read last frame's hip while the legs were drawn against this one. Moving `_step_cycle` to after the pose changed the number not at all.
-- **The start-of-run teleport.** The player is placed at z=10 after the creature has posed, which reads as 9.9 units on the first frame. That frame is now excluded from the measurement (`_ported`), and it was the whole of the old 9.9 reading.
-- **Three bugs that WERE real and are fixed**: the old stranded check allowed 1.04 units against a 0.75 leg and teleported instead of stepping; a corrective step froze the OTHER foot while the body walked away from it; and `TELEPORT_UNITS` was 2.0 when a real frame moves 0.10, so a one-unit yank was walked off as a stride.
+**Ruled out on 2026-09-22, with measurements — do not re-check these:**
+- **The jump.** The bots never jump. They only set `move_dir`; `_on_jump()` is reachable only from a real tap. The spike happens in runs with zero jumps.
+- **The gait, even at the real game's speed.** The rig was re-run at 5.9 units/s, turning, and jumping — a case the old table never covered. Worst readings: forward 0.7982, forward+jump 0.8290, turn 0.9140, **turn+jump at game speed 1.0875**, against a clamp of 1.1160. The rig never once reaches it.
+- Earlier, and still true: the plant itself (feet land 0.66-0.76 from the hip), the pose order, and the start-of-run teleport.
 
-**How to measure it:** `tools/autoplay.gd -- level=1 fps=60` prints a `LEASH` line over a clean, death-free run (max as drawn, planted, and the unclamped worst). `tools/shot_walk.gd -- slide=1 dir=forward|turn|strafe [jump=1] [speed=1.5]` is the rig version and is the reliable instrument; `tools/shot.gd` prints `LEASH` too but its captures are flaky (see below).
+**The top hypothesis, and the two prints that settle it.** The rig has a flat infinite floor and its stand-in player can never drop below `y = 0`. The real one can, and two things line up:
+
+1. `prototype/creature.gd:460` — the teleport guard measures only sideways:
+   `var moved := Vector3(here.x - _ground.x, 0.0, here.z - _ground.z)`
+   That middle `0.0` throws away vertical movement, so `TELEPORT_UNITS` **cannot see the creature move up or down, however far**.
+2. `prototype/player3d.gd:70` — `if y <= 0.0 and floor_here: y = 0.0` snaps the player up from whatever depth it had fallen to, in one frame. `Rules.FALL_DEATH_Y` is **-3.0**, so that snap can be just under 3 units, it is not a death, and it happens freely inside a "death-free" run. **The worst measured is 3.2165.**
+
+**Next session starts here:** one `print` at that snap logging the height it snapped from, one in `_leash()` logging the frame the raw distance peaks. Same frame = proven. Cheap cross-check: run `autoplay` on a level with no pits and see whether the spike disappears.
+
+**A second, separate bug found on the way** — worth fixing whichever way the first one lands. In `_place_legs`, `prototype/creature.gd:906`, `if _ported: continue` skips the rest of the loop body — which includes `leg.global_transform = ...`, **the line that actually draws the leg**. So on any frame flagged as a teleport the legs are not repositioned at all: they hold last frame's pose while the body moves on. The measurement and the drawing are being skipped by the same flag, which means the legs go wrong on exactly the frames nobody is measuring. This alone could be the drag Milko sees. It changes how the creature looks, so it gets flagged before it is changed.
+
+**How to measure it:** `tools/autoplay.gd -- level=1 fps=60` prints a `LEASH` line over a clean, death-free run (max as drawn, planted, and the unclamped worst). `tools/shot_walk.gd -- slide=1 dir=forward|turn|strafe [jump=1] [speed=1.5]` is the rig version and is the reliable instrument; `tools/shot.gd` prints `LEASH` too but its captures are flaky (see below). Note the rig's `slide=1` report prints the clamped numbers only — it never prints the unclamped worst, which is why the rig looked clean for so long.
 
 ### NEXT, in this order
 
-1. **A read-only code health check.** Nothing built. `prototype/creature.gd` has roughly doubled over briefs 5 and 5A/B and carries several interacting timers (the stride phase, the settle clock, the leash, the tuck), which is where the known issue above is hiding.
+1. **The foot bug — the two prints above, first.** `prototype/creature.gd` has roughly doubled over briefs 5 and 5A/B and carries five interacting clocks (the stride phase, the settle clock, the leash's recovery step, the jump tuck, the mode timer), which is where this is hiding. Do not split the file until the bug is found; splitting it now just moves the bug house.
 2. **Brief 6 sections 1 + 2 as ONE slice** (`PHASE_A_BRIEF_6_LIGHT.md`): one light direction published as a global uniform, then drop shadows, **creature first** (body + both feet), hazards after. Taking section 1 with it avoids hardcoding a light direction and then reworking it.
    - **Cost: zero net draw calls.** All shadows go in one `MultiMeshInstance3D` -- one call however many casters -- and it REPLACES the blob the creature already draws under itself (`_ring` in `creature.gd`). The real cost is fill rate (transparent quads), a fraction of a percent of the frame at bar 11.
    - **Why it is next and not more leg tuning:** "it floats" is a contact problem. At game distance the whole creature is about 105 px tall and a leg is ten of them, so no amount of thickening solves what a shadow solves directly.
