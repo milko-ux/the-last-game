@@ -107,14 +107,49 @@ const BUILDINGS := [
 ]
 const BUILDING_BASE_Y := -22.0    # as monoliths.gd: the foot sits far below the slab
 
-# The idle: the creature looks at the camera, then away, then back.
 # The creature stands a little nearer the camera than the point the
 # camera looks at, which drops it below the centre line and makes it
 # bigger: a figure dead centre reads as a placeholder.
 const CREATURE_Z := -3.0
-const TURN_OFF_AXIS := 20.0     # degrees the body is turned off the lens
-const GLANCE_EVERY_S := 4.5
-const GLANCE_AWAY := Vector3(-7.0, 1.0, -6.0)   # where "away" is, relative to it
+
+# ------------------------------------------------------------
+# THE GREETING (the idle)
+# ------------------------------------------------------------
+# It faces the lens, looks around, and hops now and then. All of it is
+# creature.gd's own pose code driven from here — the body turn is the
+# stand's yaw, the head and eye are set_look_target(), the hop is
+# on_jump() over player3d.gd's own jump numbers. Nothing animates the
+# creature but the creature.
+#
+# The script, in order, as [what, seconds]. Written out rather than
+# rolled at random so it is the same every time Milko opens the menu and
+# the same in a screenshot.
+# 18 seconds round, three hops: one about every six. Two hops in twenty
+# seconds read as asleep; a hop every two reads as a fidget.
+const IDLE := [
+	["greet", 2.4],
+	["left", 2.0],
+	["hop", 1.6],
+	["greet", 1.6],
+	["right", 2.0],
+	["hop", 1.6],
+	["greet", 1.4],
+	["left", 1.8],
+	["hop", 1.6],
+	["greet", 2.0],
+]
+const BODY_TURN_DEG := 24.0     # how far the BODY turns on a look-around
+const LOOK_SIDE_DEG := 58.0     # ... and how far off the lens the eye goes
+const LOOK_DIST := 8.0          # how far away the thing it looks at is
+const LOOK_EYE_Y := 1.1         # at about its own eye height
+const TURN_LERP := 3.2          # the body turn eases at this rate per second
+
+# The hop is the GAME's jump, scaled down: a greeting, not an escape.
+# Airtime falls with it, so the one full turn still lands on the ground.
+const Player3D := preload("res://prototype/player3d.gd")
+const HOP_SCALE := 0.8
+const HOP_V := Player3D.JUMP_VELOCITY_PX * Player3D.WORLD_PER_PX * HOP_SCALE
+const HOP_G := Player3D.GRAVITY_PX * Player3D.WORLD_PER_PX
 
 var _stage: Node3D
 var _stand: Stand
@@ -123,8 +158,11 @@ var _overlay: Overlay
 var _name_edit: LineEdit
 var _build_step := 0
 var _beat_t := 0.0
-var _glance_t := 0.0
-var _looking_away := false
+var _idle_step := 0
+var _idle_t := 0.0
+var _base_yaw := 0.0            # the yaw that faces the lens
+var _turn := 0.0                # the body's current turn off it, degrees
+var _turn_want := 0.0
 var _alpha := 0.0             # the overlay fades up while the world is built
 
 @onready var rig: Node3D = $CameraRig
@@ -152,6 +190,7 @@ class Stand extends Node3D:
 	var move_dir := Vector2.ZERO
 	var y := 0.0
 	var on_ground := true
+	var vy := 0.0
 	var creature: Node3D = null
 
 
@@ -227,6 +266,8 @@ func _build_next() -> void:
 		2:
 			_build_creature()
 		3:
+			_warm_dust()
+		4:
 			FrameMeter.load_mark("menu", "", true)
 			FrameMeter.load_done()
 	_build_step += 1
@@ -286,25 +327,120 @@ func _build_buildings() -> void:
 
 func _build_creature() -> void:
 	_stand = Stand.new()
-	# Turned to face the camera: the model's eye looks down +z (the way
-	# the player runs, away from the camera), so the stand is turned
-	# half a turn and the eye comes back toward the lens.
-	# Three-quarters on to the lens, not dead on: the body is turned to
-	# the camera's own bearing (yaw 24° off the field axis) and then
-	# TURN_OFF_AXIS back, and the look target brings the eye the rest of
-	# the way. A figure square to the camera reads as a cut-out.
-	_stand.rotation.y = PI + deg_to_rad(CameraRig.CAMERA_YAW_DEG - TURN_OFF_AXIS)
+	# Square to the lens. The model's eye looks down +z — the way the
+	# player runs, which is AWAY from the camera — so the stand is turned
+	# half a turn plus the camera's own bearing (its yaw off the field
+	# axis), and the eye comes back down the lens.
+	_base_yaw = PI + deg_to_rad(CameraRig.CAMERA_YAW_DEG)
+	_stand.rotation.y = _base_yaw
 	_stand.position.z = CREATURE_Z
 	_stage.add_child(_stand)
 	_creature = load("res://prototype/creature.tscn").instantiate()
 	_stand.add_child(_creature)
 	_stand.creature = _creature
-	_creature.set_look_target(_camera_point())
+	_begin_idle("greet")
+
+
+# The landing's dust puff has a material of its own, and the web renderer
+# compiles a material the first time something using it is DRAWN — in the
+# run that is what prewarm.gd is for, and the same rule holds here or the
+# first hop's landing is a hitch. One invisible copy, drawn once, from
+# prewarm's own code rather than a second copy of it.
+func _warm_dust() -> void:
+	var warm: Node3D = load("res://prototype/prewarm.gd").new()
+	_stage.add_child(warm)
+	warm.global_position = _stand.global_position
+	warm.warm_bursts([_creature.dust()])
+	warm.step()
 
 
 func _camera_point() -> Vector3:
 	var cam := get_viewport().get_camera_3d()
 	return cam.global_position if cam != null else Vector3(0.0, 8.0, -14.0)
+
+
+# WHY THE LOOK TARGET IS MOVED BEFORE IT IS HANDED OVER.
+# creature.gd measures the angle to its target in WORLD space and then
+# applies it as a yaw in its OWN frame. In the run those are the same
+# frame — player3d never rotates — so it is exactly right there. The
+# menu's creature IS rotated (it is turned to face the camera), so a
+# world point would come out as a yaw off by that whole rotation: the
+# first build of this screen had it looking a quarter-turn wide, which
+# is the "it stands in profile" Milko saw. The target is therefore
+# rotated into the stand's frame first, and the creature then does the
+# same sum it does in the run.
+func _look_point(world: Vector3) -> Vector3:
+	if _stand == null:
+		return world
+	var here: Vector3 = _stand.global_position
+	return here + _stand.global_transform.basis.inverse() * (world - here)
+
+
+# A point LOOK_DIST away, `off` degrees to one side of the lens, at eye
+# height: something off in the fog for it to look at.
+func _side_point(off_deg: float) -> Vector3:
+	var here: Vector3 = _stand.global_position
+	var to_cam := _camera_point() - here
+	to_cam.y = 0.0
+	if to_cam.length() < 0.001:
+		to_cam = Vector3.BACK
+	var dir := to_cam.normalized().rotated(Vector3.UP, deg_to_rad(off_deg))
+	return here + dir * LOOK_DIST + Vector3(0.0, LOOK_EYE_Y, 0.0)
+
+
+# ------------------------------------------------------------
+# THE GREETING, one step at a time
+# ------------------------------------------------------------
+func _begin_idle(what: String) -> void:
+	if _creature == null:
+		return
+	match what:
+		"left":
+			_turn_want = BODY_TURN_DEG
+			_creature.set_look_target(_look_point(_side_point(LOOK_SIDE_DEG)))
+		"right":
+			_turn_want = -BODY_TURN_DEG
+			_creature.set_look_target(_look_point(_side_point(-LOOK_SIDE_DEG)))
+		"hop":
+			_turn_want = 0.0
+			_creature.set_look_target(_look_point(_camera_point()))
+			_hop()
+		_:
+			_turn_want = 0.0
+			_creature.set_look_target(_look_point(_camera_point()))
+
+
+func _tick_idle(delta: float) -> void:
+	if _creature == null:
+		return
+	_idle_t += delta
+	if _idle_t >= float(IDLE[_idle_step][1]):
+		_idle_t = 0.0
+		_idle_step = (_idle_step + 1) % IDLE.size()
+		_begin_idle(String(IDLE[_idle_step][0]))
+	# The body eases after the head instead of snapping with it.
+	_turn = lerpf(_turn, _turn_want, 1.0 - exp(-TURN_LERP * delta))
+	_stand.rotation.y = _base_yaw + deg_to_rad(_turn)
+	# The hop, run exactly as player3d runs it: the same launch speed and
+	# gravity scaled by HOP_SCALE, the creature told once at take-off.
+	# It lands itself — the landing squash, the footfall and the dust
+	# puff are creature.gd noticing on_ground come back.
+	if not _stand.on_ground:
+		_stand.vy -= HOP_G * delta
+		_stand.y += _stand.vy * delta
+		if _stand.y <= 0.0:
+			_stand.y = 0.0
+			_stand.vy = 0.0
+			_stand.on_ground = true
+		_stand.position.y = _stand.y
+
+
+func _hop() -> void:
+	if not _stand.on_ground:
+		return
+	_stand.on_ground = false
+	_stand.vy = HOP_V
+	_creature.on_jump(2.0 * HOP_V / HOP_G)
 
 
 # ------------------------------------------------------------
@@ -313,7 +449,7 @@ func _camera_point() -> Vector3:
 func _process(delta: float) -> void:
 	if _painted >= 1:
 		FrameMeter.first_frame_painted()
-	if _build_step <= 3:
+	if _build_step <= 4:
 		_build_next()
 	_alpha = minf(1.0, _alpha + delta * 2.2)
 
@@ -325,17 +461,7 @@ func _process(delta: float) -> void:
 		_beat_t -= bar_s
 		BeatClock.downbeat.emit(0)
 
-	# The idle glance: at the lens, away, back.
-	if _creature != null:
-		_glance_t += delta
-		if _glance_t >= GLANCE_EVERY_S:
-			_glance_t = 0.0
-			_looking_away = not _looking_away
-			if _looking_away:
-				_creature.set_look_target(_stand.global_position + GLANCE_AWAY)
-			else:
-				_creature.set_look_target(_camera_point())
-				_creature.play_glance()
+	_tick_idle(delta)
 
 	if _loading:
 		_tick_loading()

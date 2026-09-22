@@ -59,7 +59,16 @@ func prepare(bursts: Array) -> void:
 	for model in BUILDING_MODELS:
 		_queue.append(_building.bind(model, false))
 		_queue.append(_building.bind(model, true))
-	# The particle bursts: copies of the real emitters, particles too small to see.
+	warm_bursts(bursts)
+
+
+# The particle bursts on their own: copies of the real emitters, with the
+# particles too small to see. The main menu (prototype/menu.gd) wants
+# only this part — the creature hops there, and the landing's dust puff
+# is a material like any other, so it has to be drawn once before the
+# first hop lands on it. The menu has no use for the rest of the rack.
+func warm_bursts(bursts: Array) -> void:
+	scale = Vector3.ONE * TINY
 	for b in bursts:
 		_queue.append(_burst.bind(b))
 	_total = _queue.size()

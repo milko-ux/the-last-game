@@ -9,14 +9,24 @@ extends SceneTree
 # is. This is that tool, and nothing else — no driving, no measuring.
 #
 #   godot --path . --resolution 2400x1080 --rendering-method gl_compatibility \
-#         -s tools/shot_scene.gd -- scene=res://prototype/menu.tscn \
-#         out=docs/screenshots/e-menu.png at=2.5
+#         --fixed-fps 60 -s tools/shot_scene.gd -- \
+#         scene=res://prototype/menu.tscn out=docs/screenshots/e-menu.png at=2.5
+#
+# ALWAYS PASS --fixed-fps 60 (the standing rule, see tools/shot_walk.gd).
+# Without it every frame's delta is however long that frame really took —
+# a cold shader compile is half a second, saving a 2400x1080 PNG is
+# another tenth — so `at=` lands somewhere different every run and a
+# moving thing (a hop) cannot be aimed at. With it, `at` IS the scene's
+# own clock and the same number gives the same frame every time.
 #
 #   scene=res://...   the scene to open (required)
 #   out=path.png      where the image goes
 #   at=SEC            how long the scene runs before the shot (default 2.5:
 #                     long enough for a fade-in and a breath)
 #   fps=60            the fixed step, so the shot is the same every time
+#   frames=N step=S   a BURST: N shots from `at`, S seconds apart, named
+#                     out-01.png, out-02.png ... One run instead of N,
+#                     which is how a moving thing (a hop) gets found.
 #   tap=X,Y[;X,Y...]  tap the screen there first (screen pixels, not the
 #                     2D canvas: multiply by the stretch scale), so a
 #                     panel that only exists after a tap can be shot.
@@ -30,6 +40,9 @@ var scene_path := "res://prototype/menu.tscn"
 var out := "/tmp/scene.png"
 var at := 2.5
 var fps := 60
+var frames := 1
+var step := 0.1
+var _shots := 0
 var taps: Array[Vector2] = []
 var tap_at := 1.0
 const TAP_GAP := 0.5
@@ -50,6 +63,8 @@ func _initialize() -> void:
 			"out": out = kv[1]
 			"at": at = float(kv[1])
 			"fps": fps = int(kv[1])
+			"frames": frames = maxi(1, int(kv[1]))
+			"step": step = float(kv[1])
 			"tap_at": tap_at = float(kv[1])
 			"tap":
 				for one in kv[1].split(";"):
@@ -89,13 +104,17 @@ func _process(delta: float) -> bool:
 		ev.position = where
 		Input.parse_input_event(ev)
 		print("SHOT SCENE tapped %.0f,%.0f at %.2f s" % [where.x, where.y, _t])
-	if _t < at and _frames < MAX_FRAMES:
+	if _t < at + _shots * step and _frames < MAX_FRAMES:
 		return false
 	var img := get_root().get_viewport().get_texture().get_image()
 	var dir := out.get_base_dir()
 	if dir != "" and not DirAccess.dir_exists_absolute(dir):
 		DirAccess.make_dir_recursive_absolute(dir)
-	var err := img.save_png(out)
-	print("SHOT SCENE saved %s  (%d x %d, %d frames, %s)" % [out, img.get_width(), img.get_height(),
-		_frames, "ok" if err == OK else "ERROR %d" % err])
-	return true
+	var path := out
+	if frames > 1:
+		path = "%s-%02d.%s" % [out.get_basename(), _shots + 1, out.get_extension()]
+	var err := img.save_png(path)
+	print("SHOT SCENE saved %s  t=%.2f  (%d x %d, %d frames, %s)" % [path, _t,
+		img.get_width(), img.get_height(), _frames, "ok" if err == OK else "ERROR %d" % err])
+	_shots += 1
+	return _shots >= frames or _frames >= MAX_FRAMES
