@@ -43,7 +43,7 @@ const DEATH_PENALTY := 40
 const NOTE_BONUS := 15
 
 # LOADING is last so the numbers the tools print for the other states stay the same.
-enum State { WAIT, STARTING, RUN, DEAD, WON, GAMEOVER, LOADING }
+enum State { WAIT, STARTING, RUN, DEAD, WON, GAMEOVER, LOADING, PAUSED, COUNTIN }
 
 @onready var music: AudioStreamPlayer = $Music
 @onready var field: Node3D = $Field
@@ -131,6 +131,19 @@ var _load_phase := 0                 # 0 generate lap 0, 1 build its nodes, 2 pr
 # start at RUN_LIVES when they cross into lap 1. rules.gd still decides
 # what is lethal; this scene is the referee.
 const RUN_LIVES := 3
+# PAUSE (2026-09-22). The song and the clock stop together
+# (BeatClock.pause(), the death freeze's own call) and start together
+# (BeatClock.seek(song_time), the rewind's own call, at the very time
+# they stopped), so there is nothing to drift: one clock, one seek. The
+# count-in shows the world for COUNTIN_S before time moves again, so a
+# hazard is never a surprise and a frozen screen is not a study aid for
+# long. Distance, lives and the fairness numbers are not touched: nothing
+# samples time in these two states. Wall time spent paused is kept out of
+# run_seconds.
+const COUNTIN_S := 3.0
+var _countin := 0.0
+var _paused_ms := 0
+var _pause_began_ms := 0
 # RETRY starts the song later into the intro: a run-up of RETRY_RUNUP_S
 # instead of the full 8.6 s. The first run of a session keeps the full one.
 const RETRY_RUNUP_S := 4.0
@@ -642,14 +655,36 @@ func _input(event: InputEvent) -> void:
 		if state == State.RUN:
 			_on_jump()
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE:
-		_to_menu()
+		if state == State.RUN and endless:
+			pause_run()
+		elif state == State.PAUSED:
+			resume_run()
+		elif state != State.COUNTIN:
+			_to_menu()
 		return
 	var pressed: bool = (event is InputEventScreenTouch and event.pressed) \
 		or (event is InputEventMouseButton and event.pressed) \
 		or (event is InputEventKey and event.pressed and not event.echo)
 	if not pressed:
 		return
+	var at: Variant = event.position if (event is InputEventScreenTouch or event is InputEventMouseButton) else null
 	match state:
+		State.RUN:
+			if at != null and endless and hud.pause_rect.has_point(at):
+				pause_run()
+		State.PAUSED:
+			if at == null:
+				return
+			if hud.resume_rect.has_point(at):
+				resume_run()
+			elif hud.restart_rect.has_point(at):
+				BeatClock.stop()
+				retry_pending = true
+				get_tree().change_scene_to_file(RUN_SCENE)
+			elif hud.home_rect.has_point(at):
+				_to_menu()
+		State.COUNTIN:
+			pass
 		State.LOADING:
 			_tap_queued = true
 			status.text = "LOADING  ·  starts when ready"
@@ -712,6 +747,13 @@ func _process(delta: float) -> void:
 				state = State.RUN
 		State.RUN:
 			_tick_run(delta)
+		State.PAUSED:
+			pass
+		State.COUNTIN:
+			_countin -= delta
+			hud.countin = maxf(_countin, 0.0)
+			if _countin <= 0.0:
+				_resume_now()
 		State.DEAD:
 			_freeze -= delta
 			if _freeze <= 0.0:
@@ -1033,14 +1075,54 @@ func _game_over() -> void:
 		int(round(BeatClock.progress_of(furthest_t) * 100.0)), deaths, score]
 
 
+func pause_run() -> void:
+	if state != State.RUN:
+		return
+	state = State.PAUSED
+	_pause_began_ms = Time.get_ticks_msec()
+	BeatClock.pause()
+	motion.frozen = true
+	player.move_dir = Vector2.ZERO
+	ui.stick_touch_id = -1
+	ui.jump_touch_id = -1
+	ui.set_process_input(false)      # the joystick and JUMP sleep under the panel
+	hud.paused = true
+	FrameMeter.note("pause")
+	print("PAUSE t=%.3f bar=%d audio=%.3f distance=%d lives=%d" % [BeatClock.song_time(), BeatClock.current_bar(),
+		music.get_playback_position(), distance_m, lives])
+
+
+func resume_run() -> void:
+	if state != State.PAUSED:
+		return
+	state = State.COUNTIN
+	_countin = COUNTIN_S
+	hud.paused = false
+	hud.countin = _countin
+
+
+# The count-in is over: time moves again from the exact instant it stopped.
+func _resume_now() -> void:
+	hud.countin = 0.0
+	_paused_ms += Time.get_ticks_msec() - _pause_began_ms
+	var t := BeatClock.song_time()
+	BeatClock.seek(t)
+	motion.frozen = false
+	ui.set_process_input(true)
+	state = State.RUN
+	FrameMeter.note("resume")
+	print("RESUME t=%.3f bar=%d audio=%.3f distance=%d lives=%d paused_total=%.1f s" % [BeatClock.song_time(),
+		BeatClock.current_bar(), music.get_playback_position(), distance_m, lives, float(_paused_ms) / 1000.0])
+
+
 # Section 8 — the leaderboard. The facts of this run that travel with the
 # entry (for a later cheat check: a distance beyond run_seconds x the
 # scroll speed is impossible). run_seconds is WALL time from the start
-# of the run, which a rewind cannot shrink.
+# of the run, which a rewind cannot shrink, minus the time spent paused.
 func _run_props() -> Dictionary:
 	return {
 		"laps": BeatClock.current_lap(),
-		"run_seconds": int(round(float(Time.get_ticks_msec() - _run_started_ms) / 1000.0)),
+		"run_seconds": int(round(float(Time.get_ticks_msec() - _run_started_ms - _paused_ms) / 1000.0)),
 		"deaths": deaths,
 		"build": str(ProjectSettings.get_setting("application/config/version", "dev")),
 		"layout": LapGen.LAYOUT_VERSION,
@@ -1116,6 +1198,8 @@ func _win() -> void:
 # The run's HUD: the distance, BEST, lives, the shield meter. No score, no
 # combo readout, no song progress bar.
 func _update_run_hud() -> void:
+	hud.show_pause = state == State.RUN and bot == null
+	ui.dead_zone = hud.pause_rect if hud.show_pause else Rect2()
 	score_label.text = Hud.metres(distance_m) if state != State.LOADING and state != State.WAIT else ""
 	score_label.scale = Vector2.ONE
 	score_label.modulate.a = 1.0

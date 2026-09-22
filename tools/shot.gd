@@ -7,6 +7,10 @@ extends SceneTree
 #   ... jump=1      (jump at that moment, shoot when the creature's eye faces the camera)
 #   ... kill=1      (walk into the nearest hazard there; shoot the frame the killer flashes)
 #   ... seq=8 step=0.5   (eight frames half a second apart, out-01.png .. out-08.png)
+#   ... pause=1     (at the bar: pause the run, hold 2 s, resume, sit out the
+#                    count-in, then print PAUSE CHECK: the clock and the audio
+#                    before and after, and the drift 2 s on -- the proof the
+#                    song and the clock stayed together; no screenshot)
 #
 # Opens the run scene, starts it, waits until the song reaches the
 # given bar (plus `after` seconds), saves the frame and quits. Audio
@@ -35,6 +39,10 @@ var _jumped := false
 var kill := false            # kill=1: walk into the nearest hazard at the bar, shoot the death frame
 var _killed := false
 var seq := 1                 # seq=N step=S: N frames S seconds apart from the bar (out-01.png ...)
+var pause_check := false     # pause=1: see the header
+var _pc_stage := 0
+var _pc_wait := 0.0
+var _pc := {}
 var step := 0.5
 var _seq_taken := 0
 var _seq_next_t := 0.0
@@ -109,6 +117,8 @@ func _process(_delta: float) -> bool:
 			return true
 		return false
 	var t: float = clock.song_time()
+	if pause_check:
+		return _pause_check_step(t, _delta)
 	if end_screen:
 		if test.state == test.State.GAMEOVER:
 			_end_wait += _delta
@@ -150,6 +160,50 @@ func _process(_delta: float) -> bool:
 	return false
 
 
+# The proof, in stages: 0 wait for the bar · 1 paused, hold 2 s · 2 the
+# count-in runs · 3 running again, 2 s of drift measurement · done.
+func _pause_check_step(t: float, delta: float) -> bool:
+	match _pc_stage:
+		0:
+			if test.state == test.State.RUN and clock.current_bar() >= bar and t >= clock.bar_start(bar) + after:
+				_pc = {"t0": clock.song_time(), "a0": test.music.get_playback_position(),
+					"d0": clock.audio_drift_ms(), "dist0": test.distance_m, "lives0": test.lives}
+				test.pause_run()
+				_pc_stage = 1
+		1:
+			_pc_wait += delta
+			if _pc_wait >= 1.0 and not _pc.has("shot"):
+				# The pause panel itself, once, for the record.
+				_pc["shot"] = true
+				var img := root.get_viewport().get_texture().get_image()
+				print("SHOT saved=%s err=%d (pause panel)" % [out, img.save_png(out)])
+			if _pc_wait >= 2.0:
+				_pc["t_paused"] = clock.song_time()
+				test.resume_run()
+				_pc_stage = 2
+		2:
+			if test.state == test.State.RUN:
+				_pc["t1"] = clock.song_time()
+				_pc["a1"] = test.music.get_playback_position()
+				_pc_wait = 0.0
+				_pc_stage = 3
+		3:
+			_pc_wait += delta
+			if _pc_wait >= 2.0:
+				var local: float = clock.local_t(clock.song_time())
+				print("PAUSE CHECK clock: before %.3f  while paused %.3f  after resume %.3f  (moved by %+.1f ms across the pause)" % [
+					_pc.t0, _pc.t_paused, _pc.t1, (_pc.t1 - _pc.t0) * 1000.0])
+				print("PAUSE CHECK audio: before %.3f  after resume %.3f  (audio - clock at resume %+.1f ms)" % [
+					_pc.a0, _pc.a1, (_pc.a1 - clock.local_t(_pc.t1)) * 1000.0])
+				print("PAUSE CHECK 2 s on: audio %.3f vs clock %.3f -> %+.1f ms; drift readout before %+.1f ms, now %+.1f ms" % [
+					test.music.get_playback_position(), local, (test.music.get_playback_position() - local) * 1000.0,
+					_pc.d0, clock.audio_drift_ms()])
+				print("PAUSE CHECK distance %d -> %d  lives %d -> %d  paused_total %.1f s" % [
+					_pc.dist0, test.distance_m, _pc.lives0, test.lives, float(test._paused_ms) / 1000.0])
+				return true
+	return false
+
+
 func _setup_args() -> void:
 	for a in OS.get_cmdline_user_args():
 		var kv: PackedStringArray = a.split("=")
@@ -170,6 +224,7 @@ func _setup_args() -> void:
 			"kill": kill = kv[1] == "1"
 			"seq": seq = int(kv[1])
 			"step": step = float(kv[1])
+			"pause": pause_check = kv[1] == "1"
 
 
 func _setup() -> void:

@@ -56,6 +56,9 @@ var _account_rect := Rect2()
 # of them is visible this screen ignores input entirely, so a tap on
 # a panel never falls through to the menu or results underneath.
 var overlays: Array = []
+# A screen rect the touch controls IGNORE (the run's pause button lives
+# there): a tap inside it is neither a joystick grab nor a jump.
+var dead_zone := Rect2()
 
 # Name row on the menu. The player already HAS a name by the time they
 # get here (Profile hands one out on first launch), so this is about
@@ -222,6 +225,10 @@ func _input(event: InputEvent) -> void:
 			return
 
 	var screen := get_viewport_rect().size
+
+	if (event is InputEventScreenTouch or event is InputEventMouseButton) and event.pressed \
+			and dead_zone.size != Vector2.ZERO and dead_zone.has_point(event.position):
+		return
 
 	if event is InputEventScreenTouch:
 		if event.pressed:

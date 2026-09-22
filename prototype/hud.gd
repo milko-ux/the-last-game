@@ -48,6 +48,18 @@ var menu_rect := Rect2()
 var end_rank := ""
 var end_join := false
 var join_rect := Rect2()
+# PAUSE (2026-09-22): a small glass pill top-left while the run is on,
+# the panel (RESUME · RESTART · HOME) while paused, and the 3-2-1 count
+# back in. The run scene owns the state; this only draws it.
+var show_pause := false
+var paused := false
+var countin := 0.0          # seconds left of the count-in, 0 = none
+var pause_rect := Rect2()
+var resume_rect := Rect2()
+var restart_rect := Rect2()
+var home_rect := Rect2()
+const PAUSE_AT := Vector2(88.0, 20.0)   # clear of the notch (menu.gd MARGIN)
+const PAUSE_SIZE := 66.0                 # 48 pt on the phone
 
 
 func _process(delta: float) -> void:
@@ -77,8 +89,13 @@ func _draw() -> void:
 	if endless and end_shown:
 		_draw_end_screen(screen, font)
 		return
+	if endless and paused:
+		_draw_pause_panel(screen, font)
+		return
 	if endless:
 		_draw_run_hud(screen)
+		if countin > 0.0:
+			_draw_countin(screen, font)
 	else:
 		# glass trough
 		draw_rect(Rect2(rect.position - Vector2(2, 2), rect.size + Vector2(4, 4)), Color(1, 1, 1, 0.05), true)
@@ -129,6 +146,7 @@ var _last_word := ""
 
 # Lives (left of the distance) and the shield ring (right of it).
 func _draw_run_hud(screen: Vector2) -> void:
+	_draw_pause_button()
 	var cx := screen.x * 0.5
 	for i in lives_max:
 		var c := Vector2(cx - SIDE_GAP - i * 22.0, HUD_Y)
@@ -149,6 +167,44 @@ func _draw_run_hud(screen: Vector2) -> void:
 		draw_arc(rc, r, -PI * 0.5, -PI * 0.5 + TAU * maxf(f, shield_pop), 32, Color(col.r, col.g, col.b, 0.95), 3.0, true)
 	if shield_armed:
 		draw_circle(rc, 4.0, Color(col.r, col.g, col.b, 0.9))
+
+
+# The pause pill: two bars in a glass square, top-left.
+func _draw_pause_button() -> void:
+	pause_rect = Rect2(PAUSE_AT, Vector2(PAUSE_SIZE, PAUSE_SIZE))
+	if not show_pause:
+		return
+	_pill(pause_rect, Color(1, 1, 1), 0.7)
+	var c := pause_rect.get_center()
+	for dx in [-6.0, 6.0]:
+		draw_rect(Rect2(c + Vector2(dx - 2.5, -11.0), Vector2(5.0, 22.0)), Color(1, 1, 1, 0.85), true)
+
+
+# Near-opaque on purpose: a paused screen must not be a way to study the
+# hazards at leisure (the end screen's dim is lighter; there is nothing
+# left to study there).
+func _draw_pause_panel(screen: Vector2, font: Font) -> void:
+	draw_rect(Rect2(Vector2.ZERO, screen), Color(0.04, 0.05, 0.08, 0.93), true)
+	var c := screen * 0.5
+	_text(font, "PAUSED", c + Vector2(0, -110), 30, Color(1, 1, 1, 0.92))
+	resume_rect = Rect2(c + Vector2(-150, -60), Vector2(300, 72))
+	_pill(resume_rect, Palette.EDGE, 1.0)
+	_text(font, "RESUME", resume_rect.get_center(), 28, Color(1, 1, 1, 0.95))
+	restart_rect = Rect2(c + Vector2(-150, 26), Vector2(300, 66))
+	_pill(restart_rect, Color(1, 1, 1), 0.8)
+	_text(font, "RESTART", restart_rect.get_center(), 18, Color(1, 1, 1, 0.85))
+	home_rect = Rect2(c + Vector2(-150, 106), Vector2(300, 66))
+	_pill(home_rect, Color(1, 1, 1), 0.8)
+	_text(font, "HOME", home_rect.get_center(), 18, Color(1, 1, 1, 0.85))
+
+
+# 3 · 2 · 1, big, with the world visible behind it so what is coming can
+# be seen coming.
+func _draw_countin(screen: Vector2, font: Font) -> void:
+	var n := int(ceil(countin))
+	var frac: float = countin - floorf(countin)   # 1 -> 0 within the second
+	var size := int(96 + 40 * frac)
+	_text(font, str(n), screen * 0.5 + Vector2(0, -20), size, Color(1, 1, 1, 0.5 + 0.5 * frac))
 
 
 func show_end(distance: String, best: String, new_best: bool) -> void:
