@@ -3,8 +3,11 @@
 
     tools/serve.py            -> http://localhost:8099   (this Mac only)
     tools/serve.py tls        -> https://<LAN-IP>:8443   (phones / colleagues)
-    tools/serve.py tls build/phase-r   -> serve a different build folder
-                                          (default: "game test 1")
+    tools/serve.py tls <dir>  -> serve a different build folder
+
+The default is the Phase R build. Builds are written OUTSIDE the project
+(../the-last-game-build/) on purpose: a build folder inside res:// gets
+scanned by Godot, and the next export packs the previous export's icons.
 
 Lives in the repo on purpose. It used to live in a scratch directory
 that got wiped whenever the session restarted, which meant the test
@@ -17,7 +20,7 @@ correct — that has cost hours twice.
 import http.server, ssl, os, sys, socket, subprocess
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
-BUILD = os.path.join(ROOT, "game test 1")
+BUILD = os.path.join(ROOT, "..", "the-last-game-build", "phase-r")
 CERT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".certs")
 
 

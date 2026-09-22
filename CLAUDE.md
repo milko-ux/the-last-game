@@ -68,8 +68,10 @@ Godot 4.7.1 lives at `/Users/benim/Downloads/Godot.app/Contents/MacOS/Godot` —
 
 ```
 tools/package_web.sh "Web (Phase R)"     # export + zip, refuses a stale zip
-tools/serve.py tls build/phase-r         # HTTPS on the LAN, port 8443, self-signed
+tools/serve.py tls                       # HTTPS on the LAN, port 8443, self-signed
 ```
+
+Builds are written to `../the-last-game-build/` — **outside the project on purpose.** A build folder inside `res://` is scanned by Godot, so the next export packs the previous export's icons into itself.
 
 A Godot web build needs a **secure context**: plain `http://<LAN-IP>` fails with *"Secure Context — Check web server configuration"*. That's the expected failure, not a broken build. The phone accepts the certificate warning once.
 
@@ -81,13 +83,14 @@ A Godot web build needs a **secure context**: plain `http://<LAN-IP>` fails with
 
 - [ ] Remove the three `MCP*Bridge` autoloads from `project.godot` and disable the `godot_mcp` plugin.
 - [ ] Set `Progress.UNLOCK_ALL = false` (this also turns off the frame readout and the dev URL switches).
-- [ ] Confirm the export preset's `exclude_filter` still keeps `docs/`, `build/`, `game test 1/`, `tools/`, the unused MP3s and the 2D game out of the pack.
+- [ ] Confirm the Phase R preset's `exclude_filter` still keeps `docs/` out of the pack (it is 21.5 MB of screenshots and concept art).
+- [ ] Still shipping, and still to be decided: `addons/godot_mcp` and the old 2D game, both of which register autoloads in `project.godot` and so cannot simply be filtered out. `tools/` and the two unused MP3s stay in deliberately — `?autoplay=1` loads `res://tools/autoplay.gd`, and `?level=N` needs the tempo-shifted songs.
 
 ## Repo map
 
 **`prototype/` — the game.** `beat_clock.gd` (autoload `BeatClock`: song time, beats, seek) · `rules.gd` (constants, per-level knobs, death rules) · `hazard_math.gd` (where is it / is it lethal at time t) · `placement.gd` (deterministic layout from the beatmap) · `fairness.gd` (the mandatory validator) · `lap_gen.gd` (`LAYOUT_VERSION`) · `field.gd` (builds tiles, hazards, notes; floor/pit queries) · `hazard3d.gd` + `hazard_{slammer,sweeper,gate,orbiter,volley}.gd` · `player3d.gd` (movement, jump, hit box) · `creature.gd` (everything you see: pose, walk, dust, death) · `camera_rig.gd` · `monoliths.gd` · `props/props.gd` · `flat_mats.gd` · `motion.gd` · `palette.gd` (`WorldPalette`) · `prewarm.gd` · `frame_meter.gd` · `hud.gd` · `track_test.gd/.tscn` (the run scene) · `level_select.gd/.tscn`.
 
-**`tools/`** — all dev-only, never shipped: `autoplay.gd` (headless bots) · `plan_stats.gd` (layout + `HASH`) · `lap_stats.gd` (regenerates `verdicts.json`) · `shot.gd` / `shot_walk.gd` / `shot_creature.gd` · `frame_probe.gd` · `package_web.sh` · `serve.py` · `make_endless_audio.py` · `decimate_models.py`.
+**`tools/`** — dev-only. Note they are still *packed* into the web build: `?autoplay=1` loads `res://tools/autoplay.gd` at runtime, so filtering them out would break that switch. They cost a few KB. `autoplay.gd` (headless bots) · `plan_stats.gd` (layout + `HASH`) · `lap_stats.gd` (regenerates `verdicts.json`) · `shot.gd` / `shot_walk.gd` / `shot_creature.gd` · `frame_probe.gd` · `package_web.sh` · `serve.py` · `make_endless_audio.py` · `decimate_models.py`.
 
 **`levels/`** — `curriculum.json` (knobs per level) · `verdicts.json` (shipped fairness verdicts).
 
