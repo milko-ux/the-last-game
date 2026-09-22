@@ -6,4 +6,4 @@
 2. **`talo.cfg` must be named in the export preset's `include_filter`** (`export_presets.cfg`). `.cfg` files aren't Godot resources, so the exporter silently drops them — the build then ships dark with no error anywhere.
 3. `accept_gzip` must stay off for web-facing HTTP paths; the browser already decompresses.
 4. Reading leaderboards needs no login; submitting needs the session headers (`X-Talo-Alias/Player/Session`). Talo keeps one entry per player per board and only replaces it when the new score is beats the old one, so submitting every run is safe.
-
+5. **Every leaderboard listing is cached on Talo's side for 600 s** (`routes/protected/leaderboard/entries.ts`, `withResponseCache ttl: 600`, keyed by board + query). A freshly posted or freshly deleted entry can take up to ten minutes to show or to go, for everyone — the game cannot bust it. The POST response's own `position` is live, which is why the end screen's rank comes from the post, not from a re-read.

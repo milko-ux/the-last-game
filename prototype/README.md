@@ -2,7 +2,27 @@
 
 ## Where we are (2026-09-22) — start here
 
-**The game is ONE ENDLESS RUN** (`PHASE_E_BRIEF_1_ENDLESS.md`): how far can you get. **Stage 1 (the run) is built and accepted. Stage 2 section 7 (the main menu) is built and PASSED on the phone. Section 8 (the leaderboard) is BUILT and blocked on ONE thing only Milko can do: create the `distance` board in the Talo dashboard (`docs/TALO_SETUP.md` 3b). Until then the board reads "Leaderboard not found".** Everything below is newest first; this section is the whole state, the rest is the detail behind it.
+**The game is ONE ENDLESS RUN** (`PHASE_E_BRIEF_1_ENDLESS.md`): how far can you get. **Stage 1 (the run) is built and accepted. Stage 2 is DONE on the Mac: section 7 (the menu) passed on the phone, section 8 (the leaderboard) is built, live-checked against the real Talo API end to end, and waits for Milko's phone test.** Everything below is newest first; this section is the whole state, the rest is the detail behind it.
+
+### 2026-09-22 (late) — section 8 ACCEPTED against the real API
+
+Milko created the `distance` board. `tools/talo_check.gd` then ran the whole brief-8 acceptance for real — register → post → on GLOBAL → on MY COUNTRY → delete → gone:
+
+| step | result |
+|---|---|
+| register a throwaway account | PASS |
+| post the best, the way the run does it | PASS — `#1 GLOBAL   ·   #1 SE` (the rank line the end screen shows) |
+| posted flag set; a second post is a no-op | PASS, PASS |
+| row on GLOBAL, score = the metres, all seven props on the entry | PASS ×3 (`season, country, laps, run_seconds, deaths, build, layout`) |
+| row on MY COUNTRY (SE); country rank found | PASS, PASS |
+| delete the account; signed out; best un-posted | PASS ×3 |
+| entry gone after the delete | **PASS — after Talo's 10-minute listing cache expired** (see below) |
+
+**Screenshots:** `docs/screenshots/e-leaderboard-global.png`, `e-leaderboard-country.png` (a real row, `#1 lastgame-check-112016 · 1 234 m · SE`, live world behind), `e-end-screen.png` (guest, JOIN). All four of section 8's shots are in.
+
+**The finding — Talo caches every board listing for 600 s, and it is in their source, not a guess.** The first run of the check failed its last step: the deleted account's row was still listed. `identify` already said "Player not found"; Talo's docs promise entries go with the alias. Their public backend (TaloDev/backend) settles it: the delete route removes the alias inside the request's own transaction and `leaderboard_entry.playerAlias` cascades — erasure is immediate — but `routes/protected/leaderboard/entries.ts` wraps every listing in `withResponseCache({ ttl: 600 })`, no sliding window. A page anyone read shortly before a delete (or a post) stays as it was for up to ten minutes, for everyone, and the game cannot bust it. Measured: the row was gone at the first read after the window. Consequences, all written into `docs/TALO_GOTCHAS.md` (item 5) and `docs/TALO_SETUP.md`: the end screen's GLOBAL rank comes from the POST's own `position` (live); the country rank re-reads a page and can miss a fresh entry on a warm cache, in which case the end screen shows only `#N GLOBAL` (the check reports that as a NOTE, not a failure); the check polls up to 11 minutes for a delete to show and prints the measured time.
+
+**Nothing in the game changed for this** — tool and docs only. The served build is the one exported before the check.
 
 ### 2026-09-22 (night) — Stage 2 section 8: THE LEADERBOARD, built, waiting on the dashboard
 
@@ -24,7 +44,7 @@
 
 **Tooling found out the hard way:** `tools/shot_scene.gd` used to read the picture from `_process`, which is the PREVIOUS frame's — with a 2D screen that opened this frame it was a picture of the wrong screen, and it looked exactly like "the tap did nothing". It now reads in a one-shot `frame_post_draw` callback. `tools/shot.gd end=1` shoots the end screen (it always could).
 
-**MILKO'S TURN:** `docs/TALO_SETUP.md` section 3b — create the `distance` board (internal name exactly `distance`, Descending, Unique yes, no refresh interval). Say when it exists; I run the check and take the last two screenshots.
+~~MILKO'S TURN: create the `distance` board.~~ **Done 2026-09-22 — checked live, see the report above.**
 
 
 ### 2026-09-22 (evening) — the menu's creature GREETS you
@@ -114,7 +134,7 @@ The leash (brief 5A) guarantees `distance(foot, hip) <= LEG_H * LEG_STRETCH_MAX`
 
 ### NEXT, in this order
 
-1. **Phase E Stage 2 section 8 — the leaderboard: finish the acceptance** once the `distance` board exists (the live check, the two board screenshots, the phone test). Everything else in section 8 is built, see the report above.
+1. **Section 8's phone test** — the served build has the key: SETTINGS → REGISTER, play, die, see `#N GLOBAL` on the end screen, see the row on LEADERBOARD (up to 10 min late, that is Talo's cache), delete the account in SETTINGS → ACCOUNT. Then Stage 2 is closed.
    - **It reuses the 2D game's code, which is exactly why that code MUST STAY IN THE EXPORT**: `autoload/talo.gd` (the only file that talks to the internet), `autoload/consent.gd` (GDPR consent + the self-declared country), `ui/leaderboard_screen.gd` and `ui/account_panel.gd`. Do not "clean up" the 2D files or their autoloads — `Talo` and `Consent` ARE Stage 2's backend. `docs/TALO_GOTCHAS.md` and `docs/TALO_SETUP.md` become live reading again.
    - The backend is already live and verified end to end against the real Talo API (2026-09-02): register, play, submit, rank, delete. `talo.cfg` is gitignored and must exist locally per `docs/TALO_SETUP.md`; with no key the whole feature hides itself.
    - ~~One export detail to fix when Stage 2 lands: the "Web (Phase R)" preset has an empty `include_filter`, so it does NOT ship `talo.cfg`.~~ **Done 2026-09-22.**

@@ -145,10 +145,16 @@ Then re-export the build and the leaderboard UI appears everywhere.
   Talo's public API has no dedicated endpoint to delete a leaderboard
   entry directly (only GET/POST exist on `/v1/leaderboards/:name/entries`),
   so the entry going away is a side effect of deleting the player's
-  alias, not a deliberate step — and reads can lag a little afterward
-  (a same-session recheck right after deletion once still showed the
-  old entry; a later dashboard check showed it gone — looked like a
-  short cache delay, not a real gap).
+  alias, not a deliberate step. **Reads lag by up to TEN MINUTES, and
+  now we know why (2026-09-22, from Talo's own source):** the delete
+  itself is immediate — the alias is removed inside the request's
+  transaction and the entry cascades with it — but every entries
+  listing is cached on Talo's server for 600 seconds
+  (`withResponseCache … ttl: 600`), so a page anyone read shortly
+  before the deletion keeps showing the deleted player's row until
+  that cache expires. Not a gap in erasure, a stale page. The live
+  check (`tools/talo_check.gd`) polls for up to 11 minutes and prints
+  how long it actually took.
 - The consent text lives in `ui/account_panel.gd` (`_draw_consent`).
   If it ever changes materially, bump `VERSION` in
   `autoload/consent.gd` — players who agreed to the old text will be
