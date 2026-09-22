@@ -34,6 +34,7 @@ const NOTE_RADIUS := 1.0
 const COMBO_CAP := 4
 const START_Z := 10.0
 const SELECT_SCENE := "res://prototype/level_select.tscn"
+const RUN_SCENE := "res://prototype/track_test.tscn"
 # Score (addendum 4 section 5): distance and deaths; notes are a bonus.
 const DISTANCE_POINTS := 1000
 const DEATH_PENALTY := 40
@@ -129,6 +130,10 @@ const RUN_LIVES := 3
 # instead of the full 8.6 s. The first run of a session keeps the full one.
 const RETRY_RUNUP_S := 4.0
 static var runs_this_session := 0
+# RETRY was tapped: the run it loads starts by itself, without waiting for a
+# second tap. Static, because the scene that reads it is not the scene that
+# set it. See _end_loading().
+static var retry_pending := false
 var _lives_on := false
 
 # Distance and the shield (section 5). Distance = how far past bar 1's
@@ -448,7 +453,8 @@ func _end_loading() -> void:
 	state = State.WAIT
 	status.text = "TAP TO START"
 	ui.portrait_note = ""
-	if _tap_queued or _dev_autoplay:
+	if _tap_queued or _dev_autoplay or retry_pending:
+		retry_pending = false
 		state = State.STARTING
 		_start_delay = START_DELAY_S
 		status.text = ""
@@ -674,7 +680,14 @@ func _input(event: InputEvent) -> void:
 						_to_level_select()
 					elif pos == null or hud.retry_rect.has_point(pos):
 						BeatClock.stop()
-						get_tree().reload_current_scene()
+						# The retried run starts BY ITSELF once it has loaded — that is
+						# what the 4 s run-up is for. Without this the tap is spent on
+						# the scene change, the new run comes up on TAP TO START, and
+						# RETRY reads as having done nothing.
+						retry_pending = true
+						# The same call MENU makes. reload_current_scene() was the only
+						# thing RETRY did differently from the button that works.
+						get_tree().change_scene_to_file(RUN_SCENE)
 					return
 				Rules.LEVEL = 1
 				get_tree().reload_current_scene()
