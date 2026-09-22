@@ -1,201 +1,100 @@
-# The Last Game — Project Brief for Claude Code
+# THE LAST GAME — Project Brief for Claude Code
 
 ## Who you're working with
+
 Milko — musician/creative director (ODZ collective), self-taught builder with **zero prior coding or game-dev background**. All development happens through AI assistance. Communicates in Swedish and English.
 
 **How to work with Milko:**
-- Zero prior Godot/GDScript knowledge. The first time you use a technical term in a session (scene, node, script, signal, shader, commit, export, etc.), give a one-line plain-English explanation — an analogy helps. Never say "just tweak the X function" — always state the exact file path and show the exact code change.
-- After finishing a task, summarize in plain English: what changed, why it matters for how the game looks/feels/plays, and whether Milko needs to do anything (like re-testing on a phone).
-- Milko is hands-off from the terminal by preference now that you're running locally — execute builds and commands directly rather than dictating steps, but still narrate what you're doing and why in plain language.
-- Mobile-first lens always: touch responsiveness and phone hardware performance take priority over desktop assumptions.
-- Responds well to honest, data-backed pushback — don't just agree with an idea that works against the game or the schedule. Say so, explain why, and propose the alternative.
+- Zero prior Godot/GDScript knowledge. The first time you use a technical term in a session (scene, node, script, signal, shader, commit, export, uniform, vertex), give a one-line plain-English explanation — an analogy helps. Never say "just tweak the X function" — always state the exact file path and show the exact code change.
+- After finishing a task, summarise in plain English: what changed, why it matters for how the game looks/feels/plays, and whether Milko needs to do anything.
+- Milko is hands-off from the terminal by preference — execute builds and commands directly, but narrate what you're doing and why.
+- Mobile-first lens always: touch responsiveness and iPhone performance beat desktop assumptions.
+- Responds well to honest, data-backed pushback. Don't agree with an idea that works against the game or the schedule — say so, explain why, propose the alternative.
+
+## Milko's hard rules — these are not negotiable
+
+1. **Never push to GitHub without staging the diff and getting an explicit go-ahead.** Show `git diff --staged` and wait for a yes. No exceptions, no "this one's trivial".
+2. **One commit per section of a brief.** Not one commit per session, not one per file — per section, so any single piece can be reverted on its own.
+3. **Update "Where we are" in `prototype/README.md` at the end of every session.** It is the canonical snapshot and the first thing the next session reads. If it's stale, the next session starts wrong.
+4. **Judging how the game looks and feels is Milko's job, on his phone.** Never open a visible game window on his Mac to play or look at the game. Code only runs the game invisibly in the background (headless bots, validators and the screenshot tools).
+5. **Always run Godot from scripts with a kill switch.** A script error makes a `-s` tool spin forever and there is no `timeout` on this Mac.
+6. **Bots and tools set `Progress.save_enabled = false`** — never let one write the save file.
+7. **Never make things more complicated than they need to be — one file per real thing.** A new song = one audio file + one beatmap. A tempo variant = audio only, scaled in code. If a change needs a second copy of something that already exists, that is the signal to stop and ask whether it needs to exist at all.
 
 ## What this project is
-A mobile isometric maze game built in Godot 4 (GDScript).
+
+A mobile game built in Godot 4 (GDScript). **One endless run, driven by music.** How far can you get. The song is the level: hazards are placed from a beatmap, so the course and the track are the same thing.
 
 - **GitHub:** github.com/milko-ux/the-last-game
-- **Live/playable (web test build):** mivasthecreator.itch.io/the-last-game
-- **Target platforms:** iOS, Android (native) — itch.io web export is the testing loop before native builds
+- **Target platforms:** iOS, Android. A local HTTPS web build on Milko's iPhone is the testing loop.
+- **Active branch:** `phase-r-prototype`. Everything new lives in `prototype/`.
 
-Design synthesis: **World's Hardest Game** (punishing top-down dodge mechanics, instant restart) + **Super Mario** (jump mechanic, lives system, accessible-but-hard philosophy) + **Marble Madness** (isometric pseudo-3D aesthetic). This isn't a straight clone — the goal is a more visually compelling, more complex version of that formula, still just as brutal.
+**Read `prototype/README.md`'s "Where we are" section first, every session.** It's the live status. This file carries only what outlives any one phase. The phase-by-phase history is in `docs/PHASE_LOG.md`.
 
-## Roadmap
-Work happens in this order unless Milko says otherwise — don't jump ahead to a later phase without flagging it first.
+## The pivot — what's live and what's history
 
-- **Phase 0 — Foundation** ✅ done. Core prototype: isometric maze, jump mechanic, hazards (spinner/sweep/chain/chaser), 5 levels, deployed to itch.io.
-- **Phase 1 — Mobile Feel** ✅ done. Glass touch controls (confirmed working well on-device), responsiveness, portrait handling, performance on real phone hardware. Closed out with a framerate-independent pit-death fix and haptics on death/win.
-- **Phase 1.5 — Architecture Refactor** ✅ done. Goal: identical visual identity, more capable foundation for everything after it. Existing logic gets relocated, not rewritten from scratch.
-  - ✅ Levels become data a loader reads (`levels.json`) instead of living inline in the script.
-  - ✅ Player and each hazard type are their own reusable scenes; projection and palette moved to autoloads; UI moved to its own CanvasLayer.
-  - ✅ Real glow/bloom on the world via HDR 2D + a `WorldEnvironment`. Scoped to the world only — the glass touch controls are excluded by sitting on their own CanvasLayer.
-  - ✅ Motion trails on hazards and the player (`entities/trail.gd`). The goal marker already had an animated pulse from Phase 0.
-- **Phase 2 — Core Loop & Progression** 🔄 in progress. Difficulty tiers, checkpoints, unlock persistence, the difficulty select screen and **all 30 levels** are built. **Remaining: onboarding** (account sign-up + username) — see the note below, it overlaps Phase 3.
-- **Phase 3 — Backend & Persistence.** 🔄 in progress, backend verified live. **Built (2026-08-26)** and **tested end-to-end against the real Talo API (2026-09-02)**: Talo REST client (`autoload/talo.gd`), GDPR consent + self-declared country (`autoload/consent.gd`), account panel (consent → register/login → manage/delete), leaderboard screen (2 boards × 3 difficulties, global/country), score submission from the results screen. Talo account/game/key/six-boards are live; register→play→submit→rank→delete all confirmed working against the real backend. **Remaining:** an on-device (real phone) pass — everything so far has only been tested in a desktop browser. Forgot-password UI deliberately deferred.
-- **Phase 4 — Monetization.** Rewarded video ads only, never on death.
-- **Phase 5 — Native Build & Store Prep.** iOS export (Xcode/provisioning/App Store Connect), Android export (Play Console/signing), store listing assets, TestFlight/internal testing.
-- **Phase 6 — Launch.** Store submission, review, release, post-launch monitoring.
+The project began as an isometric neon-synthwave maze game with 30 hand-authored levels (Phases 0–3: touch controls, difficulty tiers, a Talo backend for accounts and leaderboards). **That game still exists in the repo but is no longer what's being built.** The synthwave art direction is dropped.
 
-**Deferred, agreed 2026-08-21 — restore the itch.io build.** The listing is currently private/404. Milko wants it public again so friends and testers can play, but explicitly parked it until the phases above are built. Day-to-day testing until then is local (see below). Don't spend time on itch.io before Phase 5 unless Milko raises it.
+The 2D game's files (`main.gd`, `main.tscn`, `entities/`, `ui/`, `levels.json`, and the `Iso`/`Profile`/`Consent`/`Talo` autoloads) are kept as history and as the Talo integration's home. **Nothing in `prototype/` may depend on them** — except `autoload/palette.gd` and `autoload/progress.gd`, which the prototype's HUD and unlock logic still read.
 
-### Packaging a build for itch.io
-Run `tools/package_web.sh` — it exports, zips, and then UNZIPS the archive and checks that copy contains the current last level from `levels.json`, refusing to hand over a stale zip. This exists because a stale zip has already been handed over twice; nothing errors and every file on disk looks correct, the old build just quietly runs. Never zip the build folder by hand.
+Briefs, in order: `PHASE_R_BRIEF.md` + `PHASE_R_ADDENDUM_1..4.md`, then `PHASE_E_BRIEF_1_ENDLESS.md` (the endless run, which supersedes the level-based game), then `PHASE_A_BRIEF_1..6` (art: creature, world, motion, props, walk, light).
 
-### Serving the build locally
-`tools/serve.py` (HTTP, localhost:8099) and `tools/serve.py tls` (HTTPS on the LAN for phones/colleagues, port 8443, auto-generating and refreshing its own certificate). Both live in the repo on purpose — they used to live in a session scratch directory that got wiped on every restart, so the test URL kept dying for no visible reason.
+## Art direction
 
-### Serve with no-cache headers (learned the hard way)
-Browsers cache `index.pck` aggressively, and Godot re-fetches it on every load. A stale `.pck` will silently run an OLD build while every file on disk looks correct — the symptom is the game reporting the wrong level count or missing new content, with the network tab still showing 200s. Always serve the build with `Cache-Control: no-store`, and when in doubt change the port to get a fresh origin.
+The goal is a **premium, modern 2026 look. No AI slop.** Everything in frame should read as deliberately designed and deliberately made — not as something a generator produced and nobody looked at twice.
 
-### Testing on a real phone (local, no itch.io)
-Godot web builds require a **secure context**, which browsers only grant to `localhost`/`127.0.0.1` or real HTTPS. A plain `http://<LAN-IP>` URL fails with *"Secure Context - Check web server configuration (use HTTPS)"* — this is the expected failure, not a broken build.
+- **Stone monoliths and slabs.** A dark stone field, faceted pillars, carved buildings receding into grey fog. Not black — grey fog, dim seams, one bright rim.
+- **Clay beings.** The player is a one-eyed clay creature with four flippers and two legs. It walks, it tucks in the air, it spins once per jump.
+- **Procedural textures only.** Materials are generated in shader code from noise and vertex colours. **No AI image textures in the game** — vertex colours sampled from a bake are allowed; a generated image file is not.
+- **Higgsfield is a pre-production tool, not a production one.** Use it for concept references and for image-to-3D model generation. Never for in-game textures.
+- **Colour logic is fixed and means something:** **magenta = will kill you · cyan = safe · amber = goal.** Every colour in the world lives in `prototype/palette.gd` (`WorldPalette`) and nowhere else.
 
-So serve over HTTPS with a self-signed cert (kept in the session scratchpad, never in the repo):
+## Rules that were learned the hard way — keep them
+
+- **`levels/verdicts.json` ships the fairness verdicts of laps 0–9.** After touching `placement.gd`, `rules.gd`, `hazard_math.gd`, `fairness.gd`, the curriculum or the beatmap, **bump `LapGen.LAYOUT_VERSION`** and re-run `godot --headless --path . -s tools/lap_stats.gd -- laps=0-9 write=1` (~3 min). Forget, and the phone validates every lap live — that's the difference between a 2.2 s load and a 6.5 s one.
+- **The validator bot must be judged at `fps=60`.** At 30 it can graze a wall by centimetres.
+- **Layout hashes are the proof a refactor changed nothing.** `tools/plan_stats.gd` prints `HASH level=N`; they must not change.
+- **Any new material or particle effect must be added to `prototype/prewarm.gd`**, or its first use is a frame hitch on the phone.
+- **Knobs are ALWAYS an argument** (`field.knobs_of(spec)`, `Rules.x(k)`), never a global.
+- **Nothing that can raise, and no `JavaScriptBridge`, inside a `RenderingServer.frame_post_draw` callback.**
+- **Every loading gate needs a ceiling** (`FrameMeter.LABEL_TIMEOUT_MS`, 2 s, then carry on and mark the line `TIMED OUT`).
+- **A branch behind `OS.has_feature("web")`, or anything reading a file the exporter transforms, has been tested by nothing on this Mac.**
+- **An acceptance number must measure the thing that can break.** "Zero drift during stance" was true and useless — nothing in it said how far a planted foot could be from its hip.
+- **`tools/shot.gd` is flaky for a paired screenshot** (its clock disagrees with the run's after a fast load). Use `tools/shot_walk.gd` (`--fixed-fps 60`, `cam=game`) when a frame must be reproducible.
+
+## Build, serve, test
+
+Godot 4.7.1 lives at `/Users/benim/Downloads/Godot.app/Contents/MacOS/Godot` — not on PATH, call the full path.
 
 ```
-openssl req -x509 -newkey rsa:2048 -keyout key.pem -out cert.pem -days 365 -nodes \
-  -subj "/CN=<LAN-IP>" -addext "subjectAltName=IP:<LAN-IP>,IP:127.0.0.1,DNS:localhost"
+tools/package_web.sh "Web (Phase R)"     # export + zip, refuses a stale zip
+tools/serve.py tls build/phase-r         # HTTPS on the LAN, port 8443, self-signed
 ```
 
-then a Python `http.server` wrapped in `ssl.SSLContext` on port 8443, bound to `0.0.0.0`. Get the IP with `ipconfig getifaddr en0`. The phone must accept the certificate warning once. If that ever proves insufficient, `cloudflared` is installed and gives a real trusted cert — but it exposes the build publicly, so ask Milko first.
+A Godot web build needs a **secure context**: plain `http://<LAN-IP>` fails with *"Secure Context — Check web server configuration"*. That's the expected failure, not a broken build. The phone accepts the certificate warning once.
 
-## Non-negotiables — flag before touching any of these
-Do not change or drift from these without explicitly flagging it to Milko first:
+**Always serve with `Cache-Control: no-store`.** Browsers cache `index.pck` hard, and a stale `.pck` silently runs an OLD build while every file on disk looks correct.
 
-- **Visual identity:** dark synthwave / neon aesthetic. Color logic is fixed — magenta = death, cyan = safe, amber = goal.
-- **Touch controls:** frosted-glass, Apple-style. Milko has confirmed on-device that the current glass controls feel good — don't regress this.
-- **Core loop:** 3 lives on Standard and Hard, 1 life on Extreme. Losing them all resets the loop. **Standard has checkpoints** — see the difficulty table below. (This supersedes the earlier "no mid-run checkpoints" rule; Milko changed it on 2026-08-21 when specifying the tiers.)
-- **Death screen:** must stay shareable — roast-style brag text plus clipboard copy. This is a core viral/retention mechanic, not a nice-to-have.
-- **Difficulty:** Standard/Hard/Extreme. Everyone starts on Standard; Hard and Extreme are **shown but crossed out** until Standard is cleared, so the player can see what they haven't earned. Never a free upfront choice.
+**Dev URL switches** (all behind `FrameMeter.enabled()`): `?level=N` · `?scale=X` · `?autoplay=1&live=1` · `?grad=1`.
 
-| Tier | Lives | Checkpoints | Unlocked by |
-|---|---|---|---|
-| Standard | 3 | Yes — the `C` coin | always available |
-| Hard | 3 | No | clearing every level on Standard |
-| Extreme | **1** | No | clearing every level on Standard |
+### Before any release export — checklist
 
-Clearing Standard unlocks **both** Hard and Extreme (Milko's wording was "unlock the difficulties" — change `Progress.is_unlocked()` if it should be staged instead).
-- **Ads:** rewarded video only. **Never show an ad on death** — this was explicitly rejected earlier and should not resurface.
-- **Onboarding:** guest-first. Registration is deferred to the results screen, not forced upfront. **Milko asked for upfront sign-up on 2026-08-22; this entry is the agreed outcome after pushing back** — a signup wall is the biggest drop-off point in a free game, and Talo only offers email/password + Google Play Games natively anyway (no Apple/Facebook without custom work, and offering Google on iOS may drag in Sign in with Apple).
-- **Data & privacy (GDPR/EU):** any feature that collects or stores player data (accounts, leaderboards) needs consent handling before it ships. Flag this before implementing Phase 3.
-- The Godot MCP plugin and its autoloads are dev tooling; disable them before any release export.
+- [ ] Remove the three `MCP*Bridge` autoloads from `project.godot` and disable the `godot_mcp` plugin.
+- [ ] Set `Progress.UNLOCK_ALL = false` (this also turns off the frame readout and the dev URL switches).
+- [ ] Confirm the export preset's `exclude_filter` still keeps `docs/`, `build/`, `game test 1/`, `tools/`, the unused MP3s and the 2D game out of the pack.
 
-**Note on Phase 1.5:** moving from hand-drawn rendering to scenes/shaders is a pre-approved architecture change, not a violation of the visual non-negotiables above — the goal is the identical look on a better-built foundation. Still flag it if the actual visual result (glow intensity, exact colors, control feel) ends up noticeably different from what's live now.
+## Repo map
 
-## Phase R — the pivot prototype (2026-09-14, branch `phase-r-prototype`)
-**Read `PHASE_R_BRIEF.md`, then `PHASE_R_ADDENDUM_1.md` … `PHASE_R_ADDENDUM_4.md`; they supersede the roadmap below while Phase R runs.** The synthwave art direction is dropped; the game becomes a music-driven precision game where each level is a song. The 2D game is untouched and still the project's main scene. Everything new lives in `prototype/` (see `prototype/README.md` for the run command, the file map, the tuning knobs and the **Overnight report** at its top). Status (night of 2026-09-16, addendum 4 built overnight): oblique camera at the reference angle (`camera_rig.gd` constants, input world-relative), 8 s song offset and 2-bar breathers, in-level density ramp, orbiters on 7 of 8 wave-4 bars, distance-and-deaths score, `levels/curriculum.json` (30 levels, 1-6 playable via `prototype/level_select.tscn`, the Phase R main scene), lives from level 2 with a minimal death screen. Verification is headless only: `rules.gd` decides every death and logs it, `fairness.gd` validates the layout, `tools/plan_stats.gd` generates+validates a level in seconds, `tools/autoplay.gd` has a validator-path bot (must never die; 0 deaths on levels 1-6) and a human-like bot (level 1 median 2 deaths, level 3 median 4, level 6 fails on 3-unit sweeper gaps — see the report). Screenshots via `tools/shot.gd` go to `docs/screenshots/` and get committed. Milko does the on-device feel test himself; never open a window on his Mac to "play". Web preset "Web (Phase R)" exports to `build/phase-r/`; `tools/package_web.sh "Web (Phase R)"` then `tools/serve.py tls build/phase-r`.
+**`prototype/` — the game.** `beat_clock.gd` (autoload `BeatClock`: song time, beats, seek) · `rules.gd` (constants, per-level knobs, death rules) · `hazard_math.gd` (where is it / is it lethal at time t) · `placement.gd` (deterministic layout from the beatmap) · `fairness.gd` (the mandatory validator) · `lap_gen.gd` (`LAYOUT_VERSION`) · `field.gd` (builds tiles, hazards, notes; floor/pit queries) · `hazard3d.gd` + `hazard_{slammer,sweeper,gate,orbiter,volley}.gd` · `player3d.gd` (movement, jump, hit box) · `creature.gd` (everything you see: pose, walk, dust, death) · `camera_rig.gd` · `monoliths.gd` · `props/props.gd` · `flat_mats.gd` · `motion.gd` · `palette.gd` (`WorldPalette`) · `prewarm.gd` · `frame_meter.gd` · `hud.gd` · `track_test.gd/.tscn` (the run scene) · `level_select.gd/.tscn`.
 
-**Phase E — the endless run (from 2026-09-20; read `PHASE_E_BRIEF_1_ENDLESS.md`).** The levels go away: one endless run, distance is the score. **Stage 1 (the run) is built; Stage 2 (menu + leaderboard) waits for Milko's phone test of Stage 1.** The Phase R main scene is the run itself (`prototype/track_test.tscn`, `Rules.ENDLESS` true); `prototype/level_select.tscn` is now the DEV tool (its ENDLESS RUN pill, or pick a level = the old one-level path, which must keep working — prove it with the layout hashes: `tools/plan_stats.gd` prints `HASH level=N`, and they must not change). How it fits together: `BeatClock.set_endless(true)` loops bars 1-72 (`LOOP_END_BAR` 73; `assets/audio/fuffens_endless.ogg`, re-cut with `tools/make_endless_audio.py <bar>`), `song_time()` is run time and keeps growing, run bar = lap x 72 + bar; `prototype/lap_gen.gd` decides a lap's knobs (band = lap + 1, `SEASON_SEED` + lap seeds it, lap 0 has a new-player and a graduated variant) and generates + validates it as a time-sliced job; `prototype/lap_clock.gd` shows one lap to the generator / validator as if it were a level; `prototype/field.gd` holds a rolling set of laps; knobs are ALWAYS an argument (`field.knobs_of(spec)`, `Rules.x(k)`), never a global. **`levels/verdicts.json` ships the fairness verdicts of laps 0-9 and carries a hash of placement / rules / hazard_math / fairness / curriculum / beatmap: after touching any of those, re-run `godot --headless --path . -s tools/lap_stats.gd -- laps=0-9 write=1` (about 3 minutes) or the phone validates live.** Bots: `tools/autoplay.gd -- endless=1 laps=N [grad=1 lives=1 fps=60 start_lap=N kill_bar=N]`; the validator bot must be judged at `fps=60` (at 30 it can graze a wall by centimetres). Bots and tools set `Progress.save_enabled = false` — never let one write the save file. Always run Godot from scripts with a kill switch: a script error makes a tool spin for ever and there is no `timeout` on this Mac. The web build has dev-only URL switches (`?autoplay=1&live=1&grad=1`, behind the frame-meter switch). Report: top of `prototype/README.md`.
+**`tools/`** — all dev-only, never shipped: `autoplay.gd` (headless bots) · `plan_stats.gd` (layout + `HASH`) · `lap_stats.gd` (regenerates `verdicts.json`) · `shot.gd` / `shot_walk.gd` / `shot_creature.gd` · `frame_probe.gd` · `package_web.sh` · `serve.py` · `make_endless_audio.py` · `decimate_models.py`.
 
-**Performance / feel pass (2026-09-20):** `prototype/frame_meter.gd` is the dev-only frame-time readout (top-right; on while `Progress.UNLOCK_ALL` or in a debug build) and prints a `FRAME ... events=[...]` line for any frame over 25 ms. `tools/frame_probe.gd` measures hitches, camera steps and clock evenness with the validator bot (run it with `--rendering-method gl_compatibility` and the desktop `shader_cache` folder moved away, or it hides the shader-compile hitches a web page has). `prototype/prewarm.gd` draws every material once behind TAP TO START — **any new material or particle effect must be added to it.** `BeatClock.song_time()` is a smoothed clock (frame delta, pulled toward the system clock). The downbeat camera nod + FOV punch are OFF (`NOD_DEG`, `PUNCH`): they were the "screen jumps" report. Monoliths: uniform scale, procedural stone, `_hi` meshes near the window; **rule: no AI image textures in the game** (vertex colours sampled from a bake count). ON HOLD until the endless brief (`PHASE_E_BRIEF_1_ENDLESS.md`): level-1 orbiter tuning, level-6 verdict cache. Report at the top of `prototype/README.md`.
+**`levels/`** — `curriculum.json` (knobs per level) · `verdicts.json` (shipped fairness verdicts).
 
-**Phase A (art integration, from 2026-09-17):** four briefs in order — `PHASE_A_BRIEF_1_CREATURE.md` (done: `prototype/creature.gd` + `creature.tscn`, procedural animation, report at the top of `prototype/README.md`), then world/monoliths, motion, UI. Same branch and same rules as Phase R.
+**`assets/`** — `audio/fuffens_endless.ogg` + `fuffens_beatmap.json` (the live pair) · `models/` (source GLBs) · `models/lod/` (the decimated copies the game actually loads).
 
-## Current status
-**Phase 3 in progress, backend live and verified.** The accounts/leaderboard/consent feature is coded and tested end-to-end against the real Talo API (register, play, submit a score, see it ranked, delete the account — all confirmed 2026-09-02). It still ships "dark" (invisible in-game) on any machine without a real key in `talo.cfg` — that file is gitignored on purpose, so it must be set up locally per `docs/TALO_SETUP.md` on each machine that needs it. Next: an on-device (real phone) pass.
+**Legacy, not the current game:** `main.gd`, `main.tscn`, `entities/`, `ui/`, `levels.json`, `autoload/{iso,profile,consent,talo}.gd`, `tools/check_levels.py`.
 
-- GitHub repo is live and up to date.
-- ⚠️ The itch.io page (`mivasthecreator.itch.io/the-last-game`) returned "we couldn't find your page" on 2026-08-21, so the listing is currently private/unlisted/draft rather than publicly playable. Local testing does not depend on it — export and serve the build locally instead.
-- Frosted-glass touch controls shipped and confirmed to feel good on an actual phone.
-- Known fixes already in place: missing `main.gd` resolved, export templates installed (required "Go Online" in Godot's offline mode), portrait letterboxing fixed via itch.io embed settings + Godot stretch mode.
+## Deep-dives, read on demand
 
-## Your build/test workflow in this repo
-Godot and its export templates are already installed locally — use them directly rather than asking Milko to run commands by hand.
-
-1. Before making changes, get oriented: check current scene structure, recent git history, and note anything relevant that isn't yet documented in "Repo structure" below.
-2. For build verification, run a headless export (`godot --headless --export-release "<preset>" <output_path>`) and check the log for errors/warnings before reporting a change as done.
-3. For the web build, you can drive the itch.io page via browser to visually check for regressions (broken layout, wrong colors, control visibility).
-4. **Never commit or push to GitHub without staging the diff and getting Milko's explicit go-ahead first** — the itch.io build is live, and a bad push breaks what's currently playable.
-5. Any change that touches the non-negotiables above gets flagged *before* you implement it, not after.
-6. This is a solo project — no pull requests needed. Once Milko approves a change, push straight to `origin/main`.
-7. Keep this file (`CLAUDE.md`) current — when a phase completes, update its status marker in the Roadmap section above.
-
-## Repo structure
-As of Phase 1.5, the game is split into small single-purpose files instead of one big script. A "scene" in Godot is a reusable building block (a `.tscn` file); an "autoload" is a script Godot loads once at startup that any other script can call.
-
-**Autoloads (global helpers):**
-- **`autoload/talo.gd`** (`Talo`) — the ONLY file that talks to the internet. Thin client for Talo's REST API (accounts, leaderboards); no addon. Reads `res://talo.cfg` (gitignored; copy `talo.cfg.example`, see `docs/TALO_SETUP.md`); with no key `configured()` is false and every leaderboard/account affordance in the UI hides itself. **On web it does HTTP through `JavaScriptBridge` (browser `fetch`), NOT `HTTPRequest`** — see the gotcha below. Also owns the board names (`progress-*` / `finishers-*` per tier) and the packed progress score (`level*1000 + (999-deaths)`; a clear stores as level 31).
-- **`autoload/consent.gd`** (`Consent`) — GDPR consent state (granted/date/version — bump `VERSION` if the consent text materially changes and players re-consent) plus the self-declared country code (guessed once from locale, editable, hideable; no geolocation).
-- **`autoload/iso.gd`** (`Iso`) — the isometric projection. The world underneath is a plain flat grid; isometric is only how it's DRAWN, which is what keeps level files readable as text. Everything that draws calls `Iso.to_screen()` so they all agree on where things are. Also owns `TILE`, `WALL_H`, and `set_board_size()` — the view now centres itself from the actual level dimensions, so a bigger maze in `levels.json` just works.
-- **`autoload/profile.gd`** (`Profile`) — the player's name before they have an account. Guest-first: a generated name (`GlitchSignal`, `CinderDodger`) is handed out on first launch and saved to `user://profile.save`, so nobody ever faces an empty text field. `claimed` stays false until Phase 3 registration. Local nickname only — no personal data, so still no consent needed.
-- **`autoload/progress.gd`** (`Progress`) — which difficulties are unlocked and the rules of each (lives, checkpoints). Saves to `user://progress.save`. Progression only, no personal data, so no GDPR consent needed — that starts at Phase 3.
-- **`autoload/palette.gd`** (`Palette`) — the fixed colour language (magenta = death, cyan = safe, amber = goal). Every entity reads colours from here so the meaning stays consistent. **Non-negotiable — see above.** Also owns `glow()` and the `NEON` multiplier that drive the bloom (see "How the glow works" below).
-
-**Entities (each one is its own scene):**
-- **`entities/background.gd`** — the far starfield, drawn behind everything and scaled to COVER the screen so stars never stretch out of shape. (Real parallax needs a moving camera; this game's view is fixed per level, so there's nothing to move against yet — this is the node to give a slow scroll to if that changes.)
-- **`entities/board.gd`** — draws the static world: rock floor tiles, pits, wall cubes (sorted back-to-front), the hanging island underside, and the goal marker. See "How the rock textures work" below.
-- **`entities/player.gd`** — position, jump, gravity, wall collision (axis-separated so you slide along walls instead of sticking), and its own drawing. The physics numbers are unchanged from the original, so the feel is identical.
-- **`entities/trail.gd`** — a small reusable motion ribbon (`Trail`). Remembers where something has been and draws it as shrinking, fading dots through `Palette.glow()`, so trails bloom like the rest of the neon without needing their own particle material. **Samples on a fixed time interval, not per frame**, so a trail is the same length in seconds at 30, 60 or 120fps. Used by the player and every hazard.
-- **`entities/hazard.gd`** — shared base class. `tick()` is final: it calls the subclass's `_move()`, then updates the trail and redraws, so every hazard type stays in step. Owns the box-vs-circle hit test (unchanged, so difficulty is unchanged) and the `jumpable` flag.
-- **`entities/hazard_line.gd`** — covers `patrol` and `sweep`; slides between two points. Low, so jumping clears it.
-- **`entities/hazard_chain.gd`** — orbits a pivot. TALL: `jumpable = false`, so you must go around. `arms` puts 2+ orbs on one pivot; every arm can kill.
-- **`entities/hazard_blinker.gd`** — sits still and pulses on/off; only kills while lit. Dormant blinkers still draw as a faint ring so the rhythm is readable instead of an ambush. `period`/`duty`/`phase` let several alternate with each other.
-- **`entities/hazard_chaser.gd`** — homes in on the player. Low.
-
-**UI:**
-- **`ui/account_panel.gd`** — overlay: GDPR consent screen (always first; declining just closes it), create-account/log-in form (guest name prefilled, email optional, country row), signed-in management (country, sign out, delete account + all data). Nothing talks to the network until consent is granted.
-- **`ui/leaderboard_screen.gd`** — the rankings, viewable by guests (reading is anonymous). Difficulty tabs × PROGRESS/FINISHERS boards, GLOBAL vs country filter, paging, own row highlighted, JOIN nudge for guests.
-- **`ui/ui.gd`** — HUD, the frosted-glass touch controls, the results/share screen and the portrait "rotate your phone" prompt. Sits on a `CanvasLayer` so it always draws on top of the world. Owns all touch/mouse input and reports up via signals (`jump_pressed`, `restart_requested`, `copy_requested`). **The glass control drawing here is carried over unchanged from what Milko confirmed on-device — treat edits to it as touching a non-negotiable.** The CanvasLayer is also what will let world glow/bloom be added later without blooming the controls.
-
-**Root:**
-- **`main.gd`** — now just the referee: owns the run (lives, deaths, current level), loads `levels.json`, spawns entities, and decides when you died or won. Also the share/brag text and keyboard shortcuts (Space/R/C).
-- **`main.tscn`** — scene tree: `Main` → `WorldEnvironment` (the glow settings), `Board`, `Entities` (hazards then player, so the player draws on top), `UI` (CanvasLayer) → `Screen`.
-
-### How hazard collision works (read before tuning difficulty)
-Hazard hit tests are measured in **screen space**, not on the flat grid — `Hazard.hits()` uses `Iso.project_offset()`. This is deliberate and was a bug fix on 2026-08-21.
-
-The grid underneath is flat, but everything is DRAWN isometrically, which squashes the vertical axis to half. Testing on the grid made the real kill zone about **half as tall as the ball looks on screen**: you could overlap the art from above or below and live, while the same gap from the side killed you. Measuring the projected offset instead means contact means contact from every direction — what you see is what kills you.
-
-Practical effect: hazards became roughly **twice as sensitive** along the screen-vertical axis, which is what Milko asked for after playtesting. Wall collision is unchanged and still grid-based (`Player._blocked()`) — that's a different problem and belongs on the grid.
-
-If difficulty needs tuning later, change `Hazard.RADIUS` or `Player.HIT_R`, not the projection.
-
-### How the rock textures work (read before touching it)
-All art lives in `assets/`, downscaled from the originals (the source art was 2048²/2752px, ~24MB total — far too heavy for a phone; it's 3.6MB now):
-
-- `space_far.png` — starfield background
-- `rock_floor.png` — tiled across walkable floor tiles AND wall tops
-- `rock_wall.png` — tiled across the vertical wall faces
-- `island_underside.png` — the hanging underside (transparent PNG)
-
-Three things that are easy to get wrong here:
-
-1. **UVs come from WORLD position, not from the tile.** That's what makes the rock flow continuously across neighbouring tiles instead of restarting on each one. `_world_uvs()` does this; `texture_repeat` is enabled on the Board in `_ready()`.
-2. **Wall faces need a much bigger texture scale than the floor** (`WALL_TEX_WORLD` 900 vs `FLOOR_TEX_WORLD` 384). The isometric angle squashes a wall face to roughly a third of its width on screen, so at floor scale the rock detail compresses into what looks like a picket fence.
-3. **The underside art is mostly empty space — use `UNDERSIDE_SRC`, not the whole image.** The top 14.2% of `island_underside.png` is fully transparent and the rock spans only 83% of its width. Drawing the whole image anchors that PADDING to the board edge instead of the rock, which is why the island looked detached through three separate attempts to "nudge it closer". `UNDERSIDE_SRC` holds the measured opaque bounds. If the art is ever replaced, re-measure them.
-4. **The island underside is SPLIT IN TWO and sheared onto the board's V.** The board's belly runs left corner → lowest corner → right corner, so a single straight-topped image hung along one arm leaves the other half of the platform with nothing under it — the rock then reads as a separate object floating below (this took three attempts to get right). `_draw_underside()` splits the art down the middle and shears each half onto its own arm. The art tapers to a point at its centre, so both halves meet at the board's lowest corner and the island's deepest point lands under the platform's deepest point. It's drawn FIRST so the board's own rock sides cover the join.
-
-The rock is deliberately dark — the `TINT_*` constants multiply the mid-grey source art down so neon stays the brightest thing on screen. Raise them to lighten the rock. Pits stay flat black (no texture) so they still read as holes.
-
-### Talo / networking gotchas (learned the hard way, 2026-08-26)
-1. **`HTTPRequest` is broken in this Godot version's web export** — every request stalls without ever reaching the browser and dies as `RESULT_TIMEOUT` with status 0. Verified: the browser-side fetch never fires, while native builds run the identical code fine. That's why `talo.gd` routes web requests through `JavaScriptBridge.eval` + the browser's own `fetch` (the `JS_HELPER` snippet). Don't "simplify" it back to `HTTPRequest` without testing a web export.
-2. **`talo.cfg` must be named in the export preset's `include_filter`** (`export_presets.cfg`). `.cfg` files aren't Godot resources, so the exporter silently drops them — the build then ships dark with no error anywhere.
-3. `accept_gzip` must stay off for web-facing HTTP paths; the browser already decompresses.
-4. Reading leaderboards needs no login; submitting needs the session headers (`X-Talo-Alias/Player/Session`). Talo keeps one entry per player per board and only replaces it when the new score is beats the old one, so submitting every run is safe.
-
-### How the glow works (read before touching it)
-The game renders in HDR (`rendering/viewport/hdr_2d` in `project.godot`), which lets a colour be *brighter than pure white*. The bloom pass in `main.tscn` only picks up things brighter than white (`glow_hdr_threshold = 1.0`). So:
-
-- Anything drawn through `Palette.glow(colour, amount)` blooms. Anything not drawn through it never does.
-- That's why the dark floor stays dark, and why the frosted-glass touch controls keep their exact look — `ui/ui.gd` never calls `glow()`, and the UI CanvasLayer is excluded via `background_canvas_max_layer = 0`.
-- **Boost amounts are per-element on purpose.** A colour with a zero channel (cyan `EDGE`, `#00fff2`) can be boosted hard (2.5x) and keeps its hue. A colour with high channels (the player's `#7dfaff`) clips toward white and goes grey-white if pushed — so those get a gentle 1.2–1.3x. If you raise a boost and something turns white, that's why.
-
-**Two switches if performance is a problem on a real phone:** set `Palette.NEON` to `1.0` to drop the over-bright everywhere, or `glow_enabled = false` on the Environment in `main.tscn` to remove the bloom pass entirely. Both are safe, reversible, and leave gameplay untouched.
-- **`entities/trail.gd`** — reusable motion ribbon, see above.
-- **`levels.json`** — all level data: ASCII grids (`#` wall, `.` floor, `P` start, `G` goal, `O` pit, `C` checkpoint coin) plus a `hazards` list per level. **30 levels**, curve documented in its `_readme`. **1-10 introduce every obstacle type one at a time** (patrol 2, sweep 3, pits 4, chain 5, chaser 6, blinker 7) while staying forgiving — Milko's call: the player should meet everything early. 11-20 build, 21-30 hard. Coins on 10/20/30. **Milko can edit this file directly in any text editor — no Godot or code needed.**
-  - The generator that produced them is not in the repo — it lived in the session scratchpad. Levels are hand-tunable from here; edit the JSON directly.
-  - **`tools/check_levels.py` validates the whole file** — run it after any level edit. It enforces fair spawns AND flags **decorative hazards**: if the shortest route to the goal never passes near a hazard, that hazard is doing nothing and the level is a walk. Level 19 shipped that way (pillars and blinkers guarding a corridor nobody had to enter) and Milko caught it before the tool did.
-  - **It enforces FAIR SPAWNS**, added 2026-08-22 after playtesting: nothing lethal may start within 3 tiles of the player (6 for chasers), and a spinning chain's whole ring must clear the spawn by 1.6 tiles. Seven levels were silently violating this — level 30 had a chain orb 1.0 tile from the start. If levels are ever regenerated, keep this rule.
-- **`project.godot`** — engine config. Base viewport 960x540, stretch `canvas_items` / aspect `expand` (what makes the itch.io embed scale instead of clip), `mobile` renderer, and the two autoloads above.
-- **`export_presets.cfg`** — single "Web" preset, output `game test 1/index.html`. Committed (small config, not a build artifact).
-- **`game test 1/`** — the exported web build. Build artifact — gitignored.
-- **`.gitignore`** — excludes `game test 1/`, `.DS_Store`, `.godot/`.
-- **`CLAUDE.md`** — this file. Keep it updated as phases complete.
-- **`icon.svg`** — app/project icon.
-- Still no sprite/audio assets — all visuals are vector-drawn, no audio yet.
-
-## Tools & resources
-- **Engine:** Godot 4 (GDScript)
-- **Version control:** GitHub — github.com/milko-ux/the-last-game
-- **Publishing/testing:** itch.io — mivasthecreator.itch.io/the-last-game
-- **Asset generation:** Higgsfield (concept art, logo, cover art)
-- **Leaderboard backend:** Talo (planned, not yet integrated)
+`docs/PHASE_LOG.md` (the phase-by-phase history) · `docs/2D_GLOW.md` · `docs/2D_HAZARD_COLLISION.md` · `docs/2D_ROCK_TEXTURES.md` · `docs/TALO_GOTCHAS.md` · `docs/TALO_SETUP.md` — the four 2D docs concern the legacy game; the Talo ones matter again if accounts return.
