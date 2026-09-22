@@ -25,9 +25,6 @@ Profile="*res://autoload/profile.gd"
 Consent="*res://autoload/consent.gd"
 Talo="*res://autoload/talo.gd"
 BeatClock="*res://prototype/beat_clock.gd"
-MCPRuntimeBridge="*res://addons/godot_mcp/services/mcp_runtime_bridge.gd"
-MCPInputBridge="*res://addons/godot_mcp/services/mcp_input_bridge.gd"
-MCPScreenshotBridge="*res://addons/godot_mcp/services/mcp_screenshot_bridge.gd"
 
 [display]
 
@@ -38,7 +35,7 @@ window/stretch/aspect="expand"
 
 [editor_plugins]
 
-enabled=PackedStringArray("res://addons/godot_mcp/plugin.cfg")
+enabled=PackedStringArray()
 
 [physics]
 

@@ -81,10 +81,18 @@ A Godot web build needs a **secure context**: plain `http://<LAN-IP>` fails with
 
 ### Before any release export — checklist
 
-- [ ] Remove the three `MCP*Bridge` autoloads from `project.godot` and disable the `godot_mcp` plugin.
 - [ ] Set `Progress.UNLOCK_ALL = false` (this also turns off the frame readout and the dev URL switches).
-- [ ] Confirm the Phase R preset's `exclude_filter` still keeps `docs/` out of the pack (it is 21.5 MB of screenshots and concept art).
-- [ ] Still shipping, and still to be decided: `addons/godot_mcp` and the old 2D game, both of which register autoloads in `project.godot` and so cannot simply be filtered out. `tools/` and the two unused MP3s stay in deliberately — `?autoplay=1` loads `res://tools/autoplay.gd`, and `?level=N` needs the tempo-shifted songs.
+- [ ] Confirm the Phase R preset's `exclude_filter` still keeps `docs/` and `addons/` out of the pack.
+- [x] The Godot MCP plugin is OFF (2026-09-22) — see below.
+- [ ] Still shipping: the old 2D game. Its scripts cannot simply be filtered out, because `project.godot` still registers `Iso` / `Profile` / `Consent` / `Talo` as autoloads and an exported game cannot load an autoload that is not in the pack. `tools/` and the two tempo-shifted MP3s stay in deliberately — `?autoplay=1` loads `res://tools/autoplay.gd`, and `?level=N` needs those songs.
+
+### The Godot MCP plugin is disabled on purpose
+
+`project.godot` has `[editor_plugins] enabled=PackedStringArray()`. Turning the plugin OFF is the only thing that makes this stick: `addons/godot_mcp/plugin.gd` re-injects its three `MCP*Bridge` autoloads into `project.godot` and calls `ProjectSettings.save()` every time it starts, so deleting those lines by hand is a change that undoes itself the next time the editor opens.
+
+They were running in the shipped phone build — two of them checking the filesystem for a command file on **every frame**, and one of them injecting synthetic input if it found one.
+
+To get it back for a session: Project → Project Settings → Plugins → enable `godot_mcp`. It re-injects itself, so remember to turn it off again. Nothing in the project needs it — `tools/shot_walk.gd` is deterministic where the MCP screenshot is not, `tools/autoplay.gd` drives the game far more precisely than synthetic taps, and `tools/frame_probe.gd` covers performance.
 
 ## Repo map
 
