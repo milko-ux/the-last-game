@@ -1,12 +1,40 @@
 # Phase R prototype — "an album you survive"
 
-## Where we are (2026-09-21, the performance job is DONE)
+## Where we are (2026-09-22) — start here
 
-**The game is ONE ENDLESS RUN** (`PHASE_E_BRIEF_1_ENDLESS.md`): how far can you get. **Stage 1 (the run) is built and accepted; Stage 2 (menu + leaderboard) is NOT started and must not be started until Milko says so.** Reports below, newest first.
+**The game is ONE ENDLESS RUN** (`PHASE_E_BRIEF_1_ENDLESS.md`): how far can you get. **Stage 1 (the run) is built and accepted. Stage 2 (menu + leaderboard) is NOT started and must not be started until Milko says so.** Everything below is newest first; this section is the whole state, the rest is the detail behind it.
 
-### THE PHONE HITS 60 FPS. The GPU job is closed (2026-09-21, iPhone, build `5648f06`)
+### Where the work stands
 
-Milko's readings, after the four commits of 2026-09-21:
+| | |
+|---|---|
+| Performance | **DONE and closed.** The phone holds 60 fps. |
+| Phase A brief 5 (the walk) | **Sections 1-5 done**, accepted by Milko "for now" on 2026-09-21. Pushed: `25a2445`, `fe2e784`, `8ff427b`, `f460f67`. |
+| Brief 5 section 6 (the tail) | **SKIPPED on purpose.** This model has no tail, it has two rear flippers, so the brief's z-range sway would swing both together. Milko: handle it when the model is regenerated. |
+| Brief 6 (light) | Not started. Sections 1+2 are the agreed next build. |
+
+### KNOWN ISSUE — a foot can still be dragged in the real game
+
+The leash (brief 5A) guarantees `distance(foot, hip) <= LEG_H * LEG_STRETCH_MAX` on the hip and foot the capsule is actually drawn between, so **a foot can never be drawn detached from the body again**. In the walk rig the gait never even reaches the clamp (0.83 of 1.12 at the real game's speed, 0.91 turning).
+
+**But in the real game the clamp is active**: something throws a foot to about **2.5 units** from its hip, and the clamp is what pulls it back to 1.116. The visible result is a foot that is *dragged* into place rather than stepping cleanly at speed. Milko accepted the legs with this known.
+
+**Already ruled out — do not re-check these:**
+- **The plant itself.** Measured at the moment of planting, feet land a healthy **0.66-0.76** from the hip. The gait is not what is wrong.
+- **The pose order.** The step cycle used to run before the body pose, so it read last frame's hip while the legs were drawn against this one. Moving `_step_cycle` to after the pose changed the number not at all.
+- **The start-of-run teleport.** The player is placed at z=10 after the creature has posed, which reads as 9.9 units on the first frame. That frame is now excluded from the measurement (`_ported`), and it was the whole of the old 9.9 reading.
+- **Three bugs that WERE real and are fixed**: the old stranded check allowed 1.04 units against a 0.75 leg and teleported instead of stepping; a corrective step froze the OTHER foot while the body walked away from it; and `TELEPORT_UNITS` was 2.0 when a real frame moves 0.10, so a one-unit yank was walked off as a stride.
+
+**How to measure it:** `tools/autoplay.gd -- level=1 fps=60` prints a `LEASH` line over a clean, death-free run (max as drawn, planted, and the unclamped worst). `tools/shot_walk.gd -- slide=1 dir=forward|turn|strafe [jump=1] [speed=1.5]` is the rig version and is the reliable instrument; `tools/shot.gd` prints `LEASH` too but its captures are flaky (see below).
+
+### NEXT, in this order
+
+1. **A read-only code health check.** Nothing built. `prototype/creature.gd` has roughly doubled over briefs 5 and 5A/B and carries several interacting timers (the stride phase, the settle clock, the leash, the tuck), which is where the known issue above is hiding.
+2. **Brief 6 sections 1 + 2 as ONE slice** (`PHASE_A_BRIEF_6_LIGHT.md`): one light direction published as a global uniform, then drop shadows, **creature first** (body + both feet), hazards after. Taking section 1 with it avoids hardcoding a light direction and then reworking it.
+   - **Cost: zero net draw calls.** All shadows go in one `MultiMeshInstance3D` -- one call however many casters -- and it REPLACES the blob the creature already draws under itself (`_ring` in `creature.gd`). The real cost is fill rate (transparent quads), a fraction of a percent of the frame at bar 11.
+   - **Why it is next and not more leg tuning:** "it floats" is a contact problem. At game distance the whole creature is about 105 px tall and a leg is ten of them, so no amount of thickening solves what a shadow solves directly.
+
+### Today's numbers, from Milko's iPhone (2026-09-21, build `5648f06`)
 
 | | reading |
 |---|---|
@@ -16,11 +44,44 @@ Milko's readings, after the four commits of 2026-09-21:
 | Portrait | LOADING shows under ROTATE YOUR PHONE |
 | Faceted pillars | "not noticeable, keep them" |
 
-**16.7 ms is 60 fps -- the target exactly**, and the CPU at 1.1 ms means nothing is straining. The road there: 28.7 avg (2026-09-20) -> 21.9 (the 0.75 render scale) -> **16.7** (the cheap pillars). The load: 6.5 s -> **2.2 s**, and `validate 0.0 (lap 0 shipped)` is the verdict fingerprint working on a real device -- the words to look for if it ever regresses.
+16.7 ms is 60 fps, the target exactly. The road there: 28.7 avg -> 21.9 (the 0.75 render scale) -> **16.7** (the cheap pillars). The load: 6.5 s -> **2.2 s**; `validate 0.0 (lap 0 shipped)` is the verdict fingerprint working on a real device and is the phrase to look for if it ever regresses. `audio -1372 (+0)` is the expected read-out: the device's constant offset, correctly ignored.
 
-- **Step 1c (the monolith shader) is PARKED FOR GOOD unless brief 6 needs it.** Monoliths are now the biggest single item in frame (69 880 triangles), so if lights and shadows cost more than they can afford, this is the lever that already has a plan: fewer noise octaves, or the baked 512 px noise tile from the brief 2b report.
-- `audio -1372 (+0)` is the expected read-out: the device's constant offset, correctly ignored. `(+0)` on a short run is normal -- the correction only moves once drift accumulates.
-- The 49 ms worst frame on the start screen is a one-off (first-frame compile), the same one-off as before, and never lands inside a run.
+**The walk has NOT been measured on the phone for frame time.** Brief 5 adds two leg capsules and a dust emitter: 8 more draw calls at bar 2 of level 1, and slightly fewer triangles. Worth one reading at `?level=1`, bar 11.
+
+### Asked for but not done
+- **Brief 5 section 6 (tail)** -- skipped, see above. Milko's call, deferred to the model regeneration.
+- **Step 1c, the monolith shader** -- parked for good unless brief 6 needs it. Monoliths are now the biggest item in frame (69 880 triangles), so if lights and shadows cost too much, that is where the headroom is: fewer noise octaves, or the baked 512 px noise tile from the brief 2b report.
+- **`tools/shot.gd` is flaky** and it is not worth trusting for a paired screenshot: its clock disagrees with the run's after a fast load (it can report `bar=11` while the run is at bar 0) and it sometimes saves a black LOADING frame. It now refuses to save unless the world is up, which stops the black frames. **Use `tools/shot_walk.gd` (deterministic, `--fixed-fps 60`, `cam=game` gives the game camera's own angle and lens) for anything that has to be the same moment twice.**
+
+### Rules that bit me -- keep them
+- **Nothing that can raise, and no `JavaScriptBridge`, inside a `RenderingServer.frame_post_draw` callback.** They increment an int and nothing else.
+- **Every loading gate needs a ceiling** (`FrameMeter.LABEL_TIMEOUT_MS`, 2 s, then carry on and mark the line `TIMED OUT`).
+- **A branch behind `OS.has_feature("web")`, or anything that reads a file the exporter transforms, has been tested by nothing on this Mac.** The verdict fingerprint was the second instance in two days.
+- **Bump `LapGen.LAYOUT_VERSION`** whenever placement / rules / hazard_math / fairness change what a lap looks like, then re-run `godot --headless --path . -s tools/lap_stats.gd -- laps=0-9 write=1`. Forgetting is caught: where the sources are readable, `stored_verdict()` compares the scripts and refuses the file.
+- **An acceptance number must measure the thing that can break.** "Zero drift during stance" was true and useless -- nothing in it said how far a planted foot could be from its hip.
+- Run every Godot tool through a kill switch: a script error makes a `-s` tool spin for ever and there is no `timeout` on this Mac.
+
+### Open, Milko's calls
+`SHIELD_COST` 30 · lap 7 still clears 5 bars at 24 passes · the audio encoder -- **conditional permission already given: ONLY if he says the ogg sounds worse than the mp3 may I `brew install ffmpeg` for libvorbis and re-cut the same file at quality 6** · the human bot's blind spots at run bars 63 / 77 · whether rotation resizes the canvas (still unmeasured).
+
+### Not to be started without him saying so
+Stage 2 (menu + leaderboard) · brief 5 section 6 · anything in brief 6 beyond sections 1+2 · any Stage-1 tuning beyond what he asks for.
+
+**ON HOLD / superseded:** level-1 orbiter tuning (he called the pace right), the level-6 verdict cache (replaced by `levels/verdicts.json`).
+
+**Models in `assets/models/`:** unchanged (creature; five hazard props with vertex colours from the bake; two buildings + their `_hi` copies, geometry only).
+
+### Reference: the phone build and its dev switches (`https://172.20.10.2:8443`, reload fully)
+The build opens straight into the run. `?level=N` goes to one old level instead (the fixed spot for frame numbers), `?scale=X` overrides the render scale, `?autoplay=1&live=1` lets the bot play with every lap generated live, `?grad=1` plays as a graduated player. All dev-only, behind the same switch as the readout.
+- A first run as a new player: lap 0 is level 1 as he knows it (no lives). Crossing into lap 1 (`STAGE 2`, ~2.5 min) graduates him: 3 lives from then on, and lap 0 stops teaching.
+- **The seam by ear** at ~2:29 of music (bar 73 -> bar 1). If it clicks, `LOOP_END_BAR` moves to another 8-bar boundary and `tools/make_endless_audio.py <bar>` re-cuts the file.
+- Notes charge the ring right of the distance; full = a cyan bubble that absorbs one hit. `SHIELD_COST` 30.
+- Three deaths as a graduated player: the end screen, RETRY (4 s run-up), MENU (= the dev level select).
+- Readout: `frame ... cpu ... audio +-N (+-M)`; under it the gold load line `page - tap - load [steps]`.
+
+### Screenshots worth knowing about
+`docs/screenshots/m-body-front|side|below.png` (the melt), `m-walk-cycle.png` (eight stills across one stride), `m-walk-game.png`, `m-jump-tuck.png`, `m-idle-feet.png`, `m-legs-before-after.png` (brief 5B, the same instant of the same stride at the game camera's angle).
+
 
 ### Brief 5A + 5B, after Milko's phone test rejected the walk (2026-09-21)
 
@@ -131,35 +192,6 @@ Why not Godot's own mesh LOD: `generate_lods=true` is on in the `.import`, but m
 1. **The shipped verdicts can never be trusted in an exported build.** `LapGen.source_hash()` md5s four `.gd` files; the exporter ships them COMPILED (`placement.gdc` is in the pck next to the name `placement.gd`, `script_export_mode=2`). So the hash the phone computes can never equal the hash `tools/lap_stats.gd` stamped into `levels/verdicts.json` from the readable sources -- the file is rejected on every device and every lap validates live. **That is 4.6 s of the 6.5 s load**, and the live result was identical to the shipped one (1 pass, 0 cleared). The check itself is correct and must not be weakened (a stale verdict = an unproven lap). Fix: fingerprint what survives export -- the two JSON data files (verified byte-identical in the pck) + a hand-bumped layout version, with `lap_stats.gd` failing loudly if the scripts changed without a bump. On the Mac the hash matches (`ec646cf3540a`), which is why nothing ever caught it -- another instance of the standing rule: **a path that only runs in an export has been tested by nothing here.**
 2. **The LOADING word is on screen but nowhere near the eye.** Nothing covers it: `ui.gd`'s portrait branch draws only two lines of text and returns, and `Status` is a sibling label that draws after it. But ROTATE YOUR PHONE is big, cyan and centred while LOADING is small, gold and 70 px from the top edge -- and the whole 6.5 s ran in portrait (the load line recorded 1179x2379). Fix: say it under the rotate message, where the eye already is. **That edits `ui/ui.gd` = the glass-controls file, so it needs Milko's go-ahead** (one line inside the portrait branch, nothing near the controls).
 3. **The drift correction is switched OFF on the phone, silently.** `audio -1374` is the device's CONSTANT reported offset and is meant to be ignored (SYNC_OFFSET_S was tuned by ear on top of whatever the device reports) -- that part is by design, and is why nothing sounded wrong. But `DRIFT_IGNORE_S` (0.25 s, "a gap this big is a glitch, not drift") tests the RAW gap, not the change since the baseline, so 1.374 s trips it on every frame and `_follow_audio` returns before correcting anything (`(+0)` confirms it). The thing it protects against -- audio slipping over a long deathless run -- is exactly what an endless run is. On the Mac the offset is 15-60 ms, so the gate never fired here. Fix: gate on `d - _drift_base`, one line.
-
-### Next
-**Phase A brief 5, the walk** (`PHASE_A_BRIEF_5_WALK.md`) -- Milko started it on 2026-09-21, **section 1 only**, and section 2 does not begin until he says so.
-
-### Rules that bit me -- keep them
-- **Nothing that can raise, and no `JavaScriptBridge`, inside a `RenderingServer.frame_post_draw` callback.** They increment an int and nothing else. An error in there aborts the rest of the callback silently.
-- **Every loading gate needs a ceiling** (`FrameMeter.LABEL_TIMEOUT_MS`, 2 s, then carry on and mark the line `TIMED OUT`). Milko's rule: a gate that can wait for ever is the bug class, not just the one instance.
-- **A branch behind `OS.has_feature("web")`, or anything that reads a file that the exporter transforms, has been tested by nothing on this Mac.** (Finding 1 is the second instance of this in two days.)
-- Run every Godot tool through a kill switch: a script error makes a `-s` tool spin for ever and there is no `timeout` on this Mac.
-
-### Open, Milko's calls
-`SHIELD_COST` 30 · lap 7 still clears 5 bars at 24 passes (more passes, or leave it easier) · the audio encoder -- **conditional permission already given: ONLY if he says the ogg sounds worse than the mp3 may I `brew install ffmpeg` for libvorbis and re-cut the same file at quality 6** · the human bot's blind spots at run bars 63 / 77 · whether rotation resizes the canvas (still unmeasured -- the load line said portrait).
-
-### Not to be started without him saying so
-Stage 2 (menu + leaderboard) · briefs 5 (walk) and 6 (light) · any Stage-1 tuning beyond what he asks for.
-
-**ON HOLD / superseded:** level-1 orbiter tuning (he called the pace right), the level-6 verdict cache (replaced by `levels/verdicts.json`).
-
-**Models in `assets/models/`:** unchanged (creature; five hazard props with vertex colours from the bake; two buildings + their `_hi` copies, geometry only).
-
-
-### Reference: the phone build and its dev switches (`https://172.20.10.2:8443`, reload fully)
-Superseded as a to-do list by the 2026-09-21 test above; kept for the URL and the switches. The build opens straight into the run. `?level=N` goes to one old level instead (the fixed spot for frame numbers), `?scale=X` overrides the render scale, `?autoplay=1&live=1` lets the bot play with every lap generated live, `?grad=1` plays as a graduated player. All dev-only, behind the same switch as the readout.
-- A first run as a new player: lap 0 is level 1 as he knows it (no lives). Crossing into lap 1 (`STAGE 2`, ~2.5 min) graduates him: 3 lives from then on, and lap 0 stops teaching.
-- **The seam by ear** at ~2:29 of music (bar 73 → bar 1). If it clicks, `LOOP_END_BAR` moves to another 8-bar boundary and `tools/make_endless_audio.py <bar>` re-cuts the file.
-- Notes charge the ring right of the distance; full = a cyan bubble that absorbs one hit. `SHIELD_COST` 30.
-- Three deaths as a graduated player: the end screen, RETRY (4 s run-up), MENU (= the dev level select).
-- Readout: `frame … cpu … audio ±N (±M)`; under it the gold load line `page · tap · load [steps]`.
-
 
 ## GPU + load instrument job (2026-09-20, night — step 1a ANSWERED by the 2026-09-21 phone test above)
 
