@@ -115,6 +115,11 @@ func _ready() -> void:
 # caller; the menu and the run both need it now, so it lives with the
 # signal it answers.
 func _sync_profile() -> void:
+	# A tool's sign-in (tools/talo_check.gd) must never rename the guest
+	# profile of whoever owns this machine: the check claimed its throwaway
+	# account's name into Milko's own profile.save on 2026-09-22.
+	if not Progress.save_enabled:
+		return
 	if logged_in():
 		Profile.claim(identifier)
 	else:
