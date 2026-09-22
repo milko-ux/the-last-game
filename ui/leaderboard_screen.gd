@@ -26,12 +26,26 @@ extends Node2D
 # faked by layering translucent outlines, same technique as
 # account_panel.gd's _glow_rect() and ui.gd's draw_glass_disc().
 # All tap-target rects are unchanged from before this pass.
+#
+# DISTANCE MODE (Phase E section 8, 2026-09-22): the endless run's
+# board, opened from the main menu with open_distance(). One board
+# (Talo.DISTANCE_BOARD), so the difficulty tabs and the PROGRESS /
+# FINISHERS switch are hidden and only GLOBAL / MY COUNTRY remain; a
+# row is rank, name, country, metres. The menu keeps the live world
+# behind it and dims it, so this mode paints no opaque background. Its
+# tap targets are 66 units tall — 48 pt on the phone (menu.gd TAP_MIN).
+# The 2D game's mode is untouched.
 # ============================================================
 
 signal closed
 signal join_requested
 
+const Hud := preload("res://prototype/hud.gd")
 const ROWS := 8
+const DISTANCE_ROWS := 5      # fewer rows: the tabs and pills are taller in that mode
+const TAP := 66.0
+
+var distance_mode := false
 
 var diff: int = 0            # Progress.Diff
 var board_finishers := false
@@ -51,12 +65,26 @@ var _rects := {}
 
 
 func open(d: int, count: int) -> void:
+	distance_mode = false
 	diff = d
 	level_count = count
 	board_finishers = false
 	scope_country = false
 	visible = true
 	_refetch()
+
+
+# The endless run's board (section 8). Anyone may read it.
+func open_distance() -> void:
+	distance_mode = true
+	board_finishers = false
+	scope_country = false
+	visible = true
+	_refetch()
+
+
+func _rows() -> int:
+	return DISTANCE_ROWS if distance_mode else ROWS
 
 
 func close() -> void:
@@ -75,6 +103,8 @@ func _process(delta: float) -> void:
 # FETCHING
 # ============================================================
 func _board_name() -> String:
+	if distance_mode:
+		return Talo.DISTANCE_BOARD
 	return Talo.finishers_board(diff) if board_finishers else Talo.progress_board(diff)
 
 
@@ -107,7 +137,7 @@ func _fetch_page(page: int) -> void:
 
 
 func _next_page() -> void:
-	if (view_page + 1) * ROWS < entries.size():
+	if (view_page + 1) * _rows() < entries.size():
 		view_page += 1
 	elif not _last_server_page and not loading:
 		view_page += 1
@@ -212,6 +242,13 @@ func _draw() -> void:
 	var cx := screen.x * 0.5
 	_rects = {}
 
+	if distance_mode:
+		# The menu behind has dimmed its live world already; this only
+		# settles the middle a little more so the rows read.
+		draw_rect(Rect2(Vector2.ZERO, screen), Color(0.04, 0.05, 0.08, 0.12), true)
+		_draw_distance(screen, font, cx)
+		return
+
 	draw_rect(Rect2(Vector2.ZERO, screen), Palette.BG, true)
 	_centre(font, "LEADERBOARD", Vector2(cx, 40.0), 28, Palette.glow(Palette.EDGE, 2.0))
 
@@ -275,8 +312,15 @@ func _draw() -> void:
 	var panel := Rect2(Vector2(lx - 10.0, top - 10.0), Vector2(list_w + 20.0, ROWS * row_h + 20.0))
 	draw_rect(panel, Color(1, 1, 1, 0.035), true)
 	_glow_rect(panel, Palette.EDGE, 0.4, 1.0)
+	_draw_list(font, cx, lx, top, list_w, row_h, panel, screen)
 
-	if loading and entries.size() <= view_page * ROWS:
+
+# The rows, the empty / error / loading states, the paging and the join
+# banner — shared by both modes. `rows` per page differs between them.
+func _draw_list(font, cx: float, lx: float, top: float, list_w: float, row_h: float, panel: Rect2, screen: Vector2) -> void:
+	var rows := _rows()
+	var th := 60.0 if distance_mode else 30.0
+	if loading and entries.size() <= view_page * rows:
 		_draw_loading_dots(Vector2(cx, top + 120.0))
 	elif not error_text.is_empty():
 		_centre(font, error_text, Vector2(cx, top + 100.0), 14, Palette.HAZ)
@@ -287,25 +331,27 @@ func _draw() -> void:
 		_centre(font, "RETRY", rr.get_center(), 13, Color(1, 1, 1, 0.8))
 	elif entries.is_empty():
 		var msg := "NOBODY HAS CLEARED THE LOOP YET" if board_finishers else "NOBODY HERE YET"
+		if distance_mode:
+			msg = "NOBODY HAS RUN YET"
 		_centre(font, msg, Vector2(cx, top + 100.0), 16, Color(1, 1, 1, 0.5))
 		_centre(font, "Be the first.", Vector2(cx, top + 128.0), 13,
 			Color(Palette.GOAL.r, Palette.GOAL.g, Palette.GOAL.b, 0.7))
 	else:
-		var start := view_page * ROWS
-		for i in range(start, mini(start + ROWS, entries.size())):
+		var start := view_page * rows
+		for i in range(start, mini(start + rows, entries.size())):
 			_draw_row(font, entries[i], i, Vector2(lx, top + (i - start) * row_h), list_w, row_h)
 
 	# --- Paging ---
 	var py := panel.end.y + 14.0
 	if view_page > 0:
-		var pr := Rect2(Vector2(cx - 110.0, py), Vector2(90.0, 30.0))
+		var pr := Rect2(Vector2(cx - 110.0, py), Vector2(90.0, th))
 		_rects["prev"] = pr
 		draw_rect(pr, Color(0, 0, 0, 0.25), true)
 		draw_rect(pr, Color(1, 1, 1, 0.25), false, 1.0)
 		_centre(font, "< PREV", pr.get_center(), 12, Color(1, 1, 1, 0.7))
-	if (view_page + 1) * ROWS < entries.size() \
+	if (view_page + 1) * rows < entries.size() \
 			or (not _last_server_page and not entries.is_empty()):
-		var nr := Rect2(Vector2(cx + 20.0, py), Vector2(90.0, 30.0))
+		var nr := Rect2(Vector2(cx + 20.0, py), Vector2(90.0, th))
 		_rects["next"] = nr
 		draw_rect(nr, Color(0, 0, 0, 0.25), true)
 		draw_rect(nr, Color(1, 1, 1, 0.25), false, 1.0)
@@ -314,11 +360,55 @@ func _draw() -> void:
 	# --- Join banner for guests: full-width, bottom of screen ---
 	if not Talo.logged_in():
 		var jw := minf(560.0, screen.x - 48.0)
-		var jr := Rect2(Vector2(cx - jw * 0.5, screen.y - 58.0), Vector2(jw, 40.0))
+		var jh := TAP if distance_mode else 40.0
+		var jr := Rect2(Vector2(cx - jw * 0.5, screen.y - 30.0 - jh), Vector2(jw, jh))
 		_rects["join"] = jr
 		draw_rect(jr, Color(Palette.GOAL.r, Palette.GOAL.g, Palette.GOAL.b, 0.07), true)
 		_glow_rect(jr, Palette.GOAL, 1.0, 1.5)
-		_centre(font, "JOIN THE LEADERBOARD", jr.get_center(), 15, Palette.GOAL)
+		_centre(font, "JOIN TO POST YOUR DISTANCE" if distance_mode else "JOIN THE LEADERBOARD",
+			jr.get_center(), 15, Palette.GOAL)
+
+
+# Distance mode's top: the title, BACK, and the two scope tabs. The list
+# below is the shared one.
+# Laid out for a phone: BACK top-left clear of the notch, the title
+# centred, the two tabs centred under it, then the list. The frame
+# readout (dev builds) lives top-right, so nothing is put there.
+func _draw_distance(screen: Vector2, font, cx: float) -> void:
+	_centre(font, "LEADERBOARD", Vector2(cx, 34.0), 24, Color(1, 1, 1, 0.92))
+	_centre(font, "SEASON  ·  furthest distance", Vector2(cx, 58.0), 11,
+		Color(Palette.TEXT.r, Palette.TEXT.g, Palette.TEXT.b, 0.7))
+
+	var back := Rect2(Vector2(88.0, 18.0), Vector2(110.0, TAP))
+	_rects["back"] = back
+	Hud.glass_pill(self, back, Palette.TEXT, 0.8)
+	_centre(font, "< BACK", back.get_center(), 13, Color(1, 1, 1, 0.85))
+
+	# GLOBAL / MY COUNTRY, centred. MY COUNTRY only when there is one to show.
+	var tw := 150.0
+	var ty := 84.0
+	var has_country := not Consent.country.is_empty()
+	var gr := Rect2(Vector2(cx - tw * 0.5, ty), Vector2(tw, TAP))
+	if has_country:
+		gr.position.x = cx - tw - 6.0
+		var cr := Rect2(Vector2(cx + 6.0, ty), Vector2(tw, TAP))
+		_rects["scope_country"] = cr
+		Hud.glass_pill(self, cr, Palette.EDGE if scope_country else Palette.TEXT, 1.0 if scope_country else 0.55)
+		_centre(font, "MY COUNTRY", cr.get_center() + Vector2(0, -6), 12, Color(1, 1, 1, 0.95 if scope_country else 0.55))
+		_centre(font, Consent.country, cr.get_center() + Vector2(0, 10), 11,
+			Color(Palette.EDGE.r, Palette.EDGE.g, Palette.EDGE.b, 0.9 if scope_country else 0.45))
+	_rects["scope_global"] = gr
+	Hud.glass_pill(self, gr, Palette.EDGE if not scope_country else Palette.TEXT, 1.0 if not scope_country else 0.55)
+	_centre(font, "GLOBAL", gr.get_center(), 13, Color(1, 1, 1, 0.95 if not scope_country else 0.55))
+
+	var top := 172.0
+	var row_h := 36.0
+	var list_w := minf(680.0, screen.x - 176.0)
+	var lx := cx - list_w * 0.5
+	var panel := Rect2(Vector2(lx - 10.0, top - 10.0), Vector2(list_w + 20.0, DISTANCE_ROWS * row_h + 20.0))
+	draw_rect(panel, Color(0.04, 0.05, 0.08, 0.5), true)
+	Hud.glass_pill(self, panel, Palette.EDGE, 0.5)
+	_draw_list(font, cx, lx, top, list_w, row_h, panel, screen)
 
 
 func _draw_row(font, entry: Dictionary, index: int, pos: Vector2, w: float, h: float) -> void:
@@ -365,7 +455,10 @@ func _draw_row(font, entry: Dictionary, index: int, pos: Vector2, w: float, h: f
 	var score := float(entry.get("score", 0.0))
 	var result := ""
 	var result_col := Palette.TEXT
-	if board_finishers:
+	if distance_mode:
+		result = Hud.metres(int(score))
+		result_col = Color(1, 1, 1, 0.9)
+	elif board_finishers:
 		result = "%d DEATHS" % int(score)
 	else:
 		var lvl := Talo.progress_level(score)

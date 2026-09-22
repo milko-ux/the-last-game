@@ -103,8 +103,24 @@ func _ready() -> void:
 	if cfg.load(CONFIG_PATH) == OK:
 		access_key = str(cfg.get_value("talo", "access_key", ""))
 		base_url = str(cfg.get_value("talo", "base_url", base_url))
+	auth_changed.connect(_sync_profile)
 	if configured():
 		resume_session()
+
+
+# Keeps the local guest name in step with the account: signing in claims
+# the name, signing out (or deleting the account) releases it, and a
+# released account's best is no longer "posted" — a new account has to
+# post it again. This was main.gd's job while the 2D game was the only
+# caller; the menu and the run both need it now, so it lives with the
+# signal it answers.
+func _sync_profile() -> void:
+	if logged_in():
+		Profile.claim(identifier)
+	else:
+		if Profile.claimed:
+			Profile.unclaim()
+		Progress.unpost_best()
 
 
 func configured() -> bool:
@@ -142,6 +158,74 @@ static func encode_progress(reached_level: int, deaths: int) -> float:
 
 static func progress_level(score: float) -> int:
 	return int(score / 1000.0)
+
+
+# ============================================================
+# THE ENDLESS RUN'S BOARD (Phase E section 8)
+# One board, `distance`: descending, unique — one entry per player,
+# replaced only by a better run (Talo's own rule for unique boards).
+# The season is a prop on the entry, not part of the name; so are the
+# things a later cheat check needs (laps, run_seconds, deaths, build,
+# layout). Created by hand in the dashboard: docs/TALO_SETUP.md.
+# ============================================================
+const DISTANCE_BOARD := "distance"
+# Bots and screenshot tools turn saving off (Milko's rule 6) and that
+# same switch keeps them off the board: a bot's run is not a score. The
+# one tool that MUST post — tools/talo_check.gd, the live acceptance,
+# with a throwaway account it deletes again — says so here.
+var allow_tool_posts := false
+
+
+# Posts the player's BEST run of `season` — once. The run scene calls it
+# when a run ends, the menu when the player signs in; whichever comes
+# first posts, the other finds it already posted and does nothing. A
+# new best clears the flag (Progress.record_distance), so the next call
+# posts again, and Talo only replaces the entry if it really is better.
+# Returns the rank line for the screen ("#12 GLOBAL   ·   #3 SE"), or
+# "" when there was nothing to do, or the error text.
+func post_best_distance(season: int) -> String:
+	if not Progress.save_enabled and not allow_tool_posts:
+		return ""
+	if not (configured() and logged_in() and Consent.granted):
+		return ""
+	var metres: int = Progress.best_distance_for(season)
+	if metres <= 0 or Progress.best_posted(season):
+		return ""
+	var props: Dictionary = Progress.best_run_for(season).duplicate()
+	props.erase("posted")
+	props["season"] = season
+	var with_country: bool = Consent.show_country and not Consent.country.is_empty()
+	if with_country:
+		props["country"] = Consent.country
+	var res: Dictionary = await submit_score(DISTANCE_BOARD, float(metres), props)
+	if not res.ok:
+		return str(res.error)
+	Progress.mark_best_posted(season)
+	var pos := int(res.data.get("entry", {}).get("position", -1))
+	var line := ("#%d GLOBAL" % (pos + 1)) if pos >= 0 else "POSTED"
+	if with_country:
+		var rank: int = await country_rank(DISTANCE_BOARD, Consent.country)
+		if rank > 0:
+			line += "   ·   #%d %s" % [rank, Consent.country]
+	return line
+
+
+# The player's rank among ONE country's entries, 1-based, or 0 if not on
+# the first `max_pages` pages of 50. Talo filters on the prop server-side
+# and hands the entries back best first, so the rank is the index.
+func country_rank(board: String, country: String, max_pages: int = 3) -> int:
+	for page in max_pages:
+		var res: Dictionary = await get_entries(board, page, "country", country)
+		if not res.ok:
+			return 0
+		var entries: Array = res.data.get("entries", [])
+		for i in entries.size():
+			var alias: Dictionary = entries[i].get("playerAlias", {})
+			if int(alias.get("id", -2)) == alias_id:
+				return page * 50 + i + 1
+		if bool(res.data.get("isLastPage", true)):
+			return 0
+	return 0
 
 
 # ============================================================
@@ -324,7 +408,9 @@ func _request(method: HTTPClient.Method, path: String, body: Dictionary = {}) ->
 			"error": "No connection. Check your internet and try again."}
 
 	var status := int(raw.status)
-	var data: Variant = JSON.parse_string(str(raw.body))
+	var text := str(raw.body).strip_edges()
+	# An empty body (a 204 from logout / delete) is not a parse error.
+	var data: Variant = JSON.parse_string(text) if not text.is_empty() else {}
 	if data == null:
 		data = {}
 	var out := {"ok": status >= 200 and status < 300, "status": status, "data": data, "error": ""}

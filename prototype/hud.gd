@@ -42,6 +42,12 @@ var end_new_best := false
 var end_alpha := 0.0
 var retry_rect := Rect2()
 var menu_rect := Rect2()
+# Section 8: the rank line ("#12 GLOBAL   ·   #3 SE", or "POSTING…", or
+# an error) under BEST, and for a guest the JOIN pill that leads to the
+# account panel.
+var end_rank := ""
+var end_join := false
+var join_rect := Rect2()
 
 
 func _process(delta: float) -> void:
@@ -193,18 +199,29 @@ func _text(font: Font, text: String, c: Vector2, size: int, col: Color) -> void:
 	centre_text(self, font, text, c, size, col)
 
 
+# Every pill here is at least 66 units tall: 48 pt on the phone (the
+# sum is in menu.gd, TAP_MIN), and the last one stops clear of the home
+# indicator.
 func _draw_end_screen(screen: Vector2, font: Font) -> void:
 	var a := end_alpha
 	draw_rect(Rect2(Vector2.ZERO, screen), Color(0.04, 0.05, 0.08, 0.74 * a), true)
 	var c := screen * 0.5
-	_text(font, end_distance, c + Vector2(0, -92), 72, Color(1, 1, 1, 0.96 * a))
+	_text(font, end_distance, c + Vector2(0, -104), 72, Color(1, 1, 1, 0.96 * a))
 	if end_new_best:
-		_text(font, "NEW BEST", c + Vector2(0, -34), 20, Color(Palette.GOAL.r, Palette.GOAL.g, Palette.GOAL.b, a))
+		_text(font, "NEW BEST", c + Vector2(0, -48), 20, Color(Palette.GOAL.r, Palette.GOAL.g, Palette.GOAL.b, a))
 	else:
-		_text(font, end_best, c + Vector2(0, -34), 18, Color(Palette.GOAL.r, Palette.GOAL.g, Palette.GOAL.b, 0.9 * a))
-	retry_rect = Rect2(c + Vector2(-150, 8), Vector2(300, 72))
+		_text(font, end_best, c + Vector2(0, -48), 18, Color(Palette.GOAL.r, Palette.GOAL.g, Palette.GOAL.b, 0.9 * a))
+	if end_rank != "":
+		_text(font, end_rank, c + Vector2(0, -20), 15, Color(Palette.EDGE.r, Palette.EDGE.g, Palette.EDGE.b, 0.95 * a))
+	retry_rect = Rect2(c + Vector2(-150, 4), Vector2(300, 72))
 	_pill(retry_rect, Palette.EDGE, a)
 	_text(font, "RETRY", retry_rect.position + retry_rect.size * 0.5, 30, Color(1, 1, 1, 0.95 * a))
-	menu_rect = Rect2(c + Vector2(-90, 100), Vector2(180, 52))
+	menu_rect = Rect2(c + Vector2(-90, 90), Vector2(180, 66))
 	_pill(menu_rect, Color(1, 1, 1), a * 0.8)
 	_text(font, "MENU", menu_rect.position + menu_rect.size * 0.5, 18, Color(1, 1, 1, 0.8 * a))
+	join_rect = Rect2()
+	if end_join:
+		join_rect = Rect2(c + Vector2(-170, 160), Vector2(340, 66))
+		_pill(join_rect, Palette.GOAL, a * 0.9)
+		_text(font, "JOIN TO POST YOUR DISTANCE", join_rect.position + join_rect.size * 0.5, 15,
+			Color(Palette.GOAL.r, Palette.GOAL.g, Palette.GOAL.b, 0.95 * a))

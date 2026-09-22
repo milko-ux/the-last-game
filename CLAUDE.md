@@ -89,7 +89,8 @@ A Godot web build needs a **secure context**: plain `http://<LAN-IP>` fails with
 - [ ] Confirm the Phase R preset's `exclude_filter` still keeps `docs/` and `addons/` out of the pack.
 - [x] The Godot MCP plugin is OFF (2026-09-22) — see below.
 - [ ] `tools/` and the two tempo-shifted MP3s ship deliberately — `?autoplay=1` loads `res://tools/autoplay.gd`, and `?level=N` needs those songs.
-- [ ] Phase R Stage 2 will need `talo.cfg` added to the Phase R preset's `include_filter` (it is empty there; the 2D "Web" preset ships it). Without it the leaderboard is invisible on the phone.
+- [x] `talo.cfg` is in BOTH presets' `include_filter` (2026-09-22). Keep it there: `.cfg` is not a resource and the exporter drops it silently, and the build then ships with no leaderboard and no error. The key is safe to ship as scoped — `docs/TALO_SETUP.md`, "The access key".
+- [ ] Bump `application/config/version` in `project.godot` — every leaderboard entry carries it as `build`.
 
 ### The Godot MCP plugin is disabled on purpose
 
@@ -103,7 +104,7 @@ To get it back for a session: Project → Project Settings → Plugins → enabl
 
 **`prototype/` — the game.** `beat_clock.gd` (autoload `BeatClock`: song time, beats, seek) · `rules.gd` (constants, per-level knobs, death rules) · `hazard_math.gd` (where is it / is it lethal at time t) · `placement.gd` (deterministic layout from the beatmap) · `fairness.gd` (the mandatory validator) · `lap_gen.gd` (`LAYOUT_VERSION`) · `field.gd` (builds tiles, hazards, notes; floor/pit queries) · `hazard3d.gd` + `hazard_{slammer,sweeper,gate,orbiter,volley}.gd` · `player3d.gd` (movement, jump, hit box) · `creature.gd` (everything you see: pose, walk, dust, death) · `camera_rig.gd` · `monoliths.gd` · `props/props.gd` · `flat_mats.gd` · `motion.gd` · `palette.gd` (`WorldPalette`) · `prewarm.gd` · `frame_meter.gd` · `hud.gd` · `menu.gd/.tscn` (the MAIN MENU — the scene the game opens into) · `track_test.gd/.tscn` (the run scene) · `level_select.gd/.tscn` (a dev tool: tap N to start the run at lap N-1).
 
-**`tools/`** — dev-only. Note they are still *packed* into the web build: `?autoplay=1` loads `res://tools/autoplay.gd` at runtime, so filtering them out would break that switch. They cost a few KB. `autoplay.gd` (headless bots) · `plan_stats.gd` (layout + `HASH`) · `lap_stats.gd` (regenerates `verdicts.json`) · `shot.gd` / `shot_walk.gd` / `shot_creature.gd` / `shot_scene.gd` (a PNG of any scene file — the screens) · `frame_probe.gd` · `package_web.sh` · `serve.py` · `make_endless_audio.py` · `decimate_models.py`.
+**`tools/`** — dev-only. Note they are still *packed* into the web build: `?autoplay=1` loads `res://tools/autoplay.gd` at runtime, so filtering them out would break that switch. They cost a few KB. `autoplay.gd` (headless bots) · `talo_check.gd` (the live leaderboard acceptance: register → post → read → delete) · `plan_stats.gd` (layout + `HASH`) · `lap_stats.gd` (regenerates `verdicts.json`) · `shot.gd` / `shot_walk.gd` / `shot_creature.gd` / `shot_scene.gd` (a PNG of any scene file — the screens) · `frame_probe.gd` · `package_web.sh` · `serve.py` · `make_endless_audio.py` · `decimate_models.py`.
 
 **`levels/`** — `curriculum.json` (knobs per level) · `verdicts.json` (shipped fairness verdicts).
 

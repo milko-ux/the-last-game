@@ -1,4 +1,4 @@
-[gd_scene load_steps=9 format=3]
+[gd_scene load_steps=10 format=3]
 
 [ext_resource type="Script" path="res://prototype/track_test.gd" id="1_test"]
 [ext_resource type="Script" path="res://prototype/field.gd" id="2_field"]
@@ -7,6 +7,7 @@
 [ext_resource type="Script" path="res://ui/ui.gd" id="5_ui"]
 [ext_resource type="AudioStream" path="res://assets/audio/fuffens_instrumental_vers.mp3" id="6_music"]
 [ext_resource type="Script" path="res://prototype/hud.gd" id="7_hud"]
+[ext_resource type="Script" path="res://ui/account_panel.gd" id="8_account"]
 
 [sub_resource type="Environment" id="Environment_fog"]
 background_mode = 1
@@ -107,3 +108,7 @@ theme_override_colors/font_color = Color(0.658824, 0.623529, 0.760784, 0.55)
 theme_override_font_sizes/font_size = 12
 horizontal_alignment = 1
 vertical_alignment = 1
+
+[node name="AccountPanel" type="Node2D" parent="UI"]
+visible = false
+script = ExtResource("8_account")

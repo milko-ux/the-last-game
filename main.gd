@@ -115,17 +115,13 @@ func _overlay_open() -> bool:
 	return account_panel.visible or lb_screen.visible
 
 
-# Keeps the local guest profile in step with the Talo account: signing
-# in claims the name, signing out (or deleting the account) releases
-# it. Signing in mid-results also submits the run that just ended —
-# that's the "register on the results screen, score still counts" flow.
+# Signing in mid-results submits the run that just ended — the "register
+# on the results screen, score still counts" flow. (Keeping the guest
+# name in step with the account is Talo's own job now: talo.gd
+# _sync_profile, because the Phase R menu and run need it too.)
 func _on_auth_changed() -> void:
-	if Talo.logged_in():
-		Profile.claim(Talo.identifier)
-		if showing_results:
-			_submit_scores()
-	elif Profile.claimed:
-		Profile.unclaim()
+	if Talo.logged_in() and showing_results:
+		_submit_scores()
 
 
 # ============================================================

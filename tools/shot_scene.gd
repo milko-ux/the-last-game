@@ -104,8 +104,24 @@ func _process(delta: float) -> bool:
 		ev.position = where
 		Input.parse_input_event(ev)
 		print("SHOT SCENE tapped %.0f,%.0f at %.2f s" % [where.x, where.y, _t])
-	if _t < at + _shots * step and _frames < MAX_FRAMES:
-		return false
+	if _frames >= MAX_FRAMES:
+		return true
+	if _shots < frames and _t >= at + _shots * step and not _pending:
+		# Read the picture AFTER this frame has been drawn, not before:
+		# read from _process the texture is the previous frame's, and with
+		# a 2D overlay that changed this frame (a screen that just opened)
+		# that is a picture of the wrong screen. Learned the hard way,
+		# 2026-09-22. (A `-s` script's _process cannot await: its return
+		# value is the quit signal, so the read is a one-shot callback.)
+		_pending = true
+		RenderingServer.frame_post_draw.connect(_capture, CONNECT_ONE_SHOT)
+	return _shots >= frames and not _pending
+
+
+var _pending := false
+
+
+func _capture() -> void:
 	var img := get_root().get_viewport().get_texture().get_image()
 	var dir := out.get_base_dir()
 	if dir != "" and not DirAccess.dir_exists_absolute(dir):
@@ -117,4 +133,4 @@ func _process(delta: float) -> bool:
 	print("SHOT SCENE saved %s  t=%.2f  (%d x %d, %d frames, %s)" % [path, _t,
 		img.get_width(), img.get_height(), _frames, "ok" if err == OK else "ERROR %d" % err])
 	_shots += 1
-	return _shots >= frames or _frames >= MAX_FRAMES
+	_pending = false

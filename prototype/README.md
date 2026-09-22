@@ -2,7 +2,30 @@
 
 ## Where we are (2026-09-22) — start here
 
-**The game is ONE ENDLESS RUN** (`PHASE_E_BRIEF_1_ENDLESS.md`): how far can you get. **Stage 1 (the run) is built and accepted. Stage 2 section 7 (the main menu) is BUILT and waiting for Milko's phone test; section 8 (the leaderboard) has NOT been started and must not be until he has seen the menu.** Everything below is newest first; this section is the whole state, the rest is the detail behind it.
+**The game is ONE ENDLESS RUN** (`PHASE_E_BRIEF_1_ENDLESS.md`): how far can you get. **Stage 1 (the run) is built and accepted. Stage 2 section 7 (the main menu) is built and PASSED on the phone. Section 8 (the leaderboard) is BUILT and blocked on ONE thing only Milko can do: create the `distance` board in the Talo dashboard (`docs/TALO_SETUP.md` 3b). Until then the board reads "Leaderboard not found".** Everything below is newest first; this section is the whole state, the rest is the detail behind it.
+
+### 2026-09-22 (night) — Stage 2 section 8: THE LEADERBOARD, built, waiting on the dashboard
+
+**What it is.** One board, `distance` (`Talo.DISTANCE_BOARD`): descending, unique — one entry per player, replaced only by a better run, which is Talo's own rule for unique boards. The season is a PROP on the entry, not part of the name, along with `country`, `laps`, `run_seconds` (wall time of the run — a rewind cannot shrink it), `deaths`, `build` (`application/config/version`, now `0.8.0`) and `layout` (`LapGen.LAYOUT_VERSION`): the facts a later cheat check needs, there from day one because prizes are planned.
+
+**Reused, not rewritten.** `autoload/talo.gd` gained three things: `post_best_distance(season)` (posts the player's best ONCE — a `posted` flag in `Progress.best_run` that a new best clears — and returns the rank line), `country_rank()` (the row's index among the country-filtered pages, 1-based), and `_sync_profile()` (the claim/unclaim of the guest name on sign-in/out, which used to be `main.gd`'s job and is now the signal's own, since the menu and the run both need it). `ui/leaderboard_screen.gd` gained a **distance mode** (`open_distance()`): no difficulty tabs, no PROGRESS/FINISHERS, only GLOBAL / MY COUNTRY; a row is rank, name, country, metres; 66-unit tap targets; it paints no opaque background so the menu's live world stays behind it. `ui/account_panel.gd` untouched, opened from three places now (SETTINGS, JOIN on the board, JOIN on the end screen).
+
+**Where it shows.** The menu's LEADERBOARD is lit (amber) when the build has a key and opens the board; dim with "not set up in this build" when it has none. The end screen shows `#12 GLOBAL   ·   #3 SE` under BEST for a signed-in player (the run posts on game over; the country code, not the name — the screen shows codes too), or JOIN TO POST YOUR DISTANCE for a guest, which opens the account panel right there and posts the moment they are signed in (the 2D game's "register on the results screen, score still counts" flow). A best that was never posted goes up the next time the menu opens signed in.
+
+**The key verdict — safe as scoped, nothing to change in the dashboard.** Full reasoning in `docs/TALO_SETUP.md` ("The access key"). In one line: the key identifies the game not a person; with `read/write:players` + `read/write:leaderboards` a stranger can read boards, look up names, register, and post **as themselves** — not as anyone else, because Talo demands that player's session token for any action on a Talo-registered alias; no delete, no emails, no dashboard. A key holder can always post a made-up distance from outside the game; that is every client-submitted leaderboard, and why the props exist.
+
+**`talo.cfg` ships now** — both presets name it in `include_filter`. That means REGISTER · LOG IN works on the phone from this build on (it did not before: the panel said "accounts are not set up in this build").
+
+**Talo's refresh interval — exists, reported, not used.** A board can reset daily / weekly / monthly / yearly; the old entries are archived, readable with `withDeleted` / `include_archived`. The brief said report it and not build seasons on it: the `distance` board is created with NO refresh interval and the season stays a prop.
+
+**Proof so far, against the real API (`tools/talo_check.gd`, new):** `register` PASS with a throwaway account; `post` stops with **"Leaderboard not found"** — the expected stop, the board does not exist yet — and the account is deleted again. The rest of the check (on GLOBAL, on MY COUNTRY, country rank, delete removes the entry, the posted flag) runs the moment the board exists: `godot --headless --path . -s tools/talo_check.gd -- metres=1234 country=SE`. **Regression:** validator bot `level=1 fps=60` `deaths=0` after the run-scene changes; the menu and the board hold `16.7 avg`.
+
+**Screenshots** (`docs/screenshots/`): `e-end-screen.png` (guest, JOIN) is in; `e-leaderboard-global.png` / `e-leaderboard-country.png` wait for rows to exist.
+
+**Tooling found out the hard way:** `tools/shot_scene.gd` used to read the picture from `_process`, which is the PREVIOUS frame's — with a 2D screen that opened this frame it was a picture of the wrong screen, and it looked exactly like "the tap did nothing". It now reads in a one-shot `frame_post_draw` callback. `tools/shot.gd end=1` shoots the end screen (it always could).
+
+**MILKO'S TURN:** `docs/TALO_SETUP.md` section 3b — create the `distance` board (internal name exactly `distance`, Descending, Unique yes, no refresh interval). Say when it exists; I run the check and take the last two screenshots.
+
 
 ### 2026-09-22 (evening) — the menu's creature GREETS you
 
@@ -91,10 +114,10 @@ The leash (brief 5A) guarantees `distance(foot, hip) <= LEG_H * LEG_STRETCH_MAX`
 
 ### NEXT, in this order
 
-1. **Phase E Stage 2 section 8 — the leaderboard** (`PHASE_E_BRIEF_1_ENDLESS.md`). Section 7 (the menu) is done, see the report above. Milko opened this on 2026-09-22; it is ahead of everything else.
+1. **Phase E Stage 2 section 8 — the leaderboard: finish the acceptance** once the `distance` board exists (the live check, the two board screenshots, the phone test). Everything else in section 8 is built, see the report above.
    - **It reuses the 2D game's code, which is exactly why that code MUST STAY IN THE EXPORT**: `autoload/talo.gd` (the only file that talks to the internet), `autoload/consent.gd` (GDPR consent + the self-declared country), `ui/leaderboard_screen.gd` and `ui/account_panel.gd`. Do not "clean up" the 2D files or their autoloads — `Talo` and `Consent` ARE Stage 2's backend. `docs/TALO_GOTCHAS.md` and `docs/TALO_SETUP.md` become live reading again.
    - The backend is already live and verified end to end against the real Talo API (2026-09-02): register, play, submit, rank, delete. `talo.cfg` is gitignored and must exist locally per `docs/TALO_SETUP.md`; with no key the whole feature hides itself.
-   - **One export detail to fix when Stage 2 lands**: the "Web (Phase R)" preset has an empty `include_filter`, so it does NOT ship `talo.cfg` (the 2D "Web" preset does). Without it the leaderboard is invisible on the phone.
+   - ~~One export detail to fix when Stage 2 lands: the "Web (Phase R)" preset has an empty `include_filter`, so it does NOT ship `talo.cfg`.~~ **Done 2026-09-22.**
    - **On web, HTTP goes through `JavaScriptBridge`, never `HTTPRequest`** — see `docs/TALO_GOTCHAS.md`. That is a branch nothing on this Mac has ever tested.
 2. **The foot bug — the two prints, first.** `prototype/creature.gd` has roughly doubled over briefs 5 and 5A/B and carries five interacting clocks (the stride phase, the settle clock, the leash's recovery step, the jump tuck, the mode timer), which is where this is hiding. Do not split the file until the bug is found; splitting it now just moves the bug house.
 3. **Brief 6 sections 1 + 2 as ONE slice** (`PHASE_A_BRIEF_6_LIGHT.md`): one light direction published as a global uniform, then drop shadows, **creature first** (body + both feet), hazards after. Taking section 1 with it avoids hardcoding a light direction and then reworking it.
@@ -132,7 +155,7 @@ The leash (brief 5A) guarantees `distance(foot, hip) <= LEG_H * LEG_STRETCH_MAX`
 `SHIELD_COST` 30 · lap 7 still clears 5 bars at 24 passes · the audio encoder -- **conditional permission already given: ONLY if he says the ogg sounds worse than the mp3 may I `brew install ffmpeg` for libvorbis and re-cut the same file at quality 6** · the human bot's blind spots at run bars 63 / 77 · whether rotation resizes the canvas (still unmeasured).
 
 ### Not to be started without him saying so
-Stage 2 section 8 (the leaderboard) · brief 5 section 6 · anything in brief 6 beyond sections 1+2 · any Stage-1 tuning beyond what he asks for.
+Anything past section 8 (the share / roast screen, skins, prizes) · brief 5 section 6 · anything in brief 6 beyond sections 1+2 · any Stage-1 tuning beyond what he asks for.
 
 **ON HOLD / superseded:** level-1 orbiter tuning (he called the pace right), the level-6 verdict cache (replaced by `levels/verdicts.json`).
 

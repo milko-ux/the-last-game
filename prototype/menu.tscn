@@ -1,8 +1,9 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://prototype/menu.gd" id="1_menu"]
 [ext_resource type="Script" path="res://prototype/camera_rig.gd" id="2_rig"]
 [ext_resource type="Script" path="res://ui/account_panel.gd" id="3_account"]
+[ext_resource type="Script" path="res://ui/leaderboard_screen.gd" id="4_lb"]
 
 [sub_resource type="Environment" id="Environment_menu"]
 background_mode = 1
@@ -35,3 +36,7 @@ fov = 55.0
 [node name="AccountPanel" type="Node2D" parent="UI"]
 visible = false
 script = ExtResource("3_account")
+
+[node name="LeaderboardScreen" type="Node2D" parent="UI"]
+visible = false
+script = ExtResource("4_lb")

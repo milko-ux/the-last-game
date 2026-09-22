@@ -97,6 +97,10 @@ func mark_cleared(d: Diff) -> void:
 # ------------------------------------------------------------
 var graduated := false
 var best_distance := {}
+# The best run's facts, per season, kept for the leaderboard (Phase E
+# section 8): laps, run_seconds, deaths, build, layout — the entry props a
+# later cheat check needs — and `posted`, true once Talo has this best.
+var best_run := {}
 # The bots and tools turn this off: they must never write to the save file
 # of whoever owns the machine.
 var save_enabled := true
@@ -130,13 +134,43 @@ func best_distance_for(season: int) -> int:
 	return int(best_distance.get(str(season), 0))
 
 
-# Returns true when it is a new best (and saves it).
-func record_distance(season: int, metres: int) -> bool:
+# Returns true when it is a new best (and saves it). `props` are the
+# run's facts (see best_run); a new best is not yet posted.
+func record_distance(season: int, metres: int, props: Dictionary = {}) -> bool:
 	if metres <= best_distance_for(season):
 		return false
 	best_distance[str(season)] = metres
+	if not props.is_empty():
+		var run := props.duplicate()
+		run["posted"] = false
+		best_run[str(season)] = run
 	save_progress()
 	return true
+
+
+func best_run_for(season: int) -> Dictionary:
+	return best_run.get(str(season), {})
+
+
+func best_posted(season: int) -> bool:
+	return bool(best_run_for(season).get("posted", false))
+
+
+func mark_best_posted(season: int) -> void:
+	if best_run.has(str(season)):
+		best_run[str(season)]["posted"] = true
+		save_progress()
+
+
+# On sign-out / account deletion: whoever signs in next has to post again.
+func unpost_best() -> void:
+	var changed := false
+	for k in best_run:
+		if bool(best_run[k].get("posted", false)):
+			best_run[k]["posted"] = false
+			changed = true
+	if changed:
+		save_progress()
 
 
 func best_for(level: int) -> float:
@@ -190,7 +224,7 @@ func save_progress() -> void:
 		return
 	f.store_string(JSON.stringify({"standard_cleared": standard_cleared, "best_song_time": best_song_time,
 		"best_score": best_score, "levels_cleared": levels_cleared,
-		"graduated": graduated, "best_distance": best_distance, "sound_on": sound_on}))
+		"graduated": graduated, "best_distance": best_distance, "best_run": best_run, "sound_on": sound_on}))
 	f.close()
 
 
@@ -217,4 +251,7 @@ func load_progress() -> void:
 		var bd = parsed.get("best_distance", {})
 		if bd is Dictionary:
 			best_distance = bd
+		var br = parsed.get("best_run", {})
+		if br is Dictionary:
+			best_run = br
 		sound_on = bool(parsed.get("sound_on", true))

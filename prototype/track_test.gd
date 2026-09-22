@@ -54,6 +54,9 @@ enum State { WAIT, STARTING, RUN, DEAD, WON, GAMEOVER, LOADING }
 @onready var score_label: Label = $UI/Score
 @onready var debug: Label = $UI/Debug
 @onready var hud: Node2D = $UI/Hud
+# Section 8: JOIN on the end screen opens the existing account panel
+# right here, and signing in there posts the run that just ended.
+@onready var account_panel: Node2D = $UI/AccountPanel
 # Brief 3: everything on the beat and the weight of the moments; presentation only.
 var motion: Node = null
 # The knobs of what is being played: one curriculum row. Everything that
@@ -206,6 +209,8 @@ func _ready() -> void:
 	add_child(_edge_line)
 	hud.ticks = []
 	ui.jump_pressed.connect(_on_jump)
+	Talo.auth_changed.connect(_on_auth_changed)
+	ui.overlays = [account_panel]   # the joystick and JUMP ignore taps while it is up
 	status.text = "TAP TO START"
 	debug.text = _fair_warning
 	score_label.text = ""
@@ -631,6 +636,8 @@ func lives_enabled() -> bool:
 
 
 func _input(event: InputEvent) -> void:
+	if account_panel.visible:
+		return   # the panel owns the screen; nothing leaks through to the run
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_SPACE:
 		if state == State.RUN:
 			_on_jump()
@@ -662,7 +669,9 @@ func _input(event: InputEvent) -> void:
 					# RETRY (big) starts a new run with the short run-up; MENU goes
 					# back to the main menu. A key = retry.
 					var pos: Variant = event.position if (event is InputEventScreenTouch or event is InputEventMouseButton) else null
-					if pos != null and hud.menu_rect.has_point(pos):
+					if pos != null and hud.join_rect.has_point(pos):
+						account_panel.open()
+					elif pos != null and hud.menu_rect.has_point(pos):
 						_to_menu()
 					elif pos == null or hud.retry_rect.has_point(pos):
 						BeatClock.stop()
@@ -1004,7 +1013,7 @@ func _game_over() -> void:
 	hud.hide_word()
 	if endless:
 		# The end screen (section 6): distance big, BEST / NEW BEST, RETRY, MENU.
-		var new_best: bool = Progress.record_distance(LapGen.SEASON_SEED, distance_m) or (distance_m > _best_m and distance_m > 0)
+		var new_best: bool = Progress.record_distance(LapGen.SEASON_SEED, distance_m, _run_props()) or (distance_m > _best_m and distance_m > 0)
 		status.text = ""
 		score_label.visible = false
 		_best_label.visible = false
@@ -1013,6 +1022,7 @@ func _game_over() -> void:
 		_edge_line.visible = false
 		_best_line.visible = false
 		hud.show_end(Hud.metres(distance_m), "BEST " + Hud.metres(maxi(_best_m, distance_m)), new_best)
+		_post_distance()
 		print("RUN OVER distance=%d m best=%d m new_best=%s laps=%d run_s=%.1f deaths=%d notes=%d shields_used=%d" % [
 			distance_m, maxi(_best_m, distance_m), new_best, BeatClock.current_lap(),
 			BeatClock.song_time() - BeatClock.start_offset, deaths, notes, shields_used])
@@ -1021,6 +1031,43 @@ func _game_over() -> void:
 	Progress.record_score(Rules.LEVEL, score)
 	status.text = "OUT OF LIVES\ndied at %d%%   ·   deaths %d   ·   score %d\nTAP TO RETRY FROM LEVEL 1" % [
 		int(round(BeatClock.progress_of(furthest_t) * 100.0)), deaths, score]
+
+
+# Section 8 — the leaderboard. The facts of this run that travel with the
+# entry (for a later cheat check: a distance beyond run_seconds x the
+# scroll speed is impossible). run_seconds is WALL time from the start
+# of the run, which a rewind cannot shrink.
+func _run_props() -> Dictionary:
+	return {
+		"laps": BeatClock.current_lap(),
+		"run_seconds": int(round(float(Time.get_ticks_msec() - _run_started_ms) / 1000.0)),
+		"deaths": deaths,
+		"build": str(ProjectSettings.get_setting("application/config/version", "dev")),
+		"layout": LapGen.LAYOUT_VERSION,
+	}
+
+
+# Posts the best (this run, if it was one) for a signed-in player; shows
+# a guest the JOIN pill instead. Fire-and-forget: the end screen is up
+# and a slow network only means the rank line lands late.
+func _post_distance() -> void:
+	hud.end_join = Talo.configured() and not Talo.logged_in()
+	if not (Talo.configured() and Talo.logged_in() and Consent.granted):
+		return
+	if Progress.best_posted(LapGen.SEASON_SEED):
+		return
+	hud.end_rank = "POSTING…"
+	var line: String = await Talo.post_best_distance(LapGen.SEASON_SEED)
+	if state == State.GAMEOVER:
+		hud.end_rank = line
+
+
+# Signing in on the end screen (JOIN -> the account panel) posts the run
+# that just ended: the "register on the results screen, score still
+# counts" flow the 2D game has.
+func _on_auth_changed() -> void:
+	if endless and state == State.GAMEOVER:
+		_post_distance()
 
 
 func _rewind() -> void:

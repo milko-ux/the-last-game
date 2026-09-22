@@ -50,6 +50,61 @@ Why these settings matter:
 - **Finishers boards, Ascending:** the score is simply deaths on a
   winning run — fewest first. Only submitted when the loop is cleared.
 
+## 3b. The endless run's board — `distance` (Phase E section 8, 2026-09-22)
+
+The endless run posts ONE number, the furthest distance in metres, to
+ONE board. The six boards above belong to the old level game and stay
+as they are. This is the one to create now. Click by click:
+
+1. Dashboard → **Leaderboards** → **Create leaderboard**.
+2. **Internal name:** `distance` — exactly that, lower case. The game
+   addresses the board by this name (`Talo.DISTANCE_BOARD`); a typo
+   here means an empty board and no error anywhere.
+3. **Display name:** anything, e.g. `Distance`.
+4. **Sort mode:** **Descending** (a longer run ranks higher).
+5. **Unique entries:** **Yes** (one entry per player; Talo replaces it
+   only when the new run is better — the player cannot wipe their own
+   best, and the game may post every run safely).
+6. **Refresh interval:** **None / never.** (Talo can reset a board
+   daily, weekly, monthly or yearly and archive the old entries. It
+   exists, it is real — but seasons are NOT built on it yet; the season
+   travels as a prop on each entry instead. Leave it off.)
+7. Save. Nothing else — no props to declare up front: an entry's props
+   (`season`, `country`, `laps`, `run_seconds`, `deaths`, `build`,
+   `layout`) are sent with the entry and appear in the dashboard's
+   entry view on their own.
+
+Then, the check that it works end to end (I do this part): a throwaway
+account registers, posts a distance, it appears under GLOBAL and under
+its country, and deleting the account removes it. If the board name is
+wrong, the very first post fails with a 404 and I will say so.
+
+### The access key — is it safe to ship in a web build? (checked 2026-09-22)
+
+Yes, as the key is scoped now. The verdict in plain language:
+
+- **Talo's model IS that the key ships with the game.** Their Godot and
+  Unity packages embed it in the client; there is no other way for a
+  player's copy of the game to talk to Talo. The key identifies the
+  GAME, not a person, and has no billing or admin power.
+- **What our four scopes let a stranger who extracts the key do:** read
+  the leaderboards (public anyway), look up players by name, register
+  accounts (rate-limited), and post scores **as themselves**. What they
+  **cannot** do: post as another player — Talo requires that player's
+  session token (`x-talo-session`, "required for this player") for any
+  action on a Talo-registered alias; delete anyone; read emails; see the
+  dashboard; touch game settings.
+- **What a key holder can still do, and always will:** register and post
+  a made-up distance from outside the game. That is true of every
+  client-submitted leaderboard on earth, not a Talo weakness. It is why
+  every entry carries `laps`, `run_seconds`, `deaths`, `build` and
+  `layout` from day one — the cheat check comes later, with prizes.
+- **Nothing to change in the dashboard,** as long as the key has ONLY
+  the four scopes in section 2. If you ever add `write:game-config`,
+  `read:game-config`, `write:events` or anything broader, make a
+  separate key for the tool that needs it and keep the game's key at
+  four.
+
 ## 4. Put the key in the game
 
 ```bash
@@ -67,6 +122,11 @@ base_url="https://api.trytalo.com"
 `talo.cfg` is gitignored on purpose — the repo is public, the key is
 not. (The key does ship inside the exported web build; that's how
 Talo is designed to work, and the scopes above are all it can do.)
+
+**Both export presets now name `talo.cfg` in their `include_filter`**
+("Web" and "Web (Phase R)"). `.cfg` is not a Godot resource, so the
+exporter drops it silently unless it is named there — the build then
+ships dark with no error anywhere (docs/TALO_GOTCHAS.md, item 2).
 
 Then re-export the build and the leaderboard UI appears everywhere.
 

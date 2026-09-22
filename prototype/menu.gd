@@ -21,7 +21,9 @@ extends Node3D
 #
 # WHAT THE BUTTONS DO
 #   PLAY         starts the endless run at lap 0 (Rules.ENDLESS)
-#   LEADERBOARD  section 8 — dim until then, and it says so
+#   LEADERBOARD  the EXISTING leaderboard screen (ui/leaderboard_screen.gd)
+#                in its distance mode: GLOBAL / MY COUNTRY, metres. Dim
+#                with a note when this build has no Talo key.
 #   SETTINGS     sound on/off, the nickname, and the EXISTING account
 #                panel (ui/account_panel.gd: consent -> register / log
 #                in -> manage / delete). No second account flow was
@@ -167,6 +169,7 @@ var _alpha := 0.0             # the overlay fades up while the world is built
 
 @onready var rig: Node3D = $CameraRig
 @onready var account_panel: Node2D = $UI/AccountPanel
+@onready var lb_screen: Node2D = $UI/LeaderboardScreen
 
 # Which overlay is up. The 3D stays live behind all of them.
 enum Sheet { NONE, SETTINGS }
@@ -234,6 +237,15 @@ func _ready() -> void:
 	_name_edit = _make_name_edit()
 	$UI.add_child(_name_edit)
 	account_panel.closed.connect(func() -> void: _overlay.queue_redraw())
+	lb_screen.closed.connect(func() -> void: _overlay.queue_redraw())
+	# JOIN on the board: the same account panel SETTINGS opens.
+	lb_screen.join_requested.connect(func() -> void:
+		lb_screen.close()
+		account_panel.open())
+	# A best run that has not reached the board yet goes up as soon as the
+	# player is signed in — now, or the moment they register in SETTINGS.
+	Talo.auth_changed.connect(_post_best)
+	_post_best()
 
 	if FrameMeter.enabled():
 		$UI.add_child(FrameMeter.new())
@@ -503,7 +515,16 @@ func _play() -> void:
 # INPUT
 # ------------------------------------------------------------
 func _overlay_open() -> bool:
-	return account_panel.visible
+	return account_panel.visible or lb_screen.visible
+
+
+# Section 8: the stored best goes to the board once (Talo.post_best_distance
+# does nothing when it is already there). Fire-and-forget; the menu has no
+# rank line to show, the end screen does.
+func _post_best() -> void:
+	var line: String = await Talo.post_best_distance(LapGen.SEASON_SEED)
+	if line != "":
+		print("MENU posted best: %s" % line)
 
 
 func _input(event: InputEvent) -> void:
@@ -537,8 +558,8 @@ func _tap(what: String) -> void:
 		"play":
 			_play()
 		"leaderboard":
-			# Section 8 wires this to ui/leaderboard_screen.gd.
-			pass
+			if Talo.configured():
+				lb_screen.open_distance()
 		"settings", "name_chip":
 			_panel = Sheet.SETTINGS
 		"close":
@@ -638,6 +659,13 @@ func draw_overlay(c: CanvasItem) -> void:
 			Color(Palette.TEXT.r, Palette.TEXT.g, Palette.TEXT.b, 0.8))
 		return
 
+	# The leaderboard is a whole screen, not a sheet: while it is up the
+	# menu draws nothing of its own but the dim, and the world stays live
+	# behind it.
+	if lb_screen.visible:
+		c.draw_rect(Rect2(Vector2.ZERO, screen), Color(0.04, 0.05, 0.08, 0.6), true)
+		return
+
 	var a := _alpha
 	_draw_title(c, font, a)
 	_draw_buttons(c, screen, font, a)
@@ -706,11 +734,15 @@ func _draw_buttons(c: CanvasItem, screen: Vector2, font: Font, a: float) -> void
 
 	var lb := Rect2(Vector2(x, row_y), Vector2(190.0, TAP_MIN))
 	_rects["leaderboard"] = lb
-	# Section 8 lights this up. Until then it is honestly dim and says so.
-	Hud.glass_pill(c, lb, Palette.TEXT, 0.45 * a)
-	Hud.centre_text(c, font, "LEADERBOARD", lb.get_center() + Vector2(0, -4), 14, Color(1, 1, 1, 0.45 * a))
-	Hud.centre_text(c, font, "next", lb.get_center() + Vector2(0, 14), 10,
-		Color(Palette.TEXT.r, Palette.TEXT.g, Palette.TEXT.b, 0.5 * a))
+	if Talo.configured():
+		Hud.glass_pill(c, lb, Palette.GOAL, 0.9 * a)
+		Hud.centre_text(c, font, "LEADERBOARD", lb.get_center() + Vector2(0, -1), 14, Color(1, 1, 1, 0.92 * a))
+	else:
+		# No Talo key in this build: honestly dim, and it says why.
+		Hud.glass_pill(c, lb, Palette.TEXT, 0.45 * a)
+		Hud.centre_text(c, font, "LEADERBOARD", lb.get_center() + Vector2(0, -4), 14, Color(1, 1, 1, 0.45 * a))
+		Hud.centre_text(c, font, "not set up in this build", lb.get_center() + Vector2(0, 14), 10,
+			Color(Palette.TEXT.r, Palette.TEXT.g, Palette.TEXT.b, 0.5 * a))
 
 	var st := Rect2(Vector2(x + 202.0, row_y), Vector2(114.0, TAP_MIN))
 	_rects["settings"] = st
