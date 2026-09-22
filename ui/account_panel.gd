@@ -100,6 +100,7 @@ func open() -> void:
 	busy = false
 	_editing_country = false
 	_pass_visible = false
+	_consent_detail = false
 	if Talo.logged_in():
 		mode = Mode.SIGNED_IN
 	elif Consent.needs_consent():
@@ -173,6 +174,8 @@ func _tap(what: String) -> void:
 	match what:
 		"close", "close2":
 			close()
+		"detail":
+			_consent_detail = true
 		"agree":
 			Consent.grant()
 			mode = Mode.FORM
@@ -356,38 +359,69 @@ func _draw_corner_brackets(panel: Rect2, color: Color) -> void:
 	draw_line(br, br + Vector2(0, -arm), col, 2.0)
 
 
+# The consent screen (2026-09-22, Milko's copy): short enough to read
+# in one breath. The full detail is one tap away — "What exactly is
+# stored?" swaps in the long text, unchanged, on the same screen.
+const CONSENT_SHORT := [
+	"To put your distance on the board we store your name,",
+	"a scrambled password and your scores.",
+	"",
+	"Email only if you want password recovery.",
+	"Country only if you choose to show it.",
+	"",
+	"No tracking. No ads. Nothing sold.",
+	"",
+	"Delete your account in the game any time —",
+	"your scores go with it.",
+	"",
+	"Rather not? Play as a guest. Nothing leaves your phone.",
+]
+const CONSENT_LONG := [
+	"Creating an account stores this on our leaderboard",
+	"service (Talo):",
+	"",
+	"- your player name and a scrambled (hashed) password",
+	"- your scores, deaths and furthest level",
+	"- your country code, only if you choose to show it",
+	"- your email, only if you give one (used for password",
+	"  recovery, nothing else)",
+	"",
+	"No tracking, no ads profiles, no selling data.",
+	"",
+	"You can delete your account in-game at any time -",
+	"that erases everything above, scores included.",
+	"",
+	"Not into it? Keep playing as a guest -",
+	"nothing ever leaves your phone.",
+]
+var _consent_detail := false
+
+
 func _draw_consent(panel: Rect2, font) -> void:
 	var cx := panel.get_center().x
 	var y := panel.position.y + 40.0
-	_centre(font, "BEFORE YOU JOIN THE LEADERBOARD", Vector2(cx, y), 20, Palette.EDGE)
+	_centre(font, "JOIN THE LEADERBOARD", Vector2(cx, y), 20, Palette.EDGE)
 	y += 34.0
 
-	var lines := [
-		"Creating an account stores this on our leaderboard",
-		"service (Talo):",
-		"",
-		"- your player name and a scrambled (hashed) password",
-		"- your scores, deaths and furthest level",
-		"- your country code, only if you choose to show it",
-		"- your email, only if you give one (used for password",
-		"  recovery, nothing else)",
-		"",
-		"No tracking, no ads profiles, no selling data.",
-		"",
-		"You can delete your account in-game at any time -",
-		"that erases everything above, scores included.",
-		"",
-		"Not into it? Keep playing as a guest -",
-		"nothing ever leaves your phone.",
-	]
+	var lines: Array = CONSENT_LONG if _consent_detail else CONSENT_SHORT
 	for line in lines:
 		_centre(font, line, Vector2(cx, y), 13, Palette.TEXT)
 		y += 18.0
 
+	if not _consent_detail:
+		y += 4.0
+		var detail := Rect2(Vector2(cx - 110.0, y - 6.0), Vector2(220.0, 26.0))
+		_rects["detail"] = detail
+		_centre(font, "What exactly is stored?", detail.get_center(), 12,
+			Color(Palette.EDGE.r, Palette.EDGE.g, Palette.EDGE.b, 0.75))
+		draw_line(Vector2(cx - 62.0, y + 16.0), Vector2(cx + 62.0, y + 16.0),
+			Color(Palette.EDGE.r, Palette.EDGE.g, Palette.EDGE.b, 0.35), 1.0)
+		y += 26.0
+
 	var bw := minf(320.0, panel.size.x - 60.0)
 	var agree := Rect2(Vector2(cx - bw * 0.5, y + 8.0), Vector2(bw, 44.0))
 	_rects["agree"] = agree
-	_glow_button(agree, Palette.EDGE, "I AGREE - LET'S GO", font)
+	_glow_button(agree, Palette.EDGE, "CREATE ACCOUNT", font)
 
 	var later := Rect2(Vector2(cx - 70.0, agree.end.y + 10.0), Vector2(140.0, 28.0))
 	_rects["close2"] = later

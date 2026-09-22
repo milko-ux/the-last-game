@@ -19,7 +19,7 @@ extends Node
 # ============================================================
 
 const SAVE_PATH := "user://consent.save"
-const VERSION := 1
+const VERSION := 2   # 2: the short copy of 2026-09-22 (the long text is one tap away, unchanged)
 
 var granted := false
 var granted_at := ""       # ISO date, e.g. "2026-08-26" — proof of when
