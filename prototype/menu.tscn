@@ -1,0 +1,37 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://prototype/menu.gd" id="1_menu"]
+[ext_resource type="Script" path="res://prototype/camera_rig.gd" id="2_rig"]
+[ext_resource type="Script" path="res://ui/account_panel.gd" id="3_account"]
+
+[sub_resource type="Environment" id="Environment_menu"]
+background_mode = 1
+background_color = Color(0.043137, 0.05098, 0.078431, 1)
+ambient_light_source = 1
+tonemap_mode = 0
+glow_enabled = false
+fog_enabled = false
+
+[node name="Menu" type="Node3D"]
+script = ExtResource("1_menu")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_menu")
+
+[node name="CreatureLight" type="DirectionalLight3D" parent="."]
+transform = Transform3D(-0.80000, -0.48000, 0.36000, 0.00000, 0.60000, 0.80000, -0.60000, 0.64000, -0.48000, 0, 10, 0)
+light_energy = 1.1
+shadow_enabled = false
+
+[node name="CameraRig" type="Node3D" parent="."]
+script = ExtResource("2_rig")
+
+[node name="Camera3D" type="Camera3D" parent="CameraRig"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.2, 21, -14)
+fov = 55.0
+
+[node name="UI" type="CanvasLayer" parent="."]
+
+[node name="AccountPanel" type="Node2D" parent="UI"]
+visible = false
+script = ExtResource("3_account")

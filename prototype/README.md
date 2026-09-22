@@ -2,7 +2,28 @@
 
 ## Where we are (2026-09-22) — start here
 
-**The game is ONE ENDLESS RUN** (`PHASE_E_BRIEF_1_ENDLESS.md`): how far can you get. **Stage 1 (the run) is built and accepted. Stage 2 (menu + leaderboard) is NOT started and must not be started until Milko says so.** Everything below is newest first; this section is the whole state, the rest is the detail behind it.
+**The game is ONE ENDLESS RUN** (`PHASE_E_BRIEF_1_ENDLESS.md`): how far can you get. **Stage 1 (the run) is built and accepted. Stage 2 section 7 (the main menu) is BUILT and waiting for Milko's phone test; section 8 (the leaderboard) has NOT been started and must not be until he has seen the menu.** Everything below is newest first; this section is the whole state, the rest is the detail behind it.
+
+### 2026-09-22 (evening) — Stage 2 section 7: THE MAIN MENU
+
+**The game no longer opens into the run. It opens into `prototype/menu.tscn`** (`run/main_scene.phase_r`), and the run is what PLAY loads. Screenshots: `docs/screenshots/e-menu.png`, `e-menu-settings.png`.
+
+- **It is the game's own world, live** — not a picture of it. A five-column strip of the real field (the same tile size and the same `Mats.tile()` material as `field.gd`), two carved buildings behind it dissolving into the fog, the creature standing on the strip facing the camera with its breathing, its beat squash and an idle that looks at the lens, away, and back. The camera is `camera_rig.gd` itself — the game's yaw, pitch and lens, only closer (distance 12.5 -> 17, solved from the window depth the rig is handed, not hardcoded).
+- **No new anything.** Glass buttons are `Hud.glass_pill` — the very pill the end screen draws, now a static so both use one copy. Colours are `WorldPalette` and `Palette`. The title is drawn letter by letter to carry real tracking; that is the only new drawing idea in the file.
+- **PLAY -> LEADERBOARD -> SETTINGS**, bottom left; the player's name is a chip top right. SETTINGS holds sound on/off, the nickname (RANDOM / EDIT, `Profile`), and **the existing account panel** — `ui/account_panel.gd`, opened unchanged: consent -> register / log in -> manage / delete. **No second account flow was written.** LEADERBOARD is deliberately dim and labelled `next` until section 8.
+- **Every tap target is at least 48 pt, worked out rather than eyeballed.** The 2D canvas is 540 units tall whatever the screen is, and the test iPhone gives 1179 device pixels at 3 per point — so one canvas unit is 0.73 pt and the brief's 48 pt is **66 units** (`Menu.TAP_MIN`). The first pass had 48-unit buttons, which is 35 pt. The left margin is 88 units (64 pt) to clear the landscape notch, and the bottom row stops 30 units (22 pt) above the home indicator.
+- **Sound on/off is new and saved** (`Progress.sound_on`, `AudioServer.set_bus_mute(0, ...)`). It MUTES, never stops: `BeatClock` reads the song's playback position every frame and a stopped stream has no position.
+- **The level select is now a dev tool only**, reached from the menu's DEV pill while `Progress.UNLOCK_ALL`. Tapping "N" there starts an endless run **at lap N-1** (the lap that uses band N), which is the brief's way to look at a band without playing up to it. Nothing there plays an old stand-alone level any more.
+- **The dev URL switches still work.** They used to be read by the run scene, which was the first scene; it is not any more. The query is now parsed once in `frame_meter.gd` (`FrameMeter.url_param`, `any_url_switch`), and **a page opened with `?level=N`, `?autoplay=1`, `?live=1`, `?grad=1` or `?scale=X` skips the menu and goes straight to the run** — `?level=1` is still the fixed spot for a frame-time reading and the bot still needs to arrive without a tap.
+- **Two rules obeyed on purpose:** the LOADING label is painted before PLAY's blocking scene change, with `FrameMeter.LABEL_TIMEOUT_MS` as the ceiling (copied from `level_select.gd`); and the world is built **one kind per frame** — tiles, then buildings, then the creature — so no single frame carries more than one first shader compile.
+- **`Hud.metres()` moved** from `track_test.gd` to `hud.gd` (the menu shows BEST in the same "1 240 m" form). Same function, same output.
+- **New tool: `tools/shot_scene.gd`** — opens any scene file, optionally taps it, saves a PNG. `tools/shot.gd` shoots a run and `tools/shot_walk.gd` shoots the walk rig; neither can be pointed at a screen. Section 8's four screenshots will come from this.
+
+**Numbers, Mac, 2400x1080, gl_compatibility:** menu **frame 16.7 avg / 17.6-20.6 worst, cpu 0.1-0.3** — the same 60 fps as the run, which is the brief's acceptance for this screen. The menu's own build costs `[menu 0.9-1.2]` on a COLD shader cache (four frames, one compile each) and that work is not repeated: PLAY still reports `load 2.1 s [validate 0.1 (lap 0 shipped) · prewarm 1.9]`, unchanged from the phone's 2.1 s. **Regression checks:** validator bot `level=1 fps=60` -> `deaths=0`; no layout source was touched, so `LAYOUT_VERSION` did not move.
+
+**Known, left alone:** the account panel's consent heading is a little wider than its 560-unit card — a pre-existing 2D-game layout quirk, not caused by the menu. Worth a one-line fix when section 8 touches those screens.
+
+**WAITING ON MILKO:** the phone test of the menu. Section 8 (the leaderboard) does not start before that.
 
 ### Where the work stands
 
@@ -28,7 +49,7 @@ A read-only health check first, then the fixes Milko approved. **No game code wa
 **Later the same day, after Milko's phone test passed** (page 1.9 s, load 2.1 s, frame 16.7 avg / 18-20 worst at bar 12):
 
 - **RETRY on the end screen is fixed.** It was changing scene correctly, but the retried run came up on TAP TO START and sat there, because the tap that pressed RETRY was spent on the scene change and the new scene never saw one. It now starts by itself, which is what the 4 s run-up is for. RETRY also uses `change_scene_to_file` now, the same call MENU makes — `reload_current_scene()` was the only thing the broken button did differently from the working one. Reproduced and fixed against a mirror of the project with the headless shortcut disabled, so the real LOADING path ran: before, run 2 ended at `state=WAIT`; after, `state=RUN` with the clock running.
-- **The push gate is a DENY, not an ask.** Milko's session runs in an auto-approve mode that satisfied the tool call before an "ask" could become a prompt — the first real test on 2026-09-22 went straight through. `deny` is not overridden that way, and it is now proven: an attempt was blocked with the message. Milko pushes himself. The matcher also had to learn to fire only on a command position and to ignore heredoc bodies — the first version denied merely *writing about* the command, in a doc or a commit message.
+- **The push gate is a DENY, not an ask.** Milko's session runs in an auto-approve mode that satisfied the tool call before an "ask" could become a prompt — the first real test on 2026-09-22 went straight through. `deny` is not overridden that way, and it is now proven: an attempt was blocked with the message. **Milko's own escape hatch is measured too:** he pushed `ba2e2ee` with `! git push origin phase-r-prototype` and the gate never fired — a command typed with `!` runs in his shell, not as a tool call, so no hook sees it. That was reasoning before; it is a measurement now. The matcher also had to learn to fire only on a command position and to ignore heredoc bodies — the first version denied merely *writing about* the command, in a doc or a commit message.
 
 **Known warnings, deliberately left** (full list in the session's report): two real footguns in the legacy 2D files — a parameter named `scale` in `entities/board.gd:160` and a local named `tr` in `ui/account_panel.gd:447`, both shadowing Godot built-ins. Not biting anything today. The ~30 "return value discarded" warnings are Godot noise. The integer divisions in `beat_clock.gd` and `rules.gd` were each checked and are all deliberate floor divisions.
 
@@ -58,7 +79,7 @@ The leash (brief 5A) guarantees `distance(foot, hip) <= LEG_H * LEG_STRETCH_MAX`
 
 ### NEXT, in this order
 
-1. **Phase E Stage 2 — the menu and the leaderboard** (`PHASE_E_BRIEF_1_ENDLESS.md`, sections 7-8). Milko opened this on 2026-09-22; it is now ahead of everything else.
+1. **Phase E Stage 2 section 8 — the leaderboard** (`PHASE_E_BRIEF_1_ENDLESS.md`). Section 7 (the menu) is done, see the report above. Milko opened this on 2026-09-22; it is ahead of everything else.
    - **It reuses the 2D game's code, which is exactly why that code MUST STAY IN THE EXPORT**: `autoload/talo.gd` (the only file that talks to the internet), `autoload/consent.gd` (GDPR consent + the self-declared country), `ui/leaderboard_screen.gd` and `ui/account_panel.gd`. Do not "clean up" the 2D files or their autoloads — `Talo` and `Consent` ARE Stage 2's backend. `docs/TALO_GOTCHAS.md` and `docs/TALO_SETUP.md` become live reading again.
    - The backend is already live and verified end to end against the real Talo API (2026-09-02): register, play, submit, rank, delete. `talo.cfg` is gitignored and must exist locally per `docs/TALO_SETUP.md`; with no key the whole feature hides itself.
    - **One export detail to fix when Stage 2 lands**: the "Web (Phase R)" preset has an empty `include_filter`, so it does NOT ship `talo.cfg` (the 2D "Web" preset does). Without it the leaderboard is invisible on the phone.
@@ -99,14 +120,14 @@ The leash (brief 5A) guarantees `distance(foot, hip) <= LEG_H * LEG_STRETCH_MAX`
 `SHIELD_COST` 30 · lap 7 still clears 5 bars at 24 passes · the audio encoder -- **conditional permission already given: ONLY if he says the ogg sounds worse than the mp3 may I `brew install ffmpeg` for libvorbis and re-cut the same file at quality 6** · the human bot's blind spots at run bars 63 / 77 · whether rotation resizes the canvas (still unmeasured).
 
 ### Not to be started without him saying so
-Stage 2 (menu + leaderboard) · brief 5 section 6 · anything in brief 6 beyond sections 1+2 · any Stage-1 tuning beyond what he asks for.
+Stage 2 section 8 (the leaderboard) · brief 5 section 6 · anything in brief 6 beyond sections 1+2 · any Stage-1 tuning beyond what he asks for.
 
 **ON HOLD / superseded:** level-1 orbiter tuning (he called the pace right), the level-6 verdict cache (replaced by `levels/verdicts.json`).
 
 **Models in `assets/models/`:** unchanged (creature; five hazard props with vertex colours from the bake; two buildings + their `_hi` copies, geometry only).
 
 ### Reference: the phone build and its dev switches (`https://172.20.10.2:8443`, reload fully)
-The build opens straight into the run. `?level=N` goes to one old level instead (the fixed spot for frame numbers), `?scale=X` overrides the render scale, `?autoplay=1&live=1` lets the bot play with every lap generated live, `?grad=1` plays as a graduated player. All dev-only, behind the same switch as the readout.
+The build opens into the MAIN MENU; PLAY loads the run. A dev switch in the URL skips the menu. `?level=N` goes to one old level instead (the fixed spot for frame numbers), `?scale=X` overrides the render scale, `?autoplay=1&live=1` lets the bot play with every lap generated live, `?grad=1` plays as a graduated player. All dev-only, behind the same switch as the readout.
 - A first run as a new player: lap 0 is level 1 as he knows it (no lives). Crossing into lap 1 (`STAGE 2`, ~2.5 min) graduates him: 3 lives from then on, and lap 0 stops teaching.
 - **The seam by ear** at ~2:29 of music (bar 73 -> bar 1). If it clicks, `LOOP_END_BAR` moves to another 8-bar boundary and `tools/make_endless_audio.py <bar>` re-cuts the file.
 - Notes charge the ring right of the distance; full = a cyan bubble that absorbs one hit. `SHIELD_COST` 30.

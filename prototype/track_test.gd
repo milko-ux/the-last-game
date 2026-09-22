@@ -17,6 +17,7 @@ const Rules := preload("res://prototype/rules.gd")
 const Mats := preload("res://prototype/flat_mats.gd")
 const HazardMath := preload("res://prototype/hazard_math.gd")
 const LapGen := preload("res://prototype/lap_gen.gd")
+const Hud := preload("res://prototype/hud.gd")
 
 # Lives come from the level's knobs (Rules.lives(): 0 on level 1, 3 from
 # level 2). Out of lives = the death screen, then back to level 1.
@@ -34,6 +35,7 @@ const NOTE_RADIUS := 1.0
 const COMBO_CAP := 4
 const START_Z := 10.0
 const SELECT_SCENE := "res://prototype/level_select.tscn"
+const MENU_SCENE := "res://prototype/menu.tscn"
 const RUN_SCENE := "res://prototype/track_test.tscn"
 # Score (addendum 4 section 5): distance and deaths; notes are a bonus.
 const DISTANCE_POINTS := 1000
@@ -286,32 +288,25 @@ func _apply_render_scale() -> void:
 #   ?grad=1       play as a graduated player (nothing is saved)
 var _dev_autoplay := false
 
-static func _url_param(query: String, key: String) -> String:
-	for part in query.trim_prefix("?").split("&"):
-		var kv := part.split("=")
-		if kv.size() == 2 and kv[0] == key:
-			return kv[1]
-	return ""
-
-
+# (The reading is in frame_meter.gd — the menu has to ask about the same
+# switches, so the query is parsed in one place.)
 func _dev_url_switches() -> void:
 	if not OS.has_feature("web") or not FrameMeter.enabled():
 		return
-	var q := str(JavaScriptBridge.eval("window.location.search"))
-	if _url_param(q, "scale") != "":
-		_render_scale_override = float(_url_param(q, "scale"))
-	if _url_param(q, "level") != "":
+	if FrameMeter.url_param("scale") != "":
+		_render_scale_override = float(FrameMeter.url_param("scale"))
+	if FrameMeter.url_param("level") != "":
 		Rules.ENDLESS = false
-		Rules.LEVEL = clampi(int(_url_param(q, "level")), 1, 6)
+		Rules.LEVEL = clampi(int(FrameMeter.url_param("level")), 1, 6)
 		return
 	if not Rules.ENDLESS:
 		return
-	if _url_param(q, "live") == "1":
+	if FrameMeter.url_param("live") == "1":
 		LapGen.ignore_verdicts = true
-	if _url_param(q, "grad") == "1":
+	if FrameMeter.url_param("grad") == "1":
 		Progress.save_enabled = false
 		Progress.graduated = true
-	if _url_param(q, "autoplay") == "1":
+	if FrameMeter.url_param("autoplay") == "1":
 		Progress.save_enabled = false
 		_dev_autoplay = true
 		var ap: Object = load("res://tools/autoplay.gd").new()
@@ -584,15 +579,6 @@ func _setup_run_hud() -> void:
 	add_child(_shield_burst)
 
 
-static func metres(m: int) -> String:
-	var txt := str(m)
-	var out := ""
-	while txt.length() > 3:
-		out = " " + txt.substr(txt.length() - 3) + out
-		txt = txt.substr(0, txt.length() - 3)
-	return txt + out + " m"
-
-
 # Per frame in a run: the distance, the best line, the shield's look.
 func _tick_distance_and_shield(delta: float) -> void:
 	_grace = maxf(0.0, _grace - delta)
@@ -649,7 +635,7 @@ func _input(event: InputEvent) -> void:
 		if state == State.RUN:
 			_on_jump()
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE:
-		_to_level_select()
+		_to_menu()
 		return
 	var pressed: bool = (event is InputEventScreenTouch and event.pressed) \
 		or (event is InputEventMouseButton and event.pressed) \
@@ -667,17 +653,17 @@ func _input(event: InputEvent) -> void:
 			status.text = ""
 		State.WON:
 			if _end_shown > 0.6:
-				_to_level_select()
+				_to_menu()
 		State.GAMEOVER:
 			# Out of lives. A level: the loop starts over from level 1 (the
 			# original rule). The endless run: a new run, short run-up.
 			if _end_shown > 0.6:
 				if endless:
-					# RETRY (big) starts a new run with the short run-up; MENU goes to
-					# the dev level select until Stage 2's menu exists. A key = retry.
+					# RETRY (big) starts a new run with the short run-up; MENU goes
+					# back to the main menu. A key = retry.
 					var pos: Variant = event.position if (event is InputEventScreenTouch or event is InputEventMouseButton) else null
 					if pos != null and hud.menu_rect.has_point(pos):
-						_to_level_select()
+						_to_menu()
 					elif pos == null or hud.retry_rect.has_point(pos):
 						BeatClock.stop()
 						# The retried run starts BY ITSELF once it has loaded — that is
@@ -693,11 +679,13 @@ func _input(event: InputEvent) -> void:
 				get_tree().reload_current_scene()
 
 
-func _to_level_select() -> void:
+# MENU: the endless run goes to the real main menu (Phase E section 7);
+# a dev level (?level=N) still goes to the level select it came from.
+func _to_menu() -> void:
 	if endless:
 		Progress.record_distance(LapGen.SEASON_SEED, distance_m)
 	BeatClock.stop()
-	get_tree().change_scene_to_file(SELECT_SCENE)
+	get_tree().change_scene_to_file(MENU_SCENE if endless else SELECT_SCENE)
 
 
 func _process(delta: float) -> void:
@@ -1024,7 +1012,7 @@ func _game_over() -> void:
 		# The two lines that always draw on top would cut across the buttons.
 		_edge_line.visible = false
 		_best_line.visible = false
-		hud.show_end(metres(distance_m), "BEST " + metres(maxi(_best_m, distance_m)), new_best)
+		hud.show_end(Hud.metres(distance_m), "BEST " + Hud.metres(maxi(_best_m, distance_m)), new_best)
 		print("RUN OVER distance=%d m best=%d m new_best=%s laps=%d run_s=%.1f deaths=%d notes=%d shields_used=%d" % [
 			distance_m, maxi(_best_m, distance_m), new_best, BeatClock.current_lap(),
 			BeatClock.song_time() - BeatClock.start_offset, deaths, notes, shields_used])
@@ -1081,11 +1069,11 @@ func _win() -> void:
 # The run's HUD: the distance, BEST, lives, the shield meter. No score, no
 # combo readout, no song progress bar.
 func _update_run_hud() -> void:
-	score_label.text = metres(distance_m) if state != State.LOADING and state != State.WAIT else ""
+	score_label.text = Hud.metres(distance_m) if state != State.LOADING and state != State.WAIT else ""
 	score_label.scale = Vector2.ONE
 	score_label.modulate.a = 1.0
 	var best := maxi(_best_m, distance_m)
-	_best_label.text = ("BEST " + metres(best)) if best > 0 else ""
+	_best_label.text = ("BEST " + Hud.metres(best)) if best > 0 else ""
 	hud.lives = lives
 	hud.lives_max = RUN_LIVES if lives_enabled() else 0
 	hud.shield = float(shield_meter) / float(SHIELD_COST)

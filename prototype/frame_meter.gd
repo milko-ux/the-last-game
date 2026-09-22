@@ -100,6 +100,42 @@ var worst_ever_ms := 0.0
 var spikes := 0
 
 
+# ------------------------------------------------------------
+# THE DEV URL SWITCHES
+# ------------------------------------------------------------
+# ?level=N · ?scale=X · ?autoplay=1 · ?live=1 · ?grad=1, all of them
+# behind enabled() and all of them web-only. track_test.gd is what ACTS
+# on them; they live here because two scenes now have to ask about them
+# — the menu has to know whether the page was opened with one, since a
+# page that was wants the run, not the menu. The query is read from the
+# browser ONCE and kept.
+const URL_SWITCHES := ["level", "scale", "autoplay", "live", "grad"]
+static var _query := ""
+static var _query_read := false
+
+
+static func url_param(key: String) -> String:
+	if not enabled():
+		return ""
+	if not _query_read:
+		_query_read = true
+		if OS.has_feature("web"):
+			_query = str(JavaScriptBridge.eval("window.location.search"))
+	for part in _query.trim_prefix("?").split("&"):
+		var kv := part.split("=")
+		if kv.size() == 2 and kv[0] == key:
+			return kv[1]
+	return ""
+
+
+# Was the page opened with any of them?
+static func any_url_switch() -> bool:
+	for k in URL_SWITCHES:
+		if url_param(k) != "":
+			return true
+	return false
+
+
 static func enabled() -> bool:
 	# Never in the headless tools (the bots run capped at 30 fps with no display).
 	if DisplayServer.get_name() == "headless":

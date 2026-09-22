@@ -7,7 +7,9 @@
 #
 # This blocks CLAUDE's git push. It does not block Milko: a command he types
 # himself with the `!` prefix runs in his shell, not as a tool call, so no
-# PreToolUse hook sees it.
+# PreToolUse hook sees it. MEASURED, not just reasoned: on 2026-09-22 Milko
+# pushed ba2e2ee with `! git push origin phase-r-prototype` and the gate never
+# fired. The escape hatch is proven from his side.
 #
 # The match is done here rather than with settings.json's `if` clause on purpose:
 # `if: "Bash(git push*)"` only matches a command that STARTS with git push, so

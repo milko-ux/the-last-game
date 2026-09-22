@@ -13,7 +13,7 @@ Milko — musician/creative director (ODZ collective), self-taught builder with 
 
 ## Milko's hard rules — these are not negotiable
 
-1. **Never push to GitHub without staging the diff and getting an explicit go-ahead.** Show `git diff --staged` and wait for a yes. No exceptions, no "this one's trivial".
+1. **Never push to GitHub without staging the diff and getting an explicit go-ahead.** Show `git diff --staged` and wait for a yes. No exceptions, no "this one's trivial". A hook (`.claude/hooks/git-push-gate.sh`) denies Claude's push outright; **Milko pushes himself with `! git push origin phase-r-prototype`, which the gate does not see — measured 2026-09-22, commit `ba2e2ee` went through that way.**
 2. **One commit per section of a brief.** Not one commit per session, not one per file — per section, so any single piece can be reverted on its own.
 3. **Update "Where we are" in `prototype/README.md` at the end of every session.** It is the canonical snapshot and the first thing the next session reads. If it's stale, the next session starts wrong.
 4. **Judging how the game looks and feels is Milko's job, on his phone.** Never open a visible game window on his Mac to play or look at the game. Code only runs the game invisibly in the background (headless bots, validators and the screenshot tools).
@@ -81,7 +81,7 @@ A Godot web build needs a **secure context**: plain `http://<LAN-IP>` fails with
 
 **Always serve with `Cache-Control: no-store`.** Browsers cache `index.pck` hard, and a stale `.pck` silently runs an OLD build while every file on disk looks correct.
 
-**Dev URL switches** (all behind `FrameMeter.enabled()`): `?level=N` · `?scale=X` · `?autoplay=1&live=1` · `?grad=1`.
+**Dev URL switches** (all behind `FrameMeter.enabled()`, read in `frame_meter.gd`): `?level=N` · `?scale=X` · `?autoplay=1&live=1` · `?grad=1`. **Any of them skips the main menu and opens the run directly.**
 
 ### Before any release export — checklist
 
@@ -101,9 +101,9 @@ To get it back for a session: Project → Project Settings → Plugins → enabl
 
 ## Repo map
 
-**`prototype/` — the game.** `beat_clock.gd` (autoload `BeatClock`: song time, beats, seek) · `rules.gd` (constants, per-level knobs, death rules) · `hazard_math.gd` (where is it / is it lethal at time t) · `placement.gd` (deterministic layout from the beatmap) · `fairness.gd` (the mandatory validator) · `lap_gen.gd` (`LAYOUT_VERSION`) · `field.gd` (builds tiles, hazards, notes; floor/pit queries) · `hazard3d.gd` + `hazard_{slammer,sweeper,gate,orbiter,volley}.gd` · `player3d.gd` (movement, jump, hit box) · `creature.gd` (everything you see: pose, walk, dust, death) · `camera_rig.gd` · `monoliths.gd` · `props/props.gd` · `flat_mats.gd` · `motion.gd` · `palette.gd` (`WorldPalette`) · `prewarm.gd` · `frame_meter.gd` · `hud.gd` · `track_test.gd/.tscn` (the run scene) · `level_select.gd/.tscn`.
+**`prototype/` — the game.** `beat_clock.gd` (autoload `BeatClock`: song time, beats, seek) · `rules.gd` (constants, per-level knobs, death rules) · `hazard_math.gd` (where is it / is it lethal at time t) · `placement.gd` (deterministic layout from the beatmap) · `fairness.gd` (the mandatory validator) · `lap_gen.gd` (`LAYOUT_VERSION`) · `field.gd` (builds tiles, hazards, notes; floor/pit queries) · `hazard3d.gd` + `hazard_{slammer,sweeper,gate,orbiter,volley}.gd` · `player3d.gd` (movement, jump, hit box) · `creature.gd` (everything you see: pose, walk, dust, death) · `camera_rig.gd` · `monoliths.gd` · `props/props.gd` · `flat_mats.gd` · `motion.gd` · `palette.gd` (`WorldPalette`) · `prewarm.gd` · `frame_meter.gd` · `hud.gd` · `menu.gd/.tscn` (the MAIN MENU — the scene the game opens into) · `track_test.gd/.tscn` (the run scene) · `level_select.gd/.tscn` (a dev tool: tap N to start the run at lap N-1).
 
-**`tools/`** — dev-only. Note they are still *packed* into the web build: `?autoplay=1` loads `res://tools/autoplay.gd` at runtime, so filtering them out would break that switch. They cost a few KB. `autoplay.gd` (headless bots) · `plan_stats.gd` (layout + `HASH`) · `lap_stats.gd` (regenerates `verdicts.json`) · `shot.gd` / `shot_walk.gd` / `shot_creature.gd` · `frame_probe.gd` · `package_web.sh` · `serve.py` · `make_endless_audio.py` · `decimate_models.py`.
+**`tools/`** — dev-only. Note they are still *packed* into the web build: `?autoplay=1` loads `res://tools/autoplay.gd` at runtime, so filtering them out would break that switch. They cost a few KB. `autoplay.gd` (headless bots) · `plan_stats.gd` (layout + `HASH`) · `lap_stats.gd` (regenerates `verdicts.json`) · `shot.gd` / `shot_walk.gd` / `shot_creature.gd` / `shot_scene.gd` (a PNG of any scene file — the screens) · `frame_probe.gd` · `package_web.sh` · `serve.py` · `make_endless_audio.py` · `decimate_models.py`.
 
 **`levels/`** — `curriculum.json` (knobs per level) · `verdicts.json` (shipped fairness verdicts).
 

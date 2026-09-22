@@ -55,6 +55,7 @@ var levels_cleared := {}
 
 func _ready() -> void:
 	load_progress()
+	apply_sound()
 
 
 func rules(d: Diff = selected) -> Dictionary:
@@ -99,6 +100,24 @@ var best_distance := {}
 # The bots and tools turn this off: they must never write to the save file
 # of whoever owns the machine.
 var save_enabled := true
+
+# ------------------------------------------------------------
+# SETTINGS (Phase E section 7 — the menu's SETTINGS panel)
+# ------------------------------------------------------------
+# Sound off MUTES the master bus; it never stops the stream. BeatClock
+# reads the song's playback position every frame to stay in sync, and a
+# stopped stream has no position — a muted one keeps running silently.
+var sound_on := true
+
+
+func set_sound(on: bool) -> void:
+	sound_on = on
+	apply_sound()
+	save_progress()
+
+
+func apply_sound() -> void:
+	AudioServer.set_bus_mute(0, not sound_on)
 
 
 func set_graduated() -> void:
@@ -171,7 +190,7 @@ func save_progress() -> void:
 		return
 	f.store_string(JSON.stringify({"standard_cleared": standard_cleared, "best_song_time": best_song_time,
 		"best_score": best_score, "levels_cleared": levels_cleared,
-		"graduated": graduated, "best_distance": best_distance}))
+		"graduated": graduated, "best_distance": best_distance, "sound_on": sound_on}))
 	f.close()
 
 
@@ -198,3 +217,4 @@ func load_progress() -> void:
 		var bd = parsed.get("best_distance", {})
 		if bd is Dictionary:
 			best_distance = bd
+		sound_on = bool(parsed.get("sound_on", true))

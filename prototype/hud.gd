@@ -152,18 +152,45 @@ func show_end(distance: String, best: String, new_best: bool) -> void:
 	end_new_best = new_best
 
 
+# THE GLASS PILL — the one copy. The end screen's buttons below and the
+# main menu's (prototype/menu.gd) are the same button, so they are drawn
+# by the same six lines: a soft outer glow, a white and a tinted fill, a
+# white and a tinted outline, and the highlight along the top edge.
+# `c` is whatever is drawing (any Node2D): a static so menu.gd can call
+# it without owning a Hud.
+static func glass_pill(c: CanvasItem, rect: Rect2, tint: Color, a: float) -> void:
+	c.draw_rect(Rect2(rect.position - Vector2(3, 3), rect.size + Vector2(6, 6)), Color(tint.r, tint.g, tint.b, 0.06 * a), true)
+	c.draw_rect(rect, Color(1, 1, 1, 0.07 * a), true)
+	c.draw_rect(rect, Color(tint.r, tint.g, tint.b, 0.08 * a), true)
+	c.draw_rect(rect, Color(1, 1, 1, 0.28 * a), false, 1.5)
+	c.draw_rect(rect, Color(tint.r, tint.g, tint.b, 0.35 * a), false, 1.0)
+	c.draw_line(rect.position + Vector2(6, 1), rect.position + Vector2(rect.size.x - 6, 1), Color(1, 1, 1, 0.42 * a), 1.5)
+
+
+# A distance the way the game writes it: "1 240 m". Thin groups of three,
+# a space (never a comma: it reads the same in every country).
+static func metres(m: int) -> String:
+	var txt := str(m)
+	var out := ""
+	while txt.length() > 3:
+		out = " " + txt.substr(txt.length() - 3) + out
+		txt = txt.substr(0, txt.length() - 3)
+	return txt + out + " m"
+
+
+# Text centred on a point (the baseline maths is the fiddly part, so it
+# lives in one place too).
+static func centre_text(c: CanvasItem, font: Font, text: String, at: Vector2, size: int, col: Color) -> void:
+	var w: float = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
+	c.draw_string(font, at - Vector2(w * 0.5, -size * 0.35), text, HORIZONTAL_ALIGNMENT_LEFT, -1, size, col)
+
+
 func _pill(rect: Rect2, tint: Color, a: float) -> void:
-	draw_rect(Rect2(rect.position - Vector2(3, 3), rect.size + Vector2(6, 6)), Color(tint.r, tint.g, tint.b, 0.06 * a), true)
-	draw_rect(rect, Color(1, 1, 1, 0.07 * a), true)
-	draw_rect(rect, Color(tint.r, tint.g, tint.b, 0.08 * a), true)
-	draw_rect(rect, Color(1, 1, 1, 0.28 * a), false, 1.5)
-	draw_rect(rect, Color(tint.r, tint.g, tint.b, 0.35 * a), false, 1.0)
-	draw_line(rect.position + Vector2(6, 1), rect.position + Vector2(rect.size.x - 6, 1), Color(1, 1, 1, 0.42 * a), 1.5)
+	glass_pill(self, rect, tint, a)
 
 
 func _text(font: Font, text: String, c: Vector2, size: int, col: Color) -> void:
-	var w: float = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
-	draw_string(font, c - Vector2(w * 0.5, -size * 0.35), text, HORIZONTAL_ALIGNMENT_LEFT, -1, size, col)
+	centre_text(self, font, text, c, size, col)
 
 
 func _draw_end_screen(screen: Vector2, font: Font) -> void:

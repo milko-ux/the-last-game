@@ -71,8 +71,9 @@ trap 'rm -rf "$TMP"' EXIT
 unzip -q -o "$OUT" -d "$TMP"
 
 if [ "$PRESET" != "Web" ]; then
-  # Prototype: the pck must contain the prototype scene and the beatmap.
-  for TOKEN in "prototype/track_test" "fuffens_beatmap"; do
+  # Prototype: the pck must contain the run scene, the menu the game now
+  # opens into (Phase E section 7) and the beatmap.
+  for TOKEN in "prototype/track_test" "prototype/menu" "fuffens_beatmap"; do
     if ! LC_ALL=C grep -aqF "$TOKEN" "$TMP/index.pck"; then
       echo "  STALE: \"$TOKEN\" is missing from the packaged pck. Do not use it." >&2
       exit 1
