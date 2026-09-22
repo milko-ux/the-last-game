@@ -35,7 +35,11 @@ A mobile game built in Godot 4 (GDScript). **One endless run, driven by music.**
 
 The project began as an isometric neon-synthwave maze game with 30 hand-authored levels (Phases 0–3: touch controls, difficulty tiers, a Talo backend for accounts and leaderboards). **That game still exists in the repo but is no longer what's being built.** The synthwave art direction is dropped.
 
-The 2D game's files (`main.gd`, `main.tscn`, `entities/`, `ui/`, `levels.json`, and the `Iso`/`Profile`/`Consent`/`Talo` autoloads) are kept as history and as the Talo integration's home. **Nothing in `prototype/` may depend on them** — except `autoload/palette.gd` and `autoload/progress.gd`, which the prototype's HUD and unlock logic still read.
+The 2D game's files (`main.gd`, `main.tscn`, `entities/`, `ui/`, `levels.json`, and the `Iso`/`Profile`/`Consent`/`Talo` autoloads) are kept, and **some of them are not history at all**.
+
+**Do not "clean up" the 2D code.** Phase E Stage 2 (the menu and the leaderboard) is built on it: `autoload/talo.gd` is the only file in the project that talks to the internet, `autoload/consent.gd` owns GDPR consent and the self-declared country, and `ui/leaderboard_screen.gd` + `ui/account_panel.gd` are the screens. `autoload/palette.gd` and `autoload/progress.gd` are already read by the prototype's HUD and unlock logic. All of these must stay in the export.
+
+What IS history: `main.gd`, `main.tscn`, `entities/`, `levels.json`, `autoload/iso.gd`, `autoload/profile.gd`, `tools/check_levels.py` — the isometric maze itself. Nothing new may depend on those.
 
 Briefs, in order: `PHASE_R_BRIEF.md` + `PHASE_R_ADDENDUM_1..4.md`, then `PHASE_E_BRIEF_1_ENDLESS.md` (the endless run, which supersedes the level-based game), then `PHASE_A_BRIEF_1..6` (art: creature, world, motion, props, walk, light).
 
@@ -84,7 +88,8 @@ A Godot web build needs a **secure context**: plain `http://<LAN-IP>` fails with
 - [ ] Set `Progress.UNLOCK_ALL = false` (this also turns off the frame readout and the dev URL switches).
 - [ ] Confirm the Phase R preset's `exclude_filter` still keeps `docs/` and `addons/` out of the pack.
 - [x] The Godot MCP plugin is OFF (2026-09-22) — see below.
-- [ ] Still shipping: the old 2D game. Its scripts cannot simply be filtered out, because `project.godot` still registers `Iso` / `Profile` / `Consent` / `Talo` as autoloads and an exported game cannot load an autoload that is not in the pack. `tools/` and the two tempo-shifted MP3s stay in deliberately — `?autoplay=1` loads `res://tools/autoplay.gd`, and `?level=N` needs those songs.
+- [ ] `tools/` and the two tempo-shifted MP3s ship deliberately — `?autoplay=1` loads `res://tools/autoplay.gd`, and `?level=N` needs those songs.
+- [ ] Phase R Stage 2 will need `talo.cfg` added to the Phase R preset's `include_filter` (it is empty there; the 2D "Web" preset ships it). Without it the leaderboard is invisible on the phone.
 
 ### The Godot MCP plugin is disabled on purpose
 

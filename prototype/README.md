@@ -25,6 +25,11 @@ A read-only health check first, then the fixes Milko approved. **No game code wa
 - **This file lost 60 KB.** The closed-phase reports moved to `docs/PHASE_LOG.md`; "Where we are", the current phase and the reference sections stayed. 100 KB -> 40 KB.
 - **`CLAUDE.md` was rewritten.** It still described the pre-pivot synthwave maze game. It now describes the endless run, the current art direction, and Milko's hard rules as rules.
 
+**Later the same day, after Milko's phone test passed** (page 1.9 s, load 2.1 s, frame 16.7 avg / 18-20 worst at bar 12):
+
+- **RETRY on the end screen is fixed.** It was changing scene correctly, but the retried run came up on TAP TO START and sat there, because the tap that pressed RETRY was spent on the scene change and the new scene never saw one. It now starts by itself, which is what the 4 s run-up is for. RETRY also uses `change_scene_to_file` now, the same call MENU makes — `reload_current_scene()` was the only thing the broken button did differently from the working one. Reproduced and fixed against a mirror of the project with the headless shortcut disabled, so the real LOADING path ran: before, run 2 ended at `state=WAIT`; after, `state=RUN` with the clock running.
+- **The push gate is a DENY, not an ask.** Milko's session runs in an auto-approve mode that satisfied the tool call before an "ask" could become a prompt — the first real test on 2026-09-22 went straight through. `deny` is not overridden that way, and it is now proven: an attempt was blocked with the message. Milko pushes himself. The matcher also had to learn to fire only on a command position and to ignore heredoc bodies — the first version denied merely *writing about* the command, in a doc or a commit message.
+
 **Known warnings, deliberately left** (full list in the session's report): two real footguns in the legacy 2D files — a parameter named `scale` in `entities/board.gd:160` and a local named `tr` in `ui/account_panel.gd:447`, both shadowing Godot built-ins. Not biting anything today. The ~30 "return value discarded" warnings are Godot noise. The integer divisions in `beat_clock.gd` and `rules.gd` were each checked and are all deliberate floor divisions.
 
 ### KNOWN ISSUE — a foot can still be dragged in the real game
@@ -53,10 +58,15 @@ The leash (brief 5A) guarantees `distance(foot, hip) <= LEG_H * LEG_STRETCH_MAX`
 
 ### NEXT, in this order
 
-1. **The foot bug — the two prints above, first.** `prototype/creature.gd` has roughly doubled over briefs 5 and 5A/B and carries five interacting clocks (the stride phase, the settle clock, the leash's recovery step, the jump tuck, the mode timer), which is where this is hiding. Do not split the file until the bug is found; splitting it now just moves the bug house.
-2. **Brief 6 sections 1 + 2 as ONE slice** (`PHASE_A_BRIEF_6_LIGHT.md`): one light direction published as a global uniform, then drop shadows, **creature first** (body + both feet), hazards after. Taking section 1 with it avoids hardcoding a light direction and then reworking it.
+1. **Phase E Stage 2 — the menu and the leaderboard** (`PHASE_E_BRIEF_1_ENDLESS.md`, sections 7-8). Milko opened this on 2026-09-22; it is now ahead of everything else.
+   - **It reuses the 2D game's code, which is exactly why that code MUST STAY IN THE EXPORT**: `autoload/talo.gd` (the only file that talks to the internet), `autoload/consent.gd` (GDPR consent + the self-declared country), `ui/leaderboard_screen.gd` and `ui/account_panel.gd`. Do not "clean up" the 2D files or their autoloads — `Talo` and `Consent` ARE Stage 2's backend. `docs/TALO_GOTCHAS.md` and `docs/TALO_SETUP.md` become live reading again.
+   - The backend is already live and verified end to end against the real Talo API (2026-09-02): register, play, submit, rank, delete. `talo.cfg` is gitignored and must exist locally per `docs/TALO_SETUP.md`; with no key the whole feature hides itself.
+   - **One export detail to fix when Stage 2 lands**: the "Web (Phase R)" preset has an empty `include_filter`, so it does NOT ship `talo.cfg` (the 2D "Web" preset does). Without it the leaderboard is invisible on the phone.
+   - **On web, HTTP goes through `JavaScriptBridge`, never `HTTPRequest`** — see `docs/TALO_GOTCHAS.md`. That is a branch nothing on this Mac has ever tested.
+2. **The foot bug — the two prints, first.** `prototype/creature.gd` has roughly doubled over briefs 5 and 5A/B and carries five interacting clocks (the stride phase, the settle clock, the leash's recovery step, the jump tuck, the mode timer), which is where this is hiding. Do not split the file until the bug is found; splitting it now just moves the bug house.
+3. **Brief 6 sections 1 + 2 as ONE slice** (`PHASE_A_BRIEF_6_LIGHT.md`): one light direction published as a global uniform, then drop shadows, **creature first** (body + both feet), hazards after. Taking section 1 with it avoids hardcoding a light direction and then reworking it.
    - **Cost: zero net draw calls.** All shadows go in one `MultiMeshInstance3D` -- one call however many casters -- and it REPLACES the blob the creature already draws under itself (`_ring` in `creature.gd`). The real cost is fill rate (transparent quads), a fraction of a percent of the frame at bar 11.
-   - **Why it is next and not more leg tuning:** "it floats" is a contact problem. At game distance the whole creature is about 105 px tall and a leg is ten of them, so no amount of thickening solves what a shadow solves directly.
+   - **Why it is not more leg tuning:** "it floats" is a contact problem. At game distance the whole creature is about 105 px tall and a leg is ten of them, so no amount of thickening solves what a shadow solves directly.
 
 ### Today's numbers, from Milko's iPhone (2026-09-21, build `5648f06`)
 
