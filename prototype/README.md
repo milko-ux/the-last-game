@@ -2,7 +2,30 @@
 
 ## Where we are (2026-09-22) — start here
 
-**The game is ONE ENDLESS RUN** (`PHASE_E_BRIEF_1_ENDLESS.md`): how far can you get. **Stage 1 (the run) is built and accepted. Stage 2 is DONE on the Mac: section 7 (the menu) passed on the phone, section 8 (the leaderboard) is built, live-checked against the real Talo API end to end, and waits for Milko's phone test.** Everything below is newest first; this section is the whole state, the rest is the detail behind it.
+**The game is ONE ENDLESS RUN** (`PHASE_E_BRIEF_1_ENDLESS.md`): how far can you get. **Stage 1 (the run) is built and accepted. Stage 2 is DONE: the menu passed on the phone, the leaderboard is live-checked against the real Talo API end to end. Tonight's three additions (the short consent copy, PAUSE, and the UI-pass backlog below) are built and exported; the phone test of section 8 + pause is what remains.** Everything below is newest first; this section is the whole state, the rest is the detail behind it.
+
+### NEXT, in this order (Milko, 2026-09-22 night)
+
+1. **Phone test** of what is serving now: register, run, PAUSE (RESUME / RESTART / HOME), die, the rank line, the board. Then Stage 2 is closed.
+2. **The foot bug** — the two prints (`creature.gd:460` teleport guard, `player3d.gd:70` snap) that settle it, then the `_place_legs` skip. See "KNOWN ISSUE" below.
+3. **Brief 6 sections 1 + 2 as one slice** (`PHASE_A_BRIEF_6_LIGHT.md`): one light direction as a global uniform, then drop shadows, creature first. Zero net draw calls — the shadows replace the creature's blob ring.
+4. **The UI pass** — the backlog just below, with the references in `docs/concept/UI/` (`ref-menu.png`, `ref-button-layers.png`, `ref-button-states.png`). Not started; nothing in the references has been acted on.
+
+### UI PASS BACKLOG (written down 2026-09-22, not built)
+
+- **Leaderboard rows are far too transparent to read** — the row list sits on a 0.5 fill over a dimmed live world and the names and metres drown. The rows need a solid card, not a tint.
+- **The whole UI wants the design pass** with `docs/concept/UI/`: the menu (title block, PLAY, the chip), the leaderboard (tabs, rows, JOIN), the end screen (distance, rank line, RETRY / MENU / JOIN), the consent + account panel (still the 2D game's 560-wide card; its heading overflows it; its X sits under the dev readout), the pause panel. Button layers and states per the references — pressed / disabled states do not exist anywhere yet.
+- **Shared drawing code is spread over four files** (`Hud.glass_pill` / `Hud.centre_text` in `hud.gd`, `_glass_pill` in `level_select.gd`, `_glow_rect` in both `account_panel.gd` and `leaderboard_screen.gd`, `centre_text` in `ui.gd`). The pass should leave ONE.
+- The account panel's `_draw_consent` centres lines by hand at 18 px pitch; a proper paragraph layout is part of the pass.
+- The frame readout (dev) collides with anything placed top-right; the pass should reserve that corner in dev builds.
+
+### 2026-09-22 (night) — consent copy, PAUSE, and a profile fix
+
+- **Consent copy** (`ui/account_panel.gd`): Milko's text word for word — JOIN THE LEADERBOARD, five short lines, CREATE ACCOUNT · NOT NOW; "What exactly is stored?" swaps in the old long text unchanged, on the same screen. `Consent.VERSION` 1 → 2, so anyone who agreed to the old wording is asked once more. `docs/screenshots/e-consent.png`.
+- **PAUSE** (`hud.gd`, `track_test.gd`, `ui.gd`): a glass pill top-left of the run (88 units in — clear of the notch; 66 units — 48 pt; hidden while a bot drives) → a near-opaque panel with RESUME · RESTART · HOME. **No new clock code:** pause = `BeatClock.pause()` (the death freeze's own call: clock and audio stream stop in the same frame); resume = `BeatClock.seek(song_time)` (the rewind's own call) at the exact time they stopped, after a 3-2-1 count-in with the world visible. Nothing samples time in PAUSED / COUNTIN, so distance, lives and the fairness numbers cannot move; paused wall time is kept out of `run_seconds`. `ui.gd` gained `dead_zone`: the touch controls ignore the pill's own tap. **The proof, one line:** `tools/shot.gd pause=1` — the clock read **21.236 s before the pause, during it, and after resume (moved 0.0 ms)**, the audio-vs-clock gap was **+14.5 ms before and +14.5 ms after** (this Mac's constant output offset), distance 35 → 35, lives 3 → 3. `docs/screenshots/e-pause.png`.
+- **A tool's sign-in renamed the guest profile** — found because the menu's chip suddenly read `lastgame-check-112016`. The live check signs in as its throwaway account and `Talo._sync_profile` claimed the name into `profile.save` on this Mac. Gated on `Progress.save_enabled` now (the switch every tool already flips); the file was put back by hand.
+- Validator bot `level=1 fps=60` → `deaths=0` after all of it. Exported; serving.
+
 
 ### 2026-09-22 (late) — section 8 ACCEPTED against the real API
 
@@ -132,7 +155,7 @@ The leash (brief 5A) guarantees `distance(foot, hip) <= LEG_H * LEG_STRETCH_MAX`
 
 **How to measure it:** `tools/autoplay.gd -- level=1 fps=60` prints a `LEASH` line over a clean, death-free run (max as drawn, planted, and the unclamped worst). `tools/shot_walk.gd -- slide=1 dir=forward|turn|strafe [jump=1] [speed=1.5]` is the rig version and is the reliable instrument; `tools/shot.gd` prints `LEASH` too but its captures are flaky (see below). Note the rig's `slide=1` report prints the clamped numbers only — it never prints the unclamped worst, which is why the rig looked clean for so long.
 
-### NEXT, in this order
+### (superseded by the NEXT list at the top) the earlier NEXT list
 
 1. **Section 8's phone test** — the served build has the key: SETTINGS → REGISTER, play, die, see `#N GLOBAL` on the end screen, see the row on LEADERBOARD (up to 10 min late, that is Talo's cache), delete the account in SETTINGS → ACCOUNT. Then Stage 2 is closed.
    - **It reuses the 2D game's code, which is exactly why that code MUST STAY IN THE EXPORT**: `autoload/talo.gd` (the only file that talks to the internet), `autoload/consent.gd` (GDPR consent + the self-declared country), `ui/leaderboard_screen.gd` and `ui/account_panel.gd`. Do not "clean up" the 2D files or their autoloads — `Talo` and `Consent` ARE Stage 2's backend. `docs/TALO_GOTCHAS.md` and `docs/TALO_SETUP.md` become live reading again.
