@@ -802,6 +802,12 @@ func _tick_run(delta: float) -> void:
 	rig.set_window(z_back)
 	motion.set_window(z_back)
 	_shadows.window_back = z_back
+	if meter != null and Engine.get_process_frames() % 15 == 0:
+		# Dev readout: monoliths inside the fade-visible range, left / right
+		# (2026-09-23, the phone's "black between the monoliths" report,
+		# which no run on the Mac reproduces -- the phone says it itself).
+		var n: Vector2i = field.monoliths_in_view(z_back)
+		FrameMeter.mono_note = "mono %d/%d" % [n.x, n.y]
 	_update_world(ht, z_back)
 	_update_progress(t)
 	_update_demo(ht)

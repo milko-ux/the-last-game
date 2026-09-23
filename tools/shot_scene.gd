@@ -50,7 +50,7 @@ var _taps_done := 0
 
 var _t := 0.0
 var _frames := 0
-const MAX_FRAMES := 2000     # the kill switch: never spin for ever
+const MAX_FRAMES := 6000     # the kill switch: never spin for ever (100 s at 60 fps: a burst over a strip of monoliths)
 
 
 func _initialize() -> void:

@@ -328,6 +328,15 @@ func last_bar() -> int:
 	return _first_bar + _bar_z0.size() - 1
 
 
+# Monoliths inside the fade-visible range of the window, per side, over
+# every lap (tools/autoplay.gd measures the longest stretch with none).
+func monoliths_in_view(z_back: float) -> Vector2i:
+	var n := Vector2i.ZERO
+	for li in laps:
+		n += laps[li].monoliths.in_view(z_back)
+	return n
+
+
 func monolith_counts() -> Dictionary:
 	var out := {"total": 0, "shown": 0, "detailed": 0}
 	for li in laps:

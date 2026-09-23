@@ -166,6 +166,23 @@ func set_window(z_back: float) -> void:
 	_shown_hi = hi
 
 
+# For tools/autoplay.gd's gap measurement: how many of this node's
+# monoliths sit inside the fade-visible range of the window, per side
+# (x: the left, screen-right side; y: the right).
+func in_view(z_back: float) -> Vector2i:
+	var lo := _z.bsearch(z_back - Mats.FADE_BEHIND_END)
+	var hi := _z.bsearch(z_back + Mats.FADE_AHEAD_END)
+	var n := Vector2i.ZERO
+	for i in range(lo, hi):
+		if not _nodes[i].visible:
+			continue
+		if _nodes[i].transform.origin.x < 0.0:
+			n.x += 1
+		else:
+			n.y += 1
+	return n
+
+
 # For the screenshot tool's report.
 func counts() -> Dictionary:
 	var shown := 0

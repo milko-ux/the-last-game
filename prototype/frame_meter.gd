@@ -88,6 +88,7 @@ static var _t_tap := -1             # msec; -1 = this load did not start with a 
 static var _t_label := -1           # msec; the loading label's first painted frame
 static var _t_ready := -1           # msec; TAP TO START
 static var page_s := -1.0           # the page span, measured once per page
+static var mono_note := ""          # the run scene: monoliths in view, left / right (the "black between" report)
 var taps := false                   # ?taps=1
 var _taps: Array = []               # [position, seconds left]
 var _taps_label: Label
@@ -447,6 +448,8 @@ func _update_text() -> void:
 		if BeatClock.endless and BeatClock.running():
 			# Audio vs clock (ms, - = audio behind) and how much has been slewed to follow it.
 			text += "     audio %+.0f (%+.0f)" % [BeatClock.audio_drift_ms(), BeatClock.drift_corrected_ms]
+		if mono_note != "":
+			text += "     " + mono_note
 	# Only when a step was added: laying out a wrapped label is not free.
 	if _load_label.visible and (load_log.size() != _load_shown or _t_ready < 0):
 		_load_shown = load_log.size()

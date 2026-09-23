@@ -73,6 +73,14 @@ var last_deaths := 0
 var death_bars := []
 var t_wall0 := 0
 var min_fps := 999
+# Monolith coverage (2026-09-23, the "empty black between" report): per
+# frame, how many monoliths are in the fade-visible range on each side;
+# the longest stretch of run (in z units = metres) with none on a side.
+var _mono_gap := [0.0, 0.0]        # longest gap so far, left / right
+var _mono_gap_at := [0.0, 0.0]     # where it began
+var _mono_run := [-1.0, -1.0]      # z where the current gap began, -1 = none
+var _mono_samples := 0
+var _mono_z0 := INF
 
 
 func _process(_delta: float) -> bool:
@@ -102,6 +110,8 @@ func _process(_delta: float) -> bool:
 			print("  BOT at (%.2f, %.2f), beat phase %.2f, fps %d" % [test.player.position.x, test.player.position.z, clock.beat_phase_at(clock.hazard_time()), int(Engine.get_frames_per_second())])
 	if test.state == test.State.RUN and clock.song_time() > clock.start_offset + 3.0:
 		min_fps = mini(min_fps, int(Engine.get_frames_per_second()))
+	if test.state == test.State.RUN:
+		_sample_monoliths(clock.z_at(clock.song_time()))
 	var done: bool = clock.current_bar() > max_bar or test.state == test.State.WON or test.state == test.State.GAMEOVER \
 		or test.deaths >= max_deaths or (Time.get_ticks_msec() - t_wall0) > 900000
 	if endless:
@@ -109,6 +119,7 @@ func _process(_delta: float) -> bool:
 			or (Time.get_ticks_msec() - t_wall0) > 3600000
 		if done:
 			_print_leash()
+			_print_monoliths()
 			print("AUTOPLAY endless mode=%s seed=%d start_lap=%d laps=%d grad=%s deaths=%d at_bars=%s notes=%d lap_reached=%d run_s=%.0f min_fps=%d" % [
 				mode, seed, start_lap, laps, grad, test.deaths, str(death_bars), test.notes, clock.current_lap(),
 				clock.song_time() - clock.start_offset, min_fps])
@@ -116,6 +127,7 @@ func _process(_delta: float) -> bool:
 		return false
 	if done:
 		_print_leash()
+		_print_monoliths()
 		print("AUTOPLAY mode=%s level=%d seed=%d bars<=%d deaths=%d at_bars=%s notes=%d state=%d goal=%s min_fps=%d" % [
 			mode, level, seed, max_bar, test.deaths, str(death_bars), test.notes, test.state,
 			"yes" if test.state == test.State.WON else "no", min_fps])
@@ -689,6 +701,38 @@ func _human_reasons(field, here: Vector2, own: Vector2, t: float, line: float, z
 					r = "walk"
 				out.append("(%.0f,%.1f)=%s" % [c.x, c.y, r])
 	return " ".join(out)
+
+
+func _sample_monoliths(z_back: float) -> void:
+	if _mono_z0 == INF:
+		_mono_z0 = z_back
+	var n: Vector2i = test.field.monoliths_in_view(z_back)
+	_mono_samples += 1
+	for side in 2:
+		var none: bool = (n.x if side == 0 else n.y) == 0
+		if none and _mono_run[side] < 0.0:
+			_mono_run[side] = z_back
+		elif not none and _mono_run[side] >= 0.0:
+			_mono_close(side, z_back)
+	if _mono_samples % 300 == 0:
+		print("MONO z=%.0f left=%d right=%d" % [z_back, n.x, n.y])
+
+
+func _mono_close(side: int, z_back: float) -> void:
+	var length: float = z_back - _mono_run[side]
+	if length > _mono_gap[side]:
+		_mono_gap[side] = length
+		_mono_gap_at[side] = _mono_run[side]
+	_mono_run[side] = -1.0
+
+
+func _print_monoliths() -> void:
+	var z_back: float = clock.z_at(clock.song_time())
+	for side in 2:
+		if _mono_run[side] >= 0.0:
+			_mono_close(side, z_back)
+	print("MONOLITHS over %.0f m: longest stretch with none in view -- left %.1f m (from %.0f), right %.1f m (from %.0f); %d samples" % [
+		z_back - _mono_z0, _mono_gap[0], _mono_gap_at[0] - _mono_z0, _mono_gap[1], _mono_gap_at[1] - _mono_z0, _mono_samples])
 
 
 # Brief 5A's leash, over a whole clean run: a bot never dies, so nothing
