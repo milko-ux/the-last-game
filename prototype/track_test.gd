@@ -85,6 +85,7 @@ var _death_z := 0.0
 # replaces the joystick. Never set in normal play.
 var bot: Object = null
 var _edge_line: MeshInstance3D
+var _shadows: MultiMeshInstance3D    # brief 6 section 2: every drop shadow, one draw call
 var _demo_bar_shown := 0
 var _best_saved := 0.0
 var _end_shown := 0.0       # seconds the goal / death screen has been up
@@ -93,6 +94,7 @@ var _end_shown := 0.0       # seconds the goal / death screen has been up
 const LOAD_SETTLE_FRAMES := 3
 var _warm: Node3D = null
 var _reveal: Array = []
+const REVEAL_COUNT := 5              # what _reveal holds: rig, player, edge line, field, shadows
 var _load_frames := 0
 var _settle := 0
 var _tap_queued := false    # a tap during LOADING is kept: the run starts the moment loading ends
@@ -221,6 +223,13 @@ func _ready() -> void:
 	_edge_line.mesh = bm
 	_edge_line.material_override = Mats.player(WorldPalette.SAFE)
 	add_child(_edge_line)
+	# The drop shadows (brief 6 section 2): the creature's and every
+	# hazard's, one MultiMesh. It replaced the creature's own blob.
+	_shadows = load("res://prototype/shadows.gd").new()
+	_shadows.name = "Shadows"
+	_shadows.field = field
+	_shadows.creature = player.creature
+	add_child(_shadows)
 	hud.ticks = []
 	ui.jump_pressed.connect(_on_jump)
 	Talo.auth_changed.connect(_on_auth_changed)
@@ -232,6 +241,7 @@ func _ready() -> void:
 	_update_world(BeatClock.hazard_time(), z_back0)
 	rig.set_window(z_back0)
 	motion.set_window(z_back0)
+	_shadows.window_back = z_back0
 	if endless:
 		_setup_run_hud()
 	# Dev only: the frame-time readout and the load line (off in a release, see frame_meter.gd).
@@ -375,7 +385,7 @@ func _begin_loading() -> void:
 		return
 	state = State.LOADING
 	_label_wait_from = Time.get_ticks_msec()
-	_reveal = [rig, player, _edge_line, field]
+	_reveal = [rig, player, _edge_line, field, _shadows]
 	for n in _reveal:
 		n.visible = false
 	status.text = "LOADING"
@@ -451,7 +461,7 @@ func _tick_loading() -> void:
 			_load_phase = 2
 		_bar_fill.size.x = 320.0 * (0.05 + 0.45 * (1.0 - float(field.pending_items()) / maxf(float(before), 1.0)))
 		return
-	var total := float(_warm.item_count() + 4 + LOAD_SETTLE_FRAMES)
+	var total := float(_warm.item_count() + REVEAL_COUNT + LOAD_SETTLE_FRAMES)
 	var done := 0.0
 	var p: float = _warm.step()
 	done = p * _warm.item_count()
@@ -460,7 +470,7 @@ func _tick_loading() -> void:
 			_reveal.pop_front().visible = true
 		else:
 			_settle += 1
-		done += (4 - _reveal.size()) + _settle
+		done += (REVEAL_COUNT - _reveal.size()) + _settle
 	var frac := clampf(done / total, 0.0, 1.0)
 	_bar_fill.size.x = 320.0 * ((0.5 + 0.5 * frac) if endless else frac)
 	if _settle >= LOAD_SETTLE_FRAMES:
@@ -791,6 +801,7 @@ func _tick_run(delta: float) -> void:
 	player.tick(delta, z_back, z_front, field)
 	rig.set_window(z_back)
 	motion.set_window(z_back)
+	_shadows.window_back = z_back
 	_update_world(ht, z_back)
 	_update_progress(t)
 	_update_demo(ht)

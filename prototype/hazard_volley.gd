@@ -71,3 +71,10 @@ func _pose(t: float) -> void:
 	_muzzle.scale = Vector3(1.0 + sq * SQUASH * 0.5, 1.0 - sq * SQUASH, 1.0 + sq * SQUASH * 0.5)
 	if vx != null:
 		_orb.position = Vector3(float(vx) - float(spec["x"]), HazardMath.VOLLEY_R, 0.0)
+
+
+# The orb's shadow runs along the floor under it while it crosses
+# (brief 6 section 2). The half-buried emitter casts nothing.
+func cast_shadows(sh: Node) -> void:
+	if _orb.visible:
+		sh.cast_round(_orb.global_position, 0.0, HazardMath.VOLLEY_R, HazardMath.VOLLEY_R * 2.0)

@@ -27,6 +27,7 @@ extends Node3D
 
 const Mats := preload("res://prototype/flat_mats.gd")
 const Props := preload("res://prototype/props/props.gd")
+const Shadows := preload("res://prototype/shadows.gd")
 
 const TINY := 0.001
 const HAZARD_MODELS := ["gate_pillar", "sweeper_segment", "slammer", "orbiter_pillar", "volley_emitter"]
@@ -59,6 +60,9 @@ func prepare(bursts: Array) -> void:
 	for model in BUILDING_MODELS:
 		_queue.append(_building.bind(model, false))
 		_queue.append(_building.bind(model, true))
+	# The drop shadows (brief 6): a MultiMesh is its own pipeline variant,
+	# so the warm-up draws one instance of the real thing.
+	_queue.append(_shadows)
 	warm_bursts(bursts)
 
 
@@ -100,6 +104,17 @@ func _prop(model: String, mat: Material, mirror: bool) -> void:
 
 func _building(model: String, far: bool) -> void:
 	_mesh(Props.mesh_of(model), Props.building(far))
+
+
+func _shadows() -> void:
+	var mi := MultiMeshInstance3D.new()
+	mi.multimesh = Shadows.make_multimesh(1)
+	mi.multimesh.visible_instance_count = 1
+	mi.multimesh.set_instance_transform(0, Transform3D.IDENTITY)
+	mi.multimesh.set_instance_custom_data(0, Color(1.0, 0.0, 1.0, 0.0))
+	mi.material_override = Shadows.shadow_material()
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(mi)
 
 
 func _burst(source: CPUParticles3D) -> void:

@@ -284,6 +284,8 @@ func _build_next() -> void:
 		3:
 			_warm_dust()
 		4:
+			_build_shadows()
+		5:
 			FrameMeter.load_mark("menu", "", true)
 			FrameMeter.load_done()
 	_build_step += 1
@@ -355,6 +357,16 @@ func _build_creature() -> void:
 	_stand.add_child(_creature)
 	_stand.creature = _creature
 	_begin_idle("greet")
+
+
+# The creature's drop shadow (brief 6 section 2): the run's own shadow
+# system with one caster. Its own build frame: a MultiMesh is its own
+# pipeline variant, so its first draw is a shader compile like the rest.
+func _build_shadows() -> void:
+	var sh: MultiMeshInstance3D = load("res://prototype/shadows.gd").new()
+	sh.name = "Shadows"
+	sh.creature = _creature
+	add_child(sh)
 
 
 # The landing's dust puff has a material of its own, and the web renderer
@@ -465,7 +477,7 @@ func _hop() -> void:
 func _process(delta: float) -> void:
 	if _painted >= 1:
 		FrameMeter.first_frame_painted()
-	if _build_step <= 4:
+	if _build_step <= 5:
 		_build_next()
 	_alpha = minf(1.0, _alpha + delta * 2.2)
 

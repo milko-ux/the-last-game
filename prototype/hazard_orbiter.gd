@@ -34,3 +34,9 @@ func _build() -> void:
 
 func _pose(t: float) -> void:
 	_orb.global_position = HazardMath.orbiter_orb_pos(spec, t)
+
+
+# The pillar on the floor, the orb from its orbit height (brief 6 section 2).
+func cast_shadows(sh: Node) -> void:
+	sh.cast_round(global_position, 0.0, HazardMath.PILLAR_R, HazardMath.ORB_Y / GROOVE_AT)
+	sh.cast_round(_orb.global_position, 0.0, HazardMath.ORB_R, HazardMath.ORB_R * 2.0)

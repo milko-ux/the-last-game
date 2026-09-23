@@ -46,6 +46,13 @@ func _note(what: String) -> void:
 		FrameMeter.note_at(kind + " " + what, position.z)
 
 
+# Brief 6 section 2: the hazard's drop shadows, one cast_round / cast_bar
+# per thing that stands on or flies over the floor. Positions are the
+# posed nodes', i.e. hazard_math's for the song time.
+func cast_shadows(_sh: Node) -> void:
+	pass
+
+
 func is_lethal() -> bool:
 	return not _boxes.is_empty()
 

@@ -224,35 +224,12 @@ const GOAL_HOP_S := 0.32
 const GOAL_HOP_HEIGHT := 1.1
 const GOAL_HOLD_AT_APEX := true        # the last hop freezes at its top, facing the camera
 
-# --- Shadow blob ------------------------------------------------------------
-# A soft dark shadow on the floor under the creature, the size of the hit
-# box's footprint (Rules.PLAYER_HALF_W, which since 2026-09-19 is the
-# body's own footprint). Never fades, stays on the floor during a jump,
-# drawn with a normal depth test (RING_ON_TOP 0 = off: it sits just above
-# the floor and under the body). Set RING_ON_TOP to 0.95 to draw it over
-# everything again.
-const RING_ON_TOP := 0.0
-const RING_ALPHA := 0.6
-const RING_SOFTNESS := 0.45            # fraction of the radius over which it fades out
-const RING_SHADER := """
-shader_type spatial;
-render_mode unshaded, cull_disabled, fog_disabled;
-uniform vec4 fill : source_color = vec4(0.0, 0.0, 0.0, 0.6);
-uniform float softness = 0.45;
-uniform float on_top = 0.0;
-
-void vertex() {
-	POSITION = PROJECTION_MATRIX * MODELVIEW_MATRIX * vec4(VERTEX, 1.0);
-	POSITION.z = mix(POSITION.z, POSITION.w, on_top);
-}
-
-void fragment() {
-	float r = length(UV - 0.5) * 2.0;
-	float a = 1.0 - smoothstep(1.0 - softness, 1.0, r);
-	ALBEDO = fill.rgb;
-	ALPHA = fill.a * a * a;
-}
-"""
+# --- Shadow -----------------------------------------------------------------
+# Brief 6 section 2: the creature no longer draws a blob of its own. Its
+# body and both feet cast into the scene's shadow system (shadows.gd,
+# one MultiMesh for every shadow in the world), which the scene hands
+# it as `shadows`. A creature without one (the walk rig) casts nothing.
+const FOOT_SHADOW_R := LEG_W * 0.5
 
 # --- Material ---------------------------------------------------------------
 # Lit (the one lit thing in the scene), never distance-faded, and drawn on
@@ -342,7 +319,6 @@ var spin_tilt := 0.0
 var _player: Node3D                    # player3d.gd: move_dir, on_ground
 var _model: Node3D
 var _burst: CPUParticles3D
-var _ring: MeshInstance3D
 var _t := 0.0
 var _pulse_t := 99.0
 var _lean := Vector2.ZERO              # x: roll, y: pitch (radians)
@@ -395,7 +371,6 @@ func _ready() -> void:
 	_model.position = _model.basis * Vector3(0.0, -MODEL_FEET_Y, -MODEL_BODY_CENTRE_Z)
 	_apply_material(_model)
 	_build_burst()
-	_build_ring()
 	_build_legs()
 	_build_dust()
 	BeatClock.downbeat.connect(func(_bar: int) -> void: _pulse_t = 0.0)
@@ -425,23 +400,27 @@ func _apply_material(n: Node) -> void:
 		_apply_material(c)
 
 
-func _build_ring() -> void:
-	_ring = MeshInstance3D.new()
-	var quad := QuadMesh.new()
-	quad.size = Vector2.ONE * (2.0 * Rules.PLAYER_HALF_W)
-	quad.orientation = PlaneMesh.FACE_Y
-	_ring.mesh = quad
-	var sh := Shader.new()
-	sh.code = RING_SHADER
-	var m := ShaderMaterial.new()
-	m.shader = sh
-	m.render_priority = 9
-	m.set_shader_parameter("fill", Color(0.0, 0.0, 0.0, RING_ALPHA))
-	m.set_shader_parameter("softness", RING_SOFTNESS)
-	m.set_shader_parameter("on_top", RING_ON_TOP)
-	_ring.material_override = m
-	_ring.top_level = true             # not scaled, tilted or lifted with the body
-	add_child(_ring)
+# Brief 6 section 2: called by the scene's shadow system every frame,
+# after this creature has posed itself. The body's shadow sits under the
+# player's feet and lifts with a jump or a hop; each foot casts its own.
+func cast_shadows(sh: Node) -> void:
+	if mode == Mode.GONE:
+		return
+	var ground := _ground_y()
+	var feet: Vector3 = _player.global_position if _player != null else global_position
+	sh.cast_round(Vector3(feet.x, global_position.y, feet.z), ground, Rules.PLAYER_HALF_W, HEIGHT)
+	if mode == Mode.ALIVE:
+		for i in 2:
+			sh.cast_round(_foot[i], ground, FOOT_SHADOW_R, 0.0)
+
+
+# The floor under the creature: the parent's position with its jump or
+# hop height taken off. (_floor_y() is the same thing measured from
+# this node, which the GOAL hop lifts.)
+func _ground_y() -> float:
+	if _player != null:
+		return _player.global_position.y - _player.y
+	return global_position.y
 
 
 # ------------------------------------------------------------
@@ -1190,10 +1169,6 @@ func _process(delta: float) -> void:
 	b = b * Basis(Vector3.UP, spin_angle + _look.x) * Basis(Vector3.RIGHT, _look.y + spin_tilt)
 	b = b.scaled_local(Vector3(scale_xz, scale_y, scale_xz) * maxf(uniform, 0.001))
 	transform = Transform3D(b, Vector3(0.0, lift, 0.0))
-	if _player != null:
-		var feet: Vector3 = _player.global_position
-		_ring.global_position = Vector3(feet.x, minf(feet.y, 0.0) + 0.02, feet.z)
-		_ring.visible = mode != Mode.GONE
 	# THE STEP CYCLE RUNS HERE, after the pose, not before it. It used to
 	# go first because its bob and roll are inputs to the pose -- which
 	# meant every hip it read was from LAST frame's transform, while the

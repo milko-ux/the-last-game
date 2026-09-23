@@ -30,6 +30,7 @@ func _build() -> void:
 	var ms := Props.size_of("gate_pillar")
 	var k := HazardMath.WALL_H / ms.y
 	_pillar_w = ms.x * k
+	_train_step = _pillar_w
 	_seg_size = Vector3(_pillar_w, HazardMath.WALL_H, ms.z * k)
 	_left = Node3D.new()
 	_right = Node3D.new()
@@ -84,3 +85,4 @@ func _pose_pillars(gx: float, gap: float) -> void:
 	for i in MAX_SEGS:
 		_left_segs[i].visible = i < nl
 		_right_segs[i].visible = i < nr
+	_train_n = Vector2i(nl, nr)

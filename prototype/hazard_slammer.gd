@@ -36,3 +36,9 @@ func _pose(t: float) -> void:
 		_note("material swap")
 		for mi in _mesh.find_children("*", "MeshInstance3D", true, false):
 			mi.material_override = Props.clay(hot)
+
+
+# Its footprint, from wherever its underside is: tight and dark when it
+# is down, wide and faint when it hovers (brief 6 section 2).
+func cast_shadows(sh: Node) -> void:
+	sh.cast_bar(_mesh.global_position, 0.0, HazardMath.SLAM_W * 0.5, HazardMath.SLAM_D * 0.5, HazardMath.SLAM_H)

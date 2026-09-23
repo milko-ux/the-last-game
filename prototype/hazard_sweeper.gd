@@ -23,6 +23,8 @@ var _left_segs: Array = []            # Node3D per segment, index 0 nearest the 
 var _right_segs: Array = []
 var _hot := false
 var _seg_size := Vector3.ZERO
+var _train_step := SEG_LEN            # one segment's width along x (the gate's is a pillar's)
+var _train_n := Vector2i.ZERO         # segments shown on the left / right train
 
 
 func _build() -> void:
@@ -83,3 +85,19 @@ func _pose_walls(gx: float, gap: float) -> void:
 	for i in MAX_SEGS:
 		_left_segs[i].visible = i < nl
 		_right_segs[i].visible = i < nr
+	_train_n = Vector2i(nl, nr)
+
+
+# One rounded bar under each train, from the gap's edge out to the last
+# shown segment, on the floor (brief 6 section 2).
+func cast_shadows(sh: Node) -> void:
+	var depth := _seg_size.z * 0.5
+	for side in 2:
+		var n := _train_n.x if side == 0 else _train_n.y
+		if n <= 0:
+			continue
+		var train: Node3D = _left if side == 0 else _right
+		var length := _train_step * float(n)
+		var dir := -1.0 if side == 0 else 1.0
+		var c := train.global_position
+		sh.cast_bar(Vector3(c.x + dir * length * 0.5, 0.0, c.z), 0.0, length * 0.5, depth, HazardMath.WALL_H)
