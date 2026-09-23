@@ -10,12 +10,14 @@
 
 **2. The bots jump pits** (`tools/autoplay.gd`, `_jump_if_pit`). Both bots look ahead along their own velocity for the next `Field.floor_at` gap, and when a one-tile pit lies there they launch the player's real `jump()` timed from the real constants (airtime 2·JUMP_VELOCITY/GRAVITY = 0.674 s × the bot's speed = a 5.8-unit reach at band 1), so the pit sits centred in the jump. Only pits: the trigger is the floor, never a hazard; the look-ahead stops at the field's side and the built course, which are not pits. A pit the jump cannot clear with 0.3 units to spare on both sides is reported as a LAYOUT PROBLEM, not worked around. **Acceptance: level 1 `deaths=0` (1 jump), endless laps 0–2 `deaths=0` (5 jumps); narrowest landing margin 1.90 units, narrowest take-off 1.00.** No LAYOUT PROBLEM anywhere in laps 0–2: every pit the bots met was one tile and clearable. (The first version reported five, all "gap ∞": its look-ahead stopped one jump from the player, so a pit first seen 5 units out had no far edge inside the scan. It now looks a further jump past a near edge; the reports went, the numbers did not move.)
 
-### NEXT, in this order (2026-09-23 evening)
+### NEXT, in this order (2026-09-23 night)
 
-1. **Phone test of the served build**, in this order: (a) **taps on a cold start** — kill the app, launch from the icon, tap LEADERBOARD first; then `?taps=1` and read the dot and the two lines of numbers under the frame readout (screenshot them if a tap is off — the `vv off` and `canvas rect` numbers are the cause). (b) **`mono L/R`** on the frame readout during a run from the menu: when the background goes black between monoliths, what does it say? 5–10 = they are counted in view and the web renderer is not drawing them; 0 = they were never built. That number is the next step on the monolith gap. (c) The fog and the floor against the concept, and the frame time at bar 11 (`?level=1`): the thick slab costs +38 draw calls (366 vs 328 at bar 1); if the phone drops under 16.7, the fallback is a skirt (2 boxes per bar) instead of 6-unit tiles.
-2. **The pit loophole verdict** (section 3 below): the validator bot's deaths after the change — see the numbers and the reason.
-3. **Brief 6 §5–8** (the hero rim, hazards as beings, glow, air and frame), one commit each.
-4. **The UI pass** — the backlog just below, with the references in `docs/concept/UI/`.
+**Phone verdict on the afternoon build (Milko, 2026-09-23 evening):** taps on a cold start FIXED, every button works from the first tap · `mono L/R` read 8/7 and 6/7 while the screen showed one or two big, flat, uncarved grey slabs and empty background — so the monoliths are built and counted and **the web renderer does not draw them properly** (that is section 2 of the look pass below) · pits kill, jumping works · frame time in the real run 16.6–16.7 avg, 17–21 worst.
+
+1. **LOOK PASS v2** (the brief of 2026-09-23 night, from "2005" toward the concept), one commit per section: (1) `tools/web_shot.py` — every look screenshot comes from the served WEB build in headless Chromium from now on; (2) the monoliths on the web; (3) the background like the concept, slim pillars at graduated distances; (4) the brightness order and the floor; (5) hazards, brief 6 §6; (6) the finishing layer, brief 6 §7–8 with URL switches; (7) hand-off. Rules: colour meaning stays, the world stays stone/clay/fog, 16.7 ms average at bar 11 in the real run.
+2. **The next brief after that: baking in Blender** (`/Applications/Blender.app/Contents/MacOS/Blender`, always headless `-b`) from our own models — the texture rule changed today, see `CLAUDE.md`. Nothing is baked yet.
+3. **Brief 6 §5** (the hero rim) if the look pass does not fold it in.
+4. **The UI pass** — the backlog below, with the references in `docs/concept/UI/`.
 
 ### 2026-09-23 (afternoon) — the second brief, five sections, five commits
 

@@ -49,7 +49,7 @@ The goal is a **premium, modern 2026 look. No AI slop.** Everything in frame sho
 
 - **Stone monoliths and slabs.** A dark stone field, faceted pillars, carved buildings receding into grey fog. Not black — grey fog, dim seams, one bright rim.
 - **Clay beings.** The player is a one-eyed clay creature with four flippers and two legs. It walks, it tucks in the air, it spins once per jump.
-- **Procedural textures only.** Materials are generated in shader code from noise and vertex colours. **No AI image textures in the game** — vertex colours sampled from a bake are allowed; a generated image file is not.
+- **Textures: procedural, or baked in Blender from our own 3D models — never AI images as textures** (rule changed 2026-09-23; it was "procedural only"). Materials are generated in shader code from noise and vertex colours, or baked from our own meshes. Blender is at `/Applications/Blender.app/Contents/MacOS/Blender` and is **always run headless (`-b`)**. Vertex colours sampled from a bake are allowed; a generated image file is not.
 - **Higgsfield is a pre-production tool, not a production one.** Use it for concept references and for image-to-3D model generation. Never for in-game textures.
 - **Colour logic is fixed and means something:** **magenta = will kill you · cyan = safe · amber = goal.** Every colour in the world lives in `prototype/palette.gd` (`WorldPalette`) and nowhere else.
 
