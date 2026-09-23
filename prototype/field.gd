@@ -41,7 +41,11 @@ enum TileState { SAFE, ARMED, LETHAL }
 # shader (flat_mats.gd TILE_SHADER), not left as gaps. The slab is 2.0
 # units thick so it reads as a floating block, with its side faces and
 # the pit walls in the face colour's shadow tones (brief 6).
-const THICK := 2.0
+# Brief 6 section 4 (Milko): the slab reads as a THICK block -- its front
+# face and outer sides dark stone several tiles deep, fading into the fog
+# (flat_mats.gd: SLAB_SIDE in the light's tones, then the height fog).
+# Same boxes, same triangle count; only their depth changed (was 2.0).
+const THICK := 6.0
 const PLAIN_LEN := 8.0
 const GOAL_WIDEN := 1.5     # brief 3: each goal post moves out this far over the last bar
 # Hazards are posed only this far either side of the window's back edge
