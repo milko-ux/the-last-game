@@ -54,6 +54,30 @@ if grep -iEq "SCRIPT ERROR|Parse Error|ERROR:" "$EXPORT_LOG"; then
 fi
 rm -f "$EXPORT_LOG"
 
+echo "==> patching the shell: one song buffer, never duplicated"
+# Godot's web shell (thread_support off: every stream is a Web Audio
+# "sample") returns _duplicateAudioBuffer() from Sample.getAudioBuffer(),
+# so EVERY start of the song -- play, seek, unpause -- copies the whole
+# 165-second buffer: 58 MB of floats each time, and iOS killed the tab on
+# ?probe=1's first seek (2026-09-24). Web Audio allows any number of
+# source nodes on one AudioBuffer, so the sample hands out the one it
+# decoded. The pattern must match exactly once, or this stops: a Godot
+# upgrade that changes the shell must be looked at, not patched blind.
+SHELL_JS="$BUILD/index.js"
+PATTERN='getAudioBuffer(){return this._duplicateAudioBuffer()}'
+N="$(grep -o "$PATTERN" "$SHELL_JS" | wc -l | tr -d ' ')"
+if [ "$N" != "1" ]; then
+  echo "  the shell's getAudioBuffer() pattern matched $N times, expected 1 -- refusing to patch; look at index.js" >&2
+  exit 1
+fi
+python3 - "$SHELL_JS" <<'PY'
+import sys
+p = sys.argv[1]; s = open(p).read()
+s = s.replace('getAudioBuffer(){return this._duplicateAudioBuffer()}', 'getAudioBuffer(){return this._audioBuffer}')
+open(p, 'w').write(s)
+PY
+echo "  ok: the song's AudioBuffer is shared, not duplicated per start"
+
 echo "==> packaging"
 rm -f "$OUT"
 ( cd "$BUILD" && zip -q -j "$OUT" \

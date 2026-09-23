@@ -406,6 +406,8 @@ func _dev_url_switches() -> void:
 		Rules.LIVES_OVERRIDE = 0
 		if FrameMeter.url_param("kill_bar") != "":
 			ap.kill_bar = int(FrameMeter.url_param("kill_bar"))
+		if FrameMeter.url_param("kill_count") != "":
+			ap.kill_count = int(FrameMeter.url_param("kill_count"))
 		print("DEV autoplay=1 live=%s" % LapGen.ignore_verdicts)
 		if probe:
 			var pr: Node = load("res://prototype/probe.gd").new()

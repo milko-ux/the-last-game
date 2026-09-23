@@ -39,6 +39,7 @@ var grad := false
 var start_lap := 0
 var fps := 30                 # fps=60: the rate the game really runs at (30 = cheap enough for 4 bots side by side)
 var kill_bar := 0             # kill_bar=N: stand still from run bar N until ONE death (the rewind test), then carry on
+var kill_count := 1           # kill_count=N: ...until N deaths in a row (the memory test: 20 deaths, 2026-09-24)
 var _kill_deaths := -1
 var with_lives := false      # lives=1: the run's own lives (3 for a graduated player) instead of none
 # Endless: one validator path per lap. The game trusts shipped verdicts
@@ -178,6 +179,8 @@ func _setup() -> void:
 			fps = int(kv[1])
 		if kv.size() == 2 and kv[0] == "kill_bar":
 			kill_bar = int(kv[1])
+		if kv.size() == 2 and kv[0] == "kill_count":
+			kill_count = int(kv[1])
 	rng.seed = 424242 + seed * 7919
 	Engine.max_fps = fps
 	Rules = load("res://prototype/rules.gd")
@@ -235,7 +238,7 @@ func move_dir(scene: Node) -> Vector2:
 	if kill_bar > 0 and clock.current_bar() >= kill_bar:
 		if _kill_deaths < 0:
 			_kill_deaths = test.deaths
-		if test.deaths == _kill_deaths:
+		if test.deaths < _kill_deaths + kill_count:
 			return Vector2.ZERO
 	var target: Variant
 	match mode:

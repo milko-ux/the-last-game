@@ -65,6 +65,9 @@ with sync_playwright() as p:
         const d = gl.getExtension('WEBGL_debug_renderer_info');
         return d ? gl.getParameter(d.UNMASKED_RENDERER_WEBGL) + ' / ' + gl.getParameter(d.UNMASKED_VENDOR_WEBGL) : gl.getParameter(gl.RENDERER); }""")
     print("WEB SHOT renderer:", renderer)
+    exts = page.evaluate("""() => { const gl = document.createElement('canvas').getContext('webgl2'); if (!gl) return '';
+        return ['WEBGL_compressed_texture_etc', 'WEBGL_compressed_texture_astc', 'WEBGL_compressed_texture_s3tc'].filter(e => gl.getExtension(e)).join(' '); }""")
+    print("WEB SHOT compressed textures:", exts or "none")
     t0 = time.time()
     last = None
     while time.time() - t0 < args.wait:
@@ -75,6 +78,8 @@ with sync_playwright() as p:
             break
         time.sleep(0.25)
     st = page.evaluate("() => [window.pr_bar, window.pr_state, window.pr_frame_ms]")
+    heap = page.evaluate("() => performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1048576) + ' MB used of ' + Math.round(performance.memory.totalJSHeapSize / 1048576) : 'n/a'")
+    print("WEB SHOT JS heap:", heap)
     page.screenshot(path=args.out, full_page=False)
     print("WEB SHOT saved=%s bar=%s state=%s frame_ms=%s after %.1f s (%dx%d @%.0fx)" % (
         args.out, st[0], st[1], st[2], time.time() - t0, args.width, args.height, args.dpr))
