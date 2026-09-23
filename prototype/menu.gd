@@ -219,6 +219,10 @@ func _ready() -> void:
 		return
 	RenderingServer.frame_post_draw.connect(_on_frame_drawn)
 	_apply_render_scale()
+	# The menu's copy of the run's light: the same direction, published
+	# the same way (brief 6 section 1), so the strip's tiles and the
+	# buildings are shaded here exactly as in the run.
+	rig.publish_light($CreatureLight)
 
 	_stage = Node3D.new()
 	_stage.position = Vector3(STAGE_X, 0.0, 0.0)

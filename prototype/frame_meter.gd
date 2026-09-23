@@ -103,13 +103,13 @@ var spikes := 0
 # ------------------------------------------------------------
 # THE DEV URL SWITCHES
 # ------------------------------------------------------------
-# ?level=N · ?scale=X · ?autoplay=1 · ?live=1 · ?grad=1, all of them
+# ?level=N · ?scale=X · ?autoplay=1 · ?live=1 · ?grad=1 · ?light=0, all of them
 # behind enabled() and all of them web-only. track_test.gd is what ACTS
 # on them; they live here because two scenes now have to ask about them
 # — the menu has to know whether the page was opened with one, since a
 # page that was wants the run, not the menu. The query is read from the
 # browser ONCE and kept.
-const URL_SWITCHES := ["level", "scale", "autoplay", "live", "grad"]
+const URL_SWITCHES := ["level", "scale", "autoplay", "live", "grad", "light"]
 static var _query := ""
 static var _query_read := false
 

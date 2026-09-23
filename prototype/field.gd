@@ -40,7 +40,7 @@ enum TileState { SAFE, ARMED, LETHAL }
 # Brief 2: tiles touch; the seams between them are drawn by the tile
 # shader (flat_mats.gd TILE_SHADER), not left as gaps. The slab is 2.0
 # units thick so it reads as a floating block, with its side faces and
-# the pit walls in TILE_SIDE.
+# the pit walls in the face colour's shadow tones (brief 6).
 const THICK := 2.0
 const PLAIN_LEN := 8.0
 const GOAL_WIDEN := 1.5     # brief 3: each goal post moves out this far over the last bar

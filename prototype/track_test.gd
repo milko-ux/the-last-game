@@ -183,6 +183,7 @@ var _shield_burst: CPUParticles3D
 func _ready() -> void:
 	FrameMeter.load_scene_started()
 	RenderingServer.frame_post_draw.connect(_on_frame_drawn)
+	rig.publish_light($CreatureLight)
 	_dev_url_switches()
 	_apply_render_scale()
 	endless = Rules.ENDLESS
@@ -304,7 +305,16 @@ func _apply_render_scale() -> void:
 #                 run, and starts it without a tap (no sound: the browser
 #                 wants a tap)
 #   ?grad=1       play as a graduated player (nothing is saved)
+#   ?light=0      brief 6's light off: the flat pre-brief-6 look, for an A/B
 var _dev_autoplay := false
+var light_on := true
+
+
+# The ?light=0 dev switch (and tools/shot.gd light=0): the fake light in
+# the world shaders off, so Milko can A/B the brief at one spot.
+func set_light(on: bool) -> void:
+	light_on = on
+	RenderingServer.global_shader_parameter_set("pr_light_on", 1.0 if on else 0.0)
 
 # (The reading is in frame_meter.gd — the menu has to ask about the same
 # switches, so the query is parsed in one place.)
@@ -313,6 +323,7 @@ func _dev_url_switches() -> void:
 		return
 	if FrameMeter.url_param("scale") != "":
 		_render_scale_override = float(FrameMeter.url_param("scale"))
+	set_light(FrameMeter.url_param("light") != "0")
 	if FrameMeter.url_param("level") != "":
 		Rules.ENDLESS = false
 		Rules.LEVEL = clampi(int(FrameMeter.url_param("level")), 1, 6)

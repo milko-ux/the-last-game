@@ -96,16 +96,22 @@ void fragment() {
 # shader lights each facet from its true face normal (screen-space
 # derivatives of the world position: hard, chiselled edges, the same on
 # web and native, no dependence on the decimated vertex normals).
+# Brief 6 section 1: the facet is shaded by the world's one light
+# (lit_tone in the shared head: top / lit side / shadow side), which
+# replaced this shader's own light direction, its smooth dark-to-lit
+# ramp and its "top 12 % lighter".
 # Fog: the usual fade along z, plus fog to the sides and below, so the
 # far ones and every monolith's foot dissolve into the background.
 const BUILDING_SHADER := """
 shader_type spatial;
 render_mode unshaded, fog_disabled;
 uniform vec3 colour : source_color;
-uniform vec3 light_dir = vec3(-0.35, 0.6, -0.72);  // toward the light: up and behind the camera, on its side of the field
-uniform float shade_dark = 0.45;     // a facet facing away from the light
-uniform float shade_lit = 1.3;       // a facet facing it
-uniform float top_lighter = 0.12;
+// The pre-brief-6 shading, kept ONLY as the ?light=0 look (an exact A/B):
+uniform vec3 old_light_dir = vec3(-0.35, 0.6, -0.72);
+uniform float old_shade_dark = 0.45;
+uniform float old_shade_lit = 1.3;
+uniform float old_top_lighter = 0.12;
+uniform float old_colour_scale = 0.77;   // the stone was 30 % darker then (palette.gd BUILDING_STONE)
 uniform float grain_amount = 0.08;   // fine grain, +-8 % at 1.5 units
 uniform float grain_scale = 1.5;
 uniform float coarse_amount = 0.05;  // +-5 % at 5 units so big faces are not flat
@@ -140,8 +146,11 @@ void fragment() {
 	if (dot(n, CAMERA_POSITION_WORLD - world_pos) < 0.0) {
 		n = -n;
 	}
-	float lit = dot(n, normalize(light_dir)) * 0.5 + 0.5;
-	vec3 c = colour * mix(shade_dark, shade_lit, lit) * (1.0 + top_lighter * smoothstep(0.7, 0.95, n.y));
+	vec3 c = lit_tone(colour, n);
+	if (pr_light_on < 0.5) {
+		float lit = dot(n, normalize(old_light_dir)) * 0.5 + 0.5;
+		c = colour * old_colour_scale * mix(old_shade_dark, old_shade_lit, lit) * (1.0 + old_top_lighter * smoothstep(0.7, 0.95, n.y));
+	}
 	float g = triplanar(world_pos, n, grain_scale) * grain_amount + triplanar(world_pos, n, coarse_scale) * coarse_amount;
 	float band = 1.0 - smoothstep(band_width * 0.5, band_width, abs(fract(world_pos.y / band_every) - 0.5) * band_every);
 	c *= (1.0 + g) * (1.0 - band_dark * band * (1.0 - smoothstep(0.7, 0.95, n.y)));
@@ -160,7 +169,7 @@ static var _low := {}
 static func _shader(kind: String) -> Shader:
 	if not _shaders.has(kind):
 		var sh := Shader.new()
-		sh.code = (CLAY_SHADER if kind == "clay" else BUILDING_SHADER).replace("FADE_HEAD", Mats.FADE_HEAD).replace("FADE_APPLY", Mats.FADE_APPLY)
+		sh.code = (CLAY_SHADER if kind == "clay" else BUILDING_SHADER).replace("FADE_HEAD", Mats.fade_head()).replace("FADE_APPLY", Mats.FADE_APPLY)
 		_shaders[kind] = sh
 	return _shaders[kind]
 

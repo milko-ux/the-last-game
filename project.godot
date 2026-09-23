@@ -78,3 +78,11 @@ pr_build_front={
 "type": "float",
 "value": -1000000000.0
 }
+pr_light_dir={
+"type": "vec3",
+"value": Vector3(0.36, 0.8, -0.48)
+}
+pr_light_on={
+"type": "float",
+"value": 1.0
+}

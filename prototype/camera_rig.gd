@@ -210,6 +210,21 @@ func kick(duration: float, amount: float, fov_punch: float, away: Vector3) -> vo
 	_kick_dir = away
 
 
+# Brief 6 section 1: the scene's one light is the light of the world.
+# Its direction (toward the light, a DirectionalLight3D's +z) is the
+# global shader uniform every world shader reads (flat_mats.gd,
+# lit_tone). Published once, by the scene that owns the light: it does
+# not move. The run and the menu each own a copy of the same light, and
+# both publish it through here, so the two scenes agree. Lives with the
+# rig because the rig already publishes the view's other global
+# (pr_window_back, below).
+static var light_dir := Vector3(0.36, 0.8, -0.48)   # toward the light; what was last published
+
+static func publish_light(light: Node3D) -> void:
+	light_dir = light.global_transform.basis.z.normalized()
+	RenderingServer.global_shader_parameter_set("pr_light_dir", light_dir)
+
+
 func set_window(z_back: float) -> void:
 	window_back = z_back
 	position = Vector3(0.0, 0.0, z_back + _window_depth * 0.5)

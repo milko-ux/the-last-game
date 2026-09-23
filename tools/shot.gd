@@ -11,6 +11,7 @@ extends SceneTree
 #                    count-in, then print PAUSE CHECK: the clock and the audio
 #                    before and after, and the drift 2 s on -- the proof the
 #                    song and the clock stayed together; no screenshot)
+#   ... light=0     (brief 6's light off: the flat look, for a before/after pair)
 #
 # Opens the run scene, starts it, waits until the song reaches the
 # given bar (plus `after` seconds), saves the frame and quits. Audio
@@ -40,6 +41,7 @@ var kill := false            # kill=1: walk into the nearest hazard at the bar, 
 var _killed := false
 var seq := 1                 # seq=N step=S: N frames S seconds apart from the bar (out-01.png ...)
 var pause_check := false     # pause=1: see the header
+var light := true            # light=0: the pre-brief-6 flat look
 var _pc_stage := 0
 var _pc_wait := 0.0
 var _pc := {}
@@ -225,6 +227,7 @@ func _setup_args() -> void:
 			"seq": seq = int(kv[1])
 			"step": step = float(kv[1])
 			"pause": pause_check = kv[1] == "1"
+			"light": light = kv[1] != "0"
 
 
 func _setup() -> void:
@@ -247,6 +250,7 @@ func _setup() -> void:
 	var scene: PackedScene = load("res://prototype/track_test.tscn")
 	test = scene.instantiate()
 	root.add_child(test)
+	test.set_light(light)
 	root.scaling_3d_scale = render_scale
 	if bar > 1 or seq > 1 or kill:
 		# Let the validator bot carry the player to the requested bar alive.

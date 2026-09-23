@@ -12,11 +12,20 @@ extends RefCounted
 # material lerps toward the background colour by how far its pixel is
 # from the window along z. The camera rig publishes the window's back
 # edge as the global shader uniform `pr_window_back` every frame.
-# The player, its shadow ring and the death line never fade.
+# The player and the death line never fade; the drop shadows (shadows.gd) fade with their floor.
 #
 # Three shaders share the fade: FLAT (hazards, markers), TILE (the
 # floor: stone face, cyan seams, dark sides) and MONOLITH (brief 2,
 # see monoliths.gd). All are built from the same snippets below.
+#
+# THE LIGHT (brief 6 section 1). The scene's CreatureLight is the one
+# light of the world; its direction (toward the light) is the global
+# uniform `pr_light_dir`, published by the scene that owns the light.
+# The unshaded world shaders fake it: `lit_tone()` in the shared head
+# shades a base colour by the face's normal as three tones (top / lit
+# side / shadow side, WorldPalette.LIGHT_*), the shadow side pulled
+# toward WorldPalette.SHADE_TINT. `pr_light_on` 0 (the ?light=0 dev
+# switch) gives the old flat look for an A/B on the phone.
 # ============================================================
 
 # Units ahead of the window's back edge (a bar is 8 units): full colour
@@ -54,7 +63,24 @@ global uniform float pr_armed_pulse;
 global uniform float pr_rim_amber;
 global uniform vec4 pr_ripple;      // z centre, half width, strength
 global uniform float pr_build_front;
+global uniform vec3 pr_light_dir;   // toward the light; the CreatureLight's +z
+global uniform float pr_light_on;   // 1, or 0 for the pre-brief-6 flat look
 varying float world_z;
+
+// Brief 6 section 1: a base colour shaded by the face's normal against
+// the light, as three tones (not a ramp): the top, a side facing the
+// light, a side facing away -- the last pulled toward a cool blue. The
+// steps are a hair wide so a facet on the boundary does not shimmer.
+vec3 lit_tone(vec3 c, vec3 n) {
+	const vec4 tones = LIGHT_TONES;   // top, lit side, shadow side, tint amount
+	const vec3 shade = SHADE_TINT;    // (not `tint`: the clay shader has a uniform of that name)
+	float up = smoothstep(0.55, 0.75, n.y);
+	float lh = length(n.xz);
+	float facing = lh > 0.001 ? dot(n.xz / lh, normalize(pr_light_dir.xz)) : sign(n.y);
+	float lit = smoothstep(-0.12, 0.12, facing);
+	vec3 side_c = mix(mix(c * tones.z, shade, tones.w), c * tones.y, lit);
+	return mix(c, mix(side_c, c * tones.x, up), pr_light_on);
+}
 
 // Brief 2b: procedural surface. 2-octave value noise from world position,
 // no texture lookups. hash -> [0,1); vnoise -> [0,1); grain -> [-1,1].
@@ -214,7 +240,6 @@ render_mode unshaded, fog_disabled;
 uniform vec4 face : source_color;
 uniform vec4 seam : source_color;
 uniform vec4 edge_colour : source_color;
-uniform vec4 side : source_color;
 uniform vec3 half_size;      // the box's half extents (x, y, z)
 uniform float seam_width = 0.03;
 uniform float edge_width = 0.1;
@@ -233,6 +258,7 @@ uniform float ao_amount = 0.18;     // ...this much darker
 FADE_HEAD
 varying vec3 local_pos;
 varying vec3 local_normal;
+varying vec3 world_n;
 varying vec3 world_pos;
 varying vec3 tile_origin;
 
@@ -243,6 +269,7 @@ void vertex() {
 	tile_origin = MODEL_MATRIX[3].xyz;
 	local_pos = VERTEX;
 	local_normal = NORMAL;
+	world_n = normalize(mat3(MODEL_MATRIX) * NORMAL);
 	// Level start (brief 3 section 5): the field is built just ahead of
 	// the player. Tiles beyond the build front sit sunk; they rise as the
 	// front passes, row by row, since the front moves with the window.
@@ -266,9 +293,10 @@ void fragment() {
 	float s = 1.0 - smoothstep(seam_width - 0.01, seam_width + 0.01, edge);
 	float r = 1.0 - smoothstep(edge_width - 0.015, edge_width + 0.015, rim);
 	// Stone: grain in the face and sides, a per-tile shade, occlusion at the seams.
+	// The sides are the face's colour in the light's side tones (brief 6).
 	float g = grain(world_pos, top ? grain_scale : side_grain_scale) * grain_amount;
 	float v = (hash3(floor(tile_origin * 4.0)) * 2.0 - 1.0) * tile_variation;
-	vec3 stone = (top ? face.rgb : side.rgb) * (1.0 + g + v);
+	vec3 stone = lit_tone(face.rgb, normalize(world_n)) * (1.0 + g + v);
 	stone *= 1.0 - ao_amount * (1.0 - smoothstep(0.0, ao_width, edge));
 	vec3 base = mix(stone, live.rgb, armed * pr_armed_pulse);
 	float rip = ripple_here();
@@ -297,9 +325,19 @@ static func _shader(kind: String) -> Shader:
 				sh.code = GLASS_SHADER
 			"gloss":
 				sh.code = GLOSS_SHADER
-		sh.code = sh.code.replace("FADE_HEAD", FADE_HEAD).replace("FADE_APPLY", FADE_APPLY)
+		sh.code = sh.code.replace("FADE_HEAD", fade_head()).replace("FADE_APPLY", FADE_APPLY)
 		_shaders[kind] = sh
 	return _shaders[kind]
+
+
+# The shared head with the palette's light tones written in (brief 6):
+# the numbers live in palette.gd, the shader text here, and this is the
+# one place they meet. props.gd builds its shaders through it too.
+static func fade_head() -> String:
+	var t := WorldPalette.SHADE_TINT
+	return FADE_HEAD.replace("LIGHT_TONES", "vec4(%.3f, %.3f, %.3f, %.3f)" % [
+			WorldPalette.LIGHT_TOP, WorldPalette.LIGHT_SIDE, WorldPalette.LIGHT_SHADE, WorldPalette.SHADE_TINT_AMOUNT]) \
+		.replace("SHADE_TINT", "vec3(%.4f, %.4f, %.4f)" % [t.r, t.g, t.b])
 
 
 static func _with_fade(m: ShaderMaterial) -> ShaderMaterial:
@@ -423,7 +461,6 @@ static func stone(c: Color, half: Vector3) -> Material:
 		m.shader = _shader("tile")
 		m.set_shader_parameter("face", c)
 		m.set_shader_parameter("seam", WorldPalette.TILE_EDGE)
-		m.set_shader_parameter("side", c.darkened(0.3))
 		m.set_shader_parameter("edge_colour", WorldPalette.TILE_EDGE)
 		m.set_shader_parameter("half_size", half)
 		m.set_shader_parameter("seam_width", EDGE_WIDTH * 0.6)
@@ -511,7 +548,6 @@ static func tile(state: int, half: Vector3, outer: Vector2 = Vector2.ZERO) -> Ma
 				face_c = WorldPalette.LETHAL_ARMED
 		m.set_shader_parameter("face", face_c)
 		m.set_shader_parameter("seam", face_c.darkened(SEAM_DARK))
-		m.set_shader_parameter("side", WorldPalette.TILE_SIDE)
 		m.set_shader_parameter("edge_colour", WorldPalette.TILE_EDGE)
 		m.set_shader_parameter("live", WorldPalette.LETHAL_LIVE)
 		m.set_shader_parameter("armed", 1.0 if state == 1 else 0.0)
