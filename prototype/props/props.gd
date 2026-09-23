@@ -318,8 +318,8 @@ static func building(far: bool = false) -> Material:
 # The pillar bands (monoliths.gd, look pass v2): the building shader with
 # a band's colour, and a band's own fade -- the far band is a skyline
 # and keeps going long after the course itself has faded.
-const PILLAR_FADE := [Vector4(14.0, 27.0, 2.0, 10.0), Vector4(22.0, 52.0, 6.0, 20.0), Vector4(34.0, 92.0, 10.0, 30.0)]
-const PILLAR_FLATTEN := [0.3, 0.6, 0.85]
+const PILLAR_FADE := [Vector4(14.0, 27.0, 2.0, 10.0), Vector4(22.0, 52.0, 6.0, 20.0), Vector4(30.0, 88.0, 10.0, 30.0)]
+const PILLAR_FLATTEN := [0.3, 0.6, 0.92]
 
 # The baked stone reads ~0.35-0.9 in the atlas; a band's tint is what the
 # stone is multiplied by, so NEAR_PILLAR etc. are relative to a mid-grey

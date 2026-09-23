@@ -49,7 +49,7 @@ const MONOLITH_FAR := Color("#3a404a")
 # darkest.
 const NEAR_PILLAR := Color("#10151b")
 const MID_PILLAR := Color("#222a34")
-const FAR_PILLAR := Color("#2f3744")
+const FAR_PILLAR := Color("#384150")   # a little lighter (stage B tuning): the far band fades more into the light fog
 const BUILDING_STONE := Color("#5c6272")
 const BUILDING_STONE_FAR := Color("#4f5664")
 # Brief 6 section 1: the one light. Every unshaded block (tiles, slab
