@@ -65,6 +65,7 @@ void vertex() {
 	world_pos = wp.xyz;
 	world_n = normalize(mat3(MODEL_MATRIX) * NORMAL);
 	vcol = COLOR.rgb;
+	fog_sy = screen_y_of(PROJECTION_MATRIX * MODELVIEW_MATRIX * vec4(VERTEX, 1.0));
 }
 
 void fragment() {
@@ -80,7 +81,8 @@ void fragment() {
 	if (f > 0.97) {
 		discard;
 	}
-	ALBEDO = mix(c, background, f);
+	// Into the fog at this screen height: a far hazard lightens, never blackens.
+	ALBEDO = mix(c, fog_colour(fog_sy), f);
 	ROUGHNESS = 0.8;
 	SPECULAR = 0.35;
 	EMISSION = (c * ambient + rim_colour.rgb * fr * (rim_strength + 0.5 * pulse)) * (1.0 - f);
@@ -120,7 +122,7 @@ uniform float band_every = 2.5;      // formwork lines every 2.5 units of height
 uniform float band_width = 0.05;
 uniform float band_dark = 0.03;
 uniform vec3 side_fog = vec3(16.0, 60.0, 0.85);   // |x| start, end, most it may take
-uniform vec3 low_fog = vec3(6.0, 30.0, 0.9);      // depth below the field: start, end, most
+uniform float far_flatten = 0.6;     // how much of its contrast a monolith loses before its colour goes
 FADE_HEAD
 varying vec3 world_pos;
 
@@ -128,6 +130,7 @@ void vertex() {
 	vec4 wp = MODEL_MATRIX * vec4(VERTEX, 1.0);
 	world_z = wp.z;
 	world_pos = wp.xyz;
+	fog_sy = screen_y_of(PROJECTION_MATRIX * MODELVIEW_MATRIX * vec4(VERTEX, 1.0));
 }
 
 float triplanar(vec3 p, vec3 n, float scale) {
@@ -155,8 +158,11 @@ void fragment() {
 	float band = 1.0 - smoothstep(band_width * 0.5, band_width, abs(fract(world_pos.y / band_every) - 0.5) * band_every);
 	c *= (1.0 + g) * (1.0 - band_dark * band * (1.0 - smoothstep(0.7, 0.95, n.y)));
 	float side = smoothstep(side_fog.x, side_fog.y, abs(world_pos.x)) * side_fog.z;
-	float low = smoothstep(low_fog.x, low_fog.y, -world_pos.y) * low_fog.z;
-	ALBEDO = mix(c, background, max(f, max(side, low)));
+	vec3 fog = fog_colour(fog_sy);
+	// Far monoliths lose contrast before they lose colour (brief 6 section 3).
+	float away = max(f, side);
+	c = mix(c, (c + fog) * 0.5, smoothstep(0.0, 0.6, away) * far_flatten);
+	ALBEDO = low_fog(mix(c, fog, away), world_pos.y);
 }
 """
 
@@ -186,7 +192,6 @@ static func clay(live: bool) -> Material:
 		m.set_shader_parameter("tint_amount", 0.75 if live else 0.55)
 		m.set_shader_parameter("armed", 0.0 if live else 1.0)
 		m.set_shader_parameter("rim_strength", 1.0 if live else 0.0)
-		m.set_shader_parameter("background", WorldPalette.BG_BOTTOM)
 		m.set_shader_parameter("fade", Quaternion(Mats.FADE_AHEAD_START, Mats.FADE_AHEAD_END, Mats.FADE_BEHIND_START, Mats.FADE_BEHIND_END))
 		_mats[key] = m
 	return _mats[key]
@@ -203,7 +208,6 @@ static func clay_safe() -> Material:
 		m.set_shader_parameter("tint_amount", 0.0)
 		m.set_shader_parameter("armed", 0.0)
 		m.set_shader_parameter("rim_strength", 0.25)
-		m.set_shader_parameter("background", WorldPalette.BG_BOTTOM)
 		m.set_shader_parameter("fade", Quaternion(Mats.FADE_AHEAD_START, Mats.FADE_AHEAD_END, Mats.FADE_BEHIND_START, Mats.FADE_BEHIND_END))
 		_mats["clay_safe"] = m
 	return _mats["clay_safe"]
@@ -215,7 +219,6 @@ static func building(far: bool = false) -> Material:
 		var m := ShaderMaterial.new()
 		m.shader = _shader("building")
 		m.set_shader_parameter("colour", WorldPalette.BUILDING_STONE_FAR if far else WorldPalette.BUILDING_STONE)
-		m.set_shader_parameter("background", WorldPalette.BG_BOTTOM)
 		m.set_shader_parameter("fade", Quaternion(Mats.FADE_AHEAD_START, Mats.FADE_AHEAD_END, Mats.FADE_BEHIND_START, Mats.FADE_BEHIND_END))
 		_mats[key] = m
 	return _mats[key]

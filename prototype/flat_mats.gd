@@ -9,9 +9,19 @@ extends RefCounted
 # gl_compatibility renderer the web export uses (checked with a
 # screenshot: 15+ rows in full colour), so the fade is part of the
 # material instead and is identical on web and native: every world
-# material lerps toward the background colour by how far its pixel is
-# from the window along z. The camera rig publishes the window's back
-# edge as the global shader uniform `pr_window_back` every frame.
+# material lerps toward the FOG by how far its pixel is from the window
+# along z. The camera rig publishes the window's back edge as the global
+# shader uniform `pr_window_back` every frame.
+#
+# THE FOG HAS A COLOUR AND A DEPTH (brief 6 section 3, Milko's version):
+# the backdrop is a four-stop gradient (WorldPalette.BG_TOP / THIRD /
+# MIDDLE / BOTTOM, light at the top, near-black at the bottom), and a
+# faded pixel goes toward the backdrop's colour AT ITS OWN SCREEN HEIGHT
+# (`fog_colour(fog_sy)`, the vertex's clip-space y), so a far floor or a
+# far hazard lightens into the fog instead of turning into a black blob.
+# `low_fog()` is the height fog: below the slab's underside everything
+# sinks toward BG_BOTTOM with depth, which is what dissolves the
+# monoliths' feet.
 # The player and the death line never fade; the drop shadows (shadows.gd) fade with their floor.
 #
 # Three shaders share the fade: FLAT (hazards, markers), TILE (the
@@ -50,11 +60,43 @@ const GRAIN_SCALE := 0.6
 const TILE_VARIATION := 0.03
 const AO_WIDTH := 0.12
 const AO_AMOUNT := 0.18
+# The height fog (brief 6 section 3): from this far below the field to
+# this far, at most this much toward BG_BOTTOM. The slab's underside is
+# at -Field.THICK; the monoliths' feet at -22.
+const LOW_FOG_START := 2.0
+const LOW_FOG_END := 24.0
+const LOW_FOG_MAX := 0.92
+
+# The fog's colour by screen height and the clip-space helper, on their
+# own so the backdrop quad and the far silhouettes (camera_rig.gd) can
+# share them without the whole head. Included into FADE_HEAD.
+const FOG_FUNCTIONS := """
+// Brief 6 section 3: the backdrop's colour at a screen height (0 top ..
+// 1 bottom), four stops. The same function paints the backdrop quad
+// (camera_rig.gd), so a faded thing goes toward exactly what is behind it.
+vec3 fog_colour(float sy) {
+	sy = clamp(sy, 0.0, 1.0);   // a vertex above the frame must not extrapolate past the top stop (it went white)
+	const vec3 top = FOG_TOP;
+	const vec3 third = FOG_THIRD;
+	const vec3 middle = FOG_MIDDLE;
+	const vec3 bottom = FOG_BOTTOM;
+	if (sy < 0.3333) { return mix(top, third, sy * 3.0); }
+	if (sy < 0.5) { return mix(third, middle, (sy - 0.3333) * 6.0); }
+	return mix(middle, bottom, (sy - 0.5) * 2.0);
+}
+
+// The screen height of a vertex, for fog_colour: from its clip position.
+// (Checked with a screenshot, 2026-09-23: clip y is DOWN here, so the top
+// of the frame is -1 -- the same sense as the backdrop quad's UV.)
+float screen_y_of(vec4 clip) {
+	return 0.5 + 0.5 * clip.y / max(clip.w, 0.001);
+}
+
+"""
 
 # Shared: the fade uniforms and the fade amount for this pixel, plus the
 # beat uniforms motion.gd sets once per frame (brief 3).
 const FADE_HEAD := """
-uniform vec3 background : source_color;
 uniform vec4 fade;   // ahead start, ahead end, behind start, behind end
 global uniform float pr_window_back;
 global uniform float pr_rim_pulse;
@@ -66,6 +108,16 @@ global uniform float pr_build_front;
 global uniform vec3 pr_light_dir;   // toward the light; the CreatureLight's +z
 global uniform float pr_light_on;   // 1, or 0 for the pre-brief-6 flat look
 varying float world_z;
+varying float fog_sy;               // the pixel's screen height, 0 = top, 1 = bottom
+
+FOG_FUNCTIONS
+
+// Height fog: below the slab's underside, toward the dark bottom of the
+// fog with depth (start, end, the most it may take).
+vec3 low_fog(vec3 c, float world_y) {
+	const vec3 lf = LOW_FOG;
+	return mix(c, FOG_BOTTOM, smoothstep(lf.x, lf.y, -world_y) * lf.z);
+}
 
 // Brief 6 section 1: a base colour shaded by the face's normal against
 // the light, as three tones (not a ramp): the top, a side facing the
@@ -120,7 +172,7 @@ const FADE_APPLY := """
 	if (f > 0.97) {
 		discard;
 	}
-	ALBEDO = mix(ALBEDO, background, f);
+	ALBEDO = mix(ALBEDO, fog_colour(fog_sy), f);
 """
 
 const FLAT_SHADER := """
@@ -133,6 +185,7 @@ FADE_HEAD
 
 void vertex() {
 	world_z = (MODEL_MATRIX * vec4(VERTEX, 1.0)).z;
+	fog_sy = screen_y_of(PROJECTION_MATRIX * MODELVIEW_MATRIX * vec4(VERTEX, 1.0));
 }
 
 void fragment() {
@@ -171,6 +224,7 @@ void vertex() {
 	world_pos = wp.xyz;
 	world_n = normalize(mat3(MODEL_MATRIX) * NORMAL);
 	local_y = VERTEX.y;
+	fog_sy = screen_y_of(PROJECTION_MATRIX * MODELVIEW_MATRIX * vec4(VERTEX, 1.0));
 }
 
 void fragment() {
@@ -212,6 +266,7 @@ void vertex() {
 	world_z = wp.z;
 	world_pos = wp.xyz;
 	world_n = normalize(mat3(MODEL_MATRIX) * NORMAL);
+	fog_sy = screen_y_of(PROJECTION_MATRIX * MODELVIEW_MATRIX * vec4(VERTEX, 1.0));
 }
 
 void fragment() {
@@ -221,7 +276,7 @@ void fragment() {
 	if (f > 0.97) {
 		discard;
 	}
-	ALBEDO = mix(albedo.rgb, background, f);
+	ALBEDO = mix(albedo.rgb, fog_colour(fog_sy), f);
 	ROUGHNESS = roughness;
 	METALLIC = 0.0;
 	SPECULAR = 0.7;
@@ -275,6 +330,7 @@ void vertex() {
 	// front passes, row by row, since the front moves with the window.
 	float up = 1.0 - smoothstep(pr_build_front - build_length, pr_build_front, world_z);
 	VERTEX.y -= build_depth * up;
+	fog_sy = screen_y_of(PROJECTION_MATRIX * MODELVIEW_MATRIX * vec4(VERTEX, 1.0));
 }
 
 void fragment() {
@@ -302,7 +358,7 @@ void fragment() {
 	float rip = ripple_here();
 	vec3 rim_c = mix(edge_colour.rgb, amber.rgb, pr_rim_amber) * (1.0 + pr_rim_pulse + rip);
 	vec3 seam_c = seam.rgb * (1.0 + pr_seam_pulse + rip * 0.6);
-	ALBEDO = mix(mix(base, seam_c, s), rim_c, r);
+	ALBEDO = low_fog(mix(mix(base, seam_c, s), rim_c, r), world_pos.y);
 FADE_APPLY
 }
 """
@@ -333,15 +389,26 @@ static func _shader(kind: String) -> Shader:
 # The shared head with the palette's light tones written in (brief 6):
 # the numbers live in palette.gd, the shader text here, and this is the
 # one place they meet. props.gd builds its shaders through it too.
+static func fog_functions() -> String:
+	return FOG_FUNCTIONS.replace("FOG_TOP", _vec3(WorldPalette.BG_TOP)).replace("FOG_THIRD", _vec3(WorldPalette.BG_THIRD)) \
+		.replace("FOG_MIDDLE", _vec3(WorldPalette.BG_MIDDLE)).replace("FOG_BOTTOM", _vec3(WorldPalette.BG_BOTTOM))
+
+
 static func fade_head() -> String:
 	var t := WorldPalette.SHADE_TINT
-	return FADE_HEAD.replace("LIGHT_TONES", "vec4(%.3f, %.3f, %.3f, %.3f)" % [
+	return FADE_HEAD.replace("FOG_FUNCTIONS", fog_functions()).replace("LIGHT_TONES", "vec4(%.3f, %.3f, %.3f, %.3f)" % [
 			WorldPalette.LIGHT_TOP, WorldPalette.LIGHT_SIDE, WorldPalette.LIGHT_SHADE, WorldPalette.SHADE_TINT_AMOUNT]) \
-		.replace("SHADE_TINT", "vec3(%.4f, %.4f, %.4f)" % [t.r, t.g, t.b])
+		.replace("SHADE_TINT", "vec3(%.4f, %.4f, %.4f)" % [t.r, t.g, t.b]) \
+		.replace("FOG_TOP", _vec3(WorldPalette.BG_TOP)).replace("FOG_THIRD", _vec3(WorldPalette.BG_THIRD)) \
+		.replace("FOG_MIDDLE", _vec3(WorldPalette.BG_MIDDLE)).replace("FOG_BOTTOM", _vec3(WorldPalette.BG_BOTTOM)) \
+		.replace("LOW_FOG", "vec3(%.1f, %.1f, %.2f)" % [LOW_FOG_START, LOW_FOG_END, LOW_FOG_MAX])
+
+
+static func _vec3(c: Color) -> String:
+	return "vec3(%.4f, %.4f, %.4f)" % [c.r, c.g, c.b]
 
 
 static func _with_fade(m: ShaderMaterial) -> ShaderMaterial:
-	m.set_shader_parameter("background", WorldPalette.BG_BOTTOM)
 	m.set_shader_parameter("fade", Quaternion(FADE_AHEAD_START, FADE_AHEAD_END, FADE_BEHIND_START, FADE_BEHIND_END))
 	return m
 

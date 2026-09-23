@@ -14,8 +14,17 @@ extends RefCounted
 # black, dim seams, one bright rim, two-tone monoliths.
 # ============================================================
 
-const BG_TOP := Color("#14171d")
-const BG_BOTTOM := Color("#262b34")
+# The fog (brief 6 section 3, with Milko's correction 2026-09-23: the
+# brief had it backwards). The concept is LIGHT at the top and in the
+# distance, dark below: four stops measured from field_monolith.png, top
+# of frame, a third down, the middle, the bottom. The backdrop is this
+# gradient; every distant thing fades toward it at its own screen height,
+# so far things get lighter, never black; below the slab everything
+# sinks toward BG_BOTTOM.
+const BG_TOP := Color("#556173")
+const BG_THIRD := Color("#38404e")
+const BG_MIDDLE := Color("#1b2029")
+const BG_BOTTOM := Color("#0c1016")
 const TILE := Color("#1c2830")          # dark stone, the tile face
 const TILE_SEAM := Color("#0f5f5a")     # the thin dim line between tiles
 const TILE_EDGE := Color("#19d3c9")     # the bright line along the slab's outer rim

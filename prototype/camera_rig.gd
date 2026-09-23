@@ -72,18 +72,20 @@ var _kick_dir := Vector3.ZERO
 @onready var cam: Camera3D = $Camera3D
 
 
-# Brief 2 section 4: the background is a two-stop vertical gradient,
-# BG_TOP -> BG_BOTTOM, drawn on an unlit quad that rides on the camera far
-# behind everything (the cheapest thing that looks the same on the web
-# renderer and native). Nothing else back there.
+# Brief 2 section 4: the background is a vertical gradient drawn on an
+# unlit quad that rides on the camera far behind everything (the cheapest
+# thing that looks the same on the web renderer and native). Brief 6
+# section 3: four stops (WorldPalette.BG_TOP / THIRD / MIDDLE / BOTTOM),
+# painted by the SAME fog_colour() every world material fades toward, so
+# a faded thing goes toward exactly what is behind it. Nothing else back
+# there but the far silhouettes.
+const Mats := preload("res://prototype/flat_mats.gd")
 const BACKDROP_DISTANCE := 600.0
 # Brief 2b section 5: the gradient carries two layers of slow noise (fog
 # with weather in it) in a world-ish space that scrolls with the window.
 const BACKDROP_SHADER := """
 shader_type spatial;
 render_mode unshaded, depth_draw_never, fog_disabled, cull_disabled;
-uniform vec3 top : source_color;
-uniform vec3 bottom : source_color;
 uniform vec2 quad_size;
 uniform float big_scale = 40.0;
 uniform float big_contrast = 0.06;
@@ -92,6 +94,7 @@ uniform float small_scale = 12.0;
 uniform float small_contrast = 0.03;
 uniform float small_speed = 0.12;
 global uniform float pr_window_back;
+FOG_FUNCTIONS
 
 float hash2(vec2 p) {
 	p = fract(p * vec2(0.3183099, 0.3678794) + vec2(0.1, 0.7));
@@ -110,19 +113,37 @@ void fragment() {
 	vec2 p = (UV - 0.5) * quad_size * 0.25 + vec2(0.0, pr_window_back * 0.2);
 	float big = vnoise2(p / big_scale + vec2(TIME * big_speed / big_scale, 0.0)) * 2.0 - 1.0;
 	float small = vnoise2(p / small_scale + vec2(0.0, TIME * small_speed / small_scale)) * 2.0 - 1.0;
-	ALBEDO = mix(bottom, top, UV.y) * (1.0 + big * big_contrast + small * small_contrast);
+	ALBEDO = fog_colour(UV.y) * (1.0 + big * big_contrast + small * small_contrast);
+}
+"""
+
+# The far silhouettes: a little darker than the fog at their screen
+# height, like the concept's furthest towers.
+const FAR_SHADER := """
+shader_type spatial;
+render_mode unshaded, fog_disabled;
+uniform float tone = 0.93;
+varying float fog_sy;
+FOG_FUNCTIONS
+
+void vertex() {
+	fog_sy = screen_y_of(PROJECTION_MATRIX * MODELVIEW_MATRIX * vec4(VERTEX, 1.0));
+}
+
+void fragment() {
+	ALBEDO = fog_colour(fog_sy) * tone;
 }
 """
 
 # Huge faint monolith silhouettes far behind the field, on the rig with
-# a 20 % parallax (they move at a fifth of the scroll), 4 % above the
-# background. Distance, size and colour are the knobs.
+# a 20 % parallax (they move at a fifth of the scroll), FAR_TONE of the
+# fog behind them. Distance, size and tone are the knobs.
 const FAR_SILHOUETTES := [
 	[Vector3(-70.0, -30.0, 40.0), Vector3(22.0, 90.0, 18.0)],
 	[Vector3(62.0, -35.0, 70.0), Vector3(30.0, 110.0, 24.0)],
 	[Vector3(-40.0, -40.0, 110.0), Vector3(18.0, 75.0, 16.0)],
 ]
-const FAR_LIFT := 1.04
+const FAR_TONE := 0.93
 var _far: Node3D
 
 
@@ -141,12 +162,10 @@ func _build_backdrop() -> void:
 	mesh.size = Vector2(h * 3.0, h)
 	quad.mesh = mesh
 	var sh := Shader.new()
-	sh.code = BACKDROP_SHADER
+	sh.code = BACKDROP_SHADER.replace("FOG_FUNCTIONS", Mats.fog_functions())
 	var m := ShaderMaterial.new()
 	m.shader = sh
 	m.render_priority = -100
-	m.set_shader_parameter("top", WorldPalette.BG_TOP)
-	m.set_shader_parameter("bottom", WorldPalette.BG_BOTTOM)
 	m.set_shader_parameter("quad_size", mesh.size)
 	quad.material_override = m
 	quad.position = Vector3(0.0, 0.0, -BACKDROP_DISTANCE)
@@ -155,10 +174,11 @@ func _build_backdrop() -> void:
 
 	_far = Node3D.new()
 	add_child(_far)
-	var far_mat := StandardMaterial3D.new()
-	far_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	far_mat.albedo_color = WorldPalette.BG_BOTTOM * FAR_LIFT
-	far_mat.disable_fog = true
+	var far_sh := Shader.new()
+	far_sh.code = FAR_SHADER.replace("FOG_FUNCTIONS", Mats.fog_functions())
+	var far_mat := ShaderMaterial.new()
+	far_mat.shader = far_sh
+	far_mat.set_shader_parameter("tone", FAR_TONE)
 	for spec in FAR_SILHOUETTES:
 		var mi := MeshInstance3D.new()
 		var bm := BoxMesh.new()

@@ -74,6 +74,7 @@ varying vec4 inst;   // alpha, core, width / length, unused
 
 void vertex() {
 	world_z = (MODEL_MATRIX * vec4(VERTEX, 1.0)).z;
+	fog_sy = screen_y_of(PROJECTION_MATRIX * MODELVIEW_MATRIX * vec4(VERTEX, 1.0));
 	inst = INSTANCE_CUSTOM;
 }
 
@@ -111,7 +112,6 @@ static func shadow_material() -> ShaderMaterial:
 		_material.render_priority = 9
 		_material.set_shader_parameter("fill", Color(0.0, 0.0, 0.0, 1.0))
 		_material.set_shader_parameter("soft", SOFT)
-		_material.set_shader_parameter("background", WorldPalette.BG_BOTTOM)
 		_material.set_shader_parameter("fade", Quaternion(Mats.FADE_AHEAD_START, Mats.FADE_AHEAD_END, Mats.FADE_BEHIND_START, Mats.FADE_BEHIND_END))
 	return _material
 
