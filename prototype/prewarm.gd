@@ -31,7 +31,6 @@ const Shadows := preload("res://prototype/shadows.gd")
 
 const TINY := 0.001
 const HAZARD_MODELS := ["gate_pillar", "sweeper_segment", "slammer", "orbiter_pillar", "volley_emitter"]
-const BUILDING_MODELS := ["building_tall", "building_stacked", "building_tall_hi", "building_stacked_hi"]
 
 var _queue: Array[Callable] = []
 var _total := 0
@@ -56,10 +55,10 @@ func prepare(bursts: Array) -> void:
 		for m in [Props.clay(false), Props.clay(true), Props.clay_safe(), white]:
 			_queue.append(_prop.bind(model, m, false))
 		_queue.append(_prop.bind(model, Props.clay(false), true))
-	# The buildings: both detail levels, the near and the far material.
-	for model in BUILDING_MODELS:
-		_queue.append(_building.bind(model, false))
-		_queue.append(_building.bind(model, true))
+	# The pillar bands (monoliths.gd): a MultiMesh of the measured hull in
+	# each band's material, one instance each.
+	for band in 3:
+		_queue.append(_pillars.bind(band))
 	# The drop shadows (brief 6): a MultiMesh is its own pipeline variant,
 	# so the warm-up draws one instance of the real thing.
 	_queue.append(_shadows)
@@ -102,8 +101,17 @@ func _prop(model: String, mat: Material, mirror: bool) -> void:
 	add_child(Props.make(model, Props.size_of(model), "base", mat, 0.0, mirror))
 
 
-func _building(model: String, far: bool) -> void:
-	_mesh(Props.mesh_of(model), Props.building(far))
+func _pillars(band: int) -> void:
+	var mi := MultiMeshInstance3D.new()
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.mesh = Props.low_mesh("building_tall")
+	mm.instance_count = 1
+	mm.set_instance_transform(0, Transform3D.IDENTITY)
+	mi.multimesh = mm
+	mi.material_override = Props.pillar(band)
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(mi)
 
 
 func _shadows() -> void:

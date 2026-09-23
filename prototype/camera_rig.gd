@@ -78,7 +78,7 @@ var _kick_dir := Vector3.ZERO
 # section 3: four stops (WorldPalette.BG_TOP / THIRD / MIDDLE / BOTTOM),
 # painted by the SAME fog_colour() every world material fades toward, so
 # a faded thing goes toward exactly what is behind it. Nothing else back
-# there but the far silhouettes.
+# there (the far pillar band, monoliths.gd, is the skyline).
 const Mats := preload("res://prototype/flat_mats.gd")
 const BACKDROP_DISTANCE := 600.0
 # Brief 2b section 5: the gradient carries two layers of slow noise (fog
@@ -117,34 +117,6 @@ void fragment() {
 }
 """
 
-# The far silhouettes: a little darker than the fog at their screen
-# height, like the concept's furthest towers.
-const FAR_SHADER := """
-shader_type spatial;
-render_mode unshaded, fog_disabled;
-uniform float tone = 0.93;
-varying highp float fog_sy;
-FOG_FUNCTIONS
-
-void vertex() {
-	fog_sy = screen_y_of(PROJECTION_MATRIX * MODELVIEW_MATRIX * vec4(VERTEX, 1.0));
-}
-
-void fragment() {
-	ALBEDO = fog_colour(fog_sy) * tone;
-}
-"""
-
-# Huge faint monolith silhouettes far behind the field, on the rig with
-# a 20 % parallax (they move at a fifth of the scroll), FAR_TONE of the
-# fog behind them. Distance, size and tone are the knobs.
-const FAR_SILHOUETTES := [
-	[Vector3(-70.0, -30.0, 40.0), Vector3(22.0, 90.0, 18.0)],
-	[Vector3(62.0, -35.0, 70.0), Vector3(30.0, 110.0, 24.0)],
-	[Vector3(-40.0, -40.0, 110.0), Vector3(18.0, 75.0, 16.0)],
-]
-const FAR_TONE := 0.93
-var _far: Node3D
 
 
 func _ready() -> void:
@@ -172,21 +144,6 @@ func _build_backdrop() -> void:
 	quad.extra_cull_margin = 16384.0
 	cam.add_child(quad)
 
-	_far = Node3D.new()
-	add_child(_far)
-	var far_sh := Shader.new()
-	far_sh.code = FAR_SHADER.replace("FOG_FUNCTIONS", Mats.fog_functions())
-	var far_mat := ShaderMaterial.new()
-	far_mat.shader = far_sh
-	far_mat.set_shader_parameter("tone", FAR_TONE)
-	for spec in FAR_SILHOUETTES:
-		var mi := MeshInstance3D.new()
-		var bm := BoxMesh.new()
-		bm.size = spec[1]
-		mi.mesh = bm
-		mi.material_override = far_mat
-		mi.position = spec[0] + Vector3(0.0, spec[1].y * 0.5, 0.0)
-		_far.add_child(mi)
 
 
 # Called by the run scene with the knobs of what is being played: the
@@ -248,8 +205,6 @@ static func publish_light(light: Node3D) -> void:
 func set_window(z_back: float) -> void:
 	window_back = z_back
 	position = Vector3(0.0, 0.0, z_back + _window_depth * 0.5)
-	if _far != null:
-		_far.position.z = -0.8 * z_back   # so the silhouettes advance at 20 % of the scroll
 	# The distance fade in flat_mats.gd is measured from the window.
 	RenderingServer.global_shader_parameter_set("pr_window_back", z_back)
 

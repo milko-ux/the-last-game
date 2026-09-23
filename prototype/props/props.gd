@@ -227,6 +227,25 @@ static func building(far: bool = false) -> Material:
 	return _mats[key]
 
 
+# The pillar bands (monoliths.gd, look pass v2): the building shader with
+# a band's colour, and a band's own fade -- the far band is a skyline
+# and keeps going long after the course itself has faded.
+const PILLAR_FADE := [Vector4(14.0, 27.0, 2.0, 10.0), Vector4(22.0, 52.0, 6.0, 20.0), Vector4(34.0, 92.0, 10.0, 30.0)]
+const PILLAR_FLATTEN := [0.3, 0.6, 0.85]
+
+static func pillar(band: int) -> Material:
+	var key := "pillar_%d" % band
+	if not _mats.has(key):
+		var m := ShaderMaterial.new()
+		m.shader = _shader("building")
+		m.set_shader_parameter("colour", [WorldPalette.NEAR_PILLAR, WorldPalette.MID_PILLAR, WorldPalette.FAR_PILLAR][band])
+		var f: Vector4 = PILLAR_FADE[band]
+		m.set_shader_parameter("fade", Quaternion(f.x, f.y, f.z, f.w))
+		m.set_shader_parameter("far_flatten", PILLAR_FLATTEN[band])
+		_mats[key] = m
+	return _mats[key]
+
+
 static func size_of(name: String) -> Vector3:
 	return MODELS[name][0]
 

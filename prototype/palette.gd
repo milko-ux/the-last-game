@@ -42,6 +42,14 @@ const MONOLITH_FAR := Color("#3a404a")
 # 2026-09-23 (brief 6): 30 % lighter than before, because the light's
 # tones top out at 1.0 where the old ramp lit a facet to 1.3 -- so a lit
 # face is as bright as it was, and the tops and shadow sides fall from it.
+# Look pass v2 section 3 (2026-09-23): the pillars around the field in
+# three bands -- near ones dark silhouettes, mid between, far ones
+# fading into the light fog. The brightness order of the concept: fog
+# lightest, floor the brightest thing in the play area, near pillars
+# darkest.
+const NEAR_PILLAR := Color("#141a20")
+const MID_PILLAR := Color("#222a34")
+const FAR_PILLAR := Color("#2f3744")
 const BUILDING_STONE := Color("#5c6272")
 const BUILDING_STONE_FAR := Color("#4f5664")
 # Brief 6 section 1: the one light. Every unshaded block (tiles, slab
