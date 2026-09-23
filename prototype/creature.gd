@@ -743,37 +743,26 @@ func _feet_squash() -> float:
 	return f * FOOT_SQUASH
 
 
-# Brief 5 section 5 — footfall dust. ONE shared emitter, restarted at the
-# foot that just landed. CPU particles, like the death burst: GPU
-# particles are the usual thing to misbehave in a web export.
+# Brief 5 section 5 — footfall dust. Two emitters of fixed size (a step's, a
+# landing's), restarted at the foot that just landed. CPU particles,
+# like the death burst: GPU particles are the usual thing to misbehave
+# in a web export.
 #
-# Budget: DUST_AMOUNT is the emitter's size, so the most dust that can
-# exist at once is 8, plus the death burst's 12 = 20 particles, well
-# inside the 200 the brief allows.
-const DUST_AMOUNT := 8
+# Budget: the most dust that can exist at once is 3 + 8, plus the death
+# burst's 12 = 23 particles, well inside the 200 the brief allows.
 const DUST_STEP := 3                   # per footfall, above half speed
 const DUST_LAND := 8                   # on a landing
 const DUST_COLOUR := Color(0.55, 0.55, 0.58)
 
 
+# Two emitters, one per puff size (2026-09-24). There used to be one whose
+# `amount` was set per puff, and setting a CPUParticles3D's amount
+# reallocates its GPU buffer every time -- a WebGL buffer deleted and
+# created on every footstep, which is the churn iOS Safari's GPU process
+# crashes on (ui/ui.gd's header). Now nothing about an emitter changes
+# after it is built. Both share one mesh and material, so the warm-up of
+# one (prewarm.gd) covers the other.
 func _build_dust() -> void:
-	_dust_p = CPUParticles3D.new()
-	_dust_p.emitting = false
-	_dust_p.one_shot = true
-	_dust_p.amount = DUST_AMOUNT
-	_dust_p.lifetime = 0.35
-	_dust_p.explosiveness = 1.0
-	_dust_p.direction = Vector3.UP
-	_dust_p.spread = 70.0
-	_dust_p.initial_velocity_min = 0.6
-	_dust_p.initial_velocity_max = 1.6
-	_dust_p.gravity = Vector3(0.0, -4.0, 0.0)
-	_dust_p.scale_amount_min = 0.25
-	_dust_p.scale_amount_max = 0.5
-	var curve := Curve.new()
-	curve.add_point(Vector2(0.0, 1.0))
-	curve.add_point(Vector2(1.0, 0.0))
-	_dust_p.scale_amount_curve = curve
 	var ball := SphereMesh.new()
 	ball.radius = 0.1
 	ball.height = 0.2
@@ -783,17 +772,43 @@ func _build_dust() -> void:
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mat.albedo_color = DUST_COLOUR
 	ball.material = mat
-	_dust_p.mesh = ball
-	_dust_p.top_level = true
-	add_child(_dust_p)
+	_dust_p = _make_dust(DUST_LAND, ball)
+	_dust_step_p = _make_dust(DUST_STEP, ball)
+
+
+var _dust_step_p: CPUParticles3D = null
+
+
+func _make_dust(amount: int, ball: Mesh) -> CPUParticles3D:
+	var p := CPUParticles3D.new()
+	p.emitting = false
+	p.one_shot = true
+	p.amount = amount
+	p.lifetime = 0.35
+	p.explosiveness = 1.0
+	p.direction = Vector3.UP
+	p.spread = 70.0
+	p.initial_velocity_min = 0.6
+	p.initial_velocity_max = 1.6
+	p.gravity = Vector3(0.0, -4.0, 0.0)
+	p.scale_amount_min = 0.25
+	p.scale_amount_max = 0.5
+	var curve := Curve.new()
+	curve.add_point(Vector2(0.0, 1.0))
+	curve.add_point(Vector2(1.0, 0.0))
+	p.scale_amount_curve = curve
+	p.mesh = ball
+	p.top_level = true
+	add_child(p)
+	return p
 
 
 func _dust(at: Vector3, count: int) -> void:
 	if _dust_p == null or count <= 0 or mode != Mode.ALIVE:
 		return
-	_dust_p.amount = count
-	_dust_p.global_position = at
-	_dust_p.restart()
+	var p := _dust_step_p if count <= DUST_STEP else _dust_p
+	p.global_position = at
+	p.restart()
 
 
 # The dust emitter, for prewarm.gd (every material must be drawn once
