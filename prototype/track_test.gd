@@ -188,6 +188,7 @@ func _ready() -> void:
 	rig.publish_light($CreatureLight)
 	_dev_url_switches()
 	_apply_render_scale()
+	apply_finish()
 	endless = Rules.ENDLESS
 	if endless:
 		_ready_endless()
@@ -316,8 +317,47 @@ func _apply_render_scale() -> void:
 #                 wants a tap)
 #   ?grad=1       play as a graduated player (nothing is saved)
 #   ?light=0      brief 6's light off: the flat pre-brief-6 look, for an A/B
+#   ?tonemap=0|aces|agx · ?glow=0 · ?vignette=0 · ?grain=0 · ?msaa=0
+#                 the finishing layer's switches (look pass v2 section 6)
 var _dev_autoplay := false
 var light_on := true
+# The finishing layer (brief 6 sections 7-8): what is on, and the
+# tonemapper. Defaults are the shipped look; the switches above flip them.
+const TONEMAP_DEFAULT := "aces"   # picked with web shots: AgX greys the magenta and the cyan, ACES keeps them (look pass v2 section 6)
+const GLOW_HDR_THRESHOLD := 0.82     # only the emissives bloom: the cyan rim, live magenta, amber
+const GLOW_INTENSITY := 0.45
+const GLOW_STRENGTH := 0.9
+var finish := {"tonemap": TONEMAP_DEFAULT, "glow": true, "vignette": true, "grain": true, "msaa": true}
+var _finish: CanvasLayer
+
+
+# Applies the finishing layer as `finish` says: the WorldEnvironment's
+# tonemapper and glow, the viewport's MSAA, and the vignette / grain quad
+# (finish.gd). Called once at _ready, after the URL switches were read.
+func apply_finish() -> void:
+	var env: Environment = $WorldEnvironment.environment
+	match String(finish["tonemap"]):
+		"aces":
+			env.tonemap_mode = Environment.TONE_MAPPER_ACES
+		"agx":
+			env.tonemap_mode = Environment.TONE_MAPPER_AGX
+		_:
+			env.tonemap_mode = Environment.TONE_MAPPER_LINEAR
+	env.tonemap_exposure = 1.0
+	env.glow_enabled = bool(finish["glow"])
+	env.glow_hdr_threshold = GLOW_HDR_THRESHOLD
+	env.glow_intensity = GLOW_INTENSITY
+	env.glow_strength = GLOW_STRENGTH
+	env.glow_bloom = 0.0
+	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SCREEN
+	get_viewport().msaa_3d = Viewport.MSAA_2X if bool(finish["msaa"]) else Viewport.MSAA_DISABLED
+	if _finish == null:
+		_finish = load("res://prototype/finish.gd").new()
+		_finish.name = "Finish"
+		add_child(_finish)
+	_finish.set_vignette(bool(finish["vignette"]))
+	_finish.set_grain(bool(finish["grain"]))
+	print("FINISH tonemap=%s glow=%s vignette=%s grain=%s msaa=%s" % [finish["tonemap"], finish["glow"], finish["vignette"], finish["grain"], finish["msaa"]])
 
 
 # The ?light=0 dev switch (and tools/shot.gd light=0): the fake light in
@@ -334,6 +374,12 @@ func _dev_url_switches() -> void:
 	if FrameMeter.url_param("scale") != "":
 		_render_scale_override = float(FrameMeter.url_param("scale"))
 	set_light(FrameMeter.url_param("light") != "0")
+	var tm := FrameMeter.url_param("tonemap")
+	if tm != "":
+		finish["tonemap"] = "linear" if tm == "0" else tm
+	for k in ["glow", "vignette", "grain", "msaa"]:
+		if FrameMeter.url_param(k) == "0":
+			finish[k] = false
 	if FrameMeter.url_param("level") != "":
 		Rules.ENDLESS = false
 		Rules.LEVEL = clampi(int(FrameMeter.url_param("level")), 1, 6)
