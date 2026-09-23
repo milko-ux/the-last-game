@@ -117,13 +117,16 @@ func _ready() -> void:
 func _sync_profile() -> void:
 	# A tool's sign-in (tools/talo_check.gd) must never rename the guest
 	# profile of whoever owns this machine: the check claimed its throwaway
-	# account's name into Milko's own profile.save on 2026-09-22.
-	if not Progress.save_enabled:
-		return
+	# account's name into Milko's own profile.save on 2026-09-22. That guard
+	# covers the NAME only: the posted flag is the run's own state and is
+	# cleared on every sign-out (2026-09-23 -- the first version returned
+	# early and the check's step 12 failed).
+	var own_profile: bool = Progress.save_enabled
 	if logged_in():
-		Profile.claim(identifier)
+		if own_profile:
+			Profile.claim(identifier)
 	else:
-		if Profile.claimed:
+		if own_profile and Profile.claimed:
 			Profile.unclaim()
 		Progress.unpost_best()
 
