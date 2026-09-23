@@ -78,6 +78,12 @@ with sync_playwright() as p:
     page.screenshot(path=args.out, full_page=False)
     print("WEB SHOT saved=%s bar=%s state=%s frame_ms=%s after %.1f s (%dx%d @%.0fx)" % (
         args.out, st[0], st[1], st[2], time.time() - t0, args.width, args.height, args.dpr))
+    probe = page.evaluate("() => window.pr_probe || ''")
+    if probe:
+        print("WEB SHOT probe table:\n" + probe)
+    frames = [l for l in logs if l.startswith("FRAME ") or l.startswith("DEATH ") or l.startswith("REWIND ") or l.startswith("TRACE ") or l.startswith("PROBE") or l.startswith("REWIND COST")]
+    for l in frames[:40]:
+        print("  " + l[:160])
     errs = [l for l in logs if "error" in l.lower() or "SHADER" in l or "WebGL" in l]
     seen = {}
     for l in errs:

@@ -89,6 +89,19 @@ static var _t_label := -1           # msec; the loading label's first painted fr
 static var _t_ready := -1           # msec; TAP TO START
 static var page_s := -1.0           # the page span, measured once per page
 static var mono_note := ""          # the run scene: monoliths in view, left / right (the "black between" report)
+# A frame trace (2026-09-24, the death spike): trace_frames(n) records the
+# next n frame times and prints them as ONE line with the events of each
+# slow one, so a two-second window around a death can be read whole.
+static var _trace_left := 0
+static var _trace: PackedFloat32Array = PackedFloat32Array()
+static var _trace_events: Array = []
+static var _trace_what := ""
+
+static func trace_frames(n: int, what: String) -> void:
+	_trace_left = n
+	_trace = PackedFloat32Array()
+	_trace_events = []
+	_trace_what = what
 var taps := false                   # ?taps=1
 var _avg_ms := 0.0                  # the last readout's average, for the page
 var _taps: Array = []               # [position, seconds left]
@@ -125,7 +138,7 @@ var spikes := 0
 # — the menu has to know whether the page was opened with one, since a
 # page that was wants the run, not the menu. The query is read from the
 # browser ONCE and kept.
-const URL_SWITCHES := ["level", "scale", "autoplay", "live", "grad", "light"]
+const URL_SWITCHES := ["level", "scale", "autoplay", "live", "grad", "light", "probe"]
 static var _query := ""
 static var _query_read := false
 
@@ -367,6 +380,21 @@ func _process(delta: float) -> void:
 		_count = mini(_count + 1, RING)
 		if ms > spike_ms:
 			_report(ms)
+		if _trace_left > 0:
+			_trace_left -= 1
+			_trace.append(ms)
+			if ms > 20.0:
+				_trace_events.append("%d:%.0fms[%s]" % [_trace.size() - 1, ms, ", ".join(_events.keys())])
+			if _trace_left == 0:
+				var parts := PackedStringArray()
+				var total := 0.0
+				var worst := 0.0
+				for v in _trace:
+					parts.append("%.0f" % v)
+					total += v
+					worst = maxf(worst, v)
+				print("TRACE %s: %d frames avg %.1f worst %.1f ms | %s | slow: %s" % [
+					_trace_what, _trace.size(), total / maxf(_trace.size(), 1), worst, " ".join(parts), " ".join(_trace_events)])
 	_last_usec = now
 	_events.clear()
 	_window_back = BeatClock.z_at(BeatClock.song_time())

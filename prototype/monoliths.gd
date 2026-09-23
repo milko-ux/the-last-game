@@ -127,6 +127,14 @@ func set_window(z_back: float) -> void:
 				mmi.visible = on
 
 
+# The probe's "half the pillars": draw this fraction of every band.
+func set_density(f: float) -> void:
+	for strip in _strips:
+		for b in BANDS.size():
+			var mm: MultiMesh = strip["nodes"][b].multimesh
+			mm.visible_instance_count = int(round(mm.instance_count * clampf(f, 0.0, 1.0)))
+
+
 # For tools/autoplay.gd's gap measurement and the dev readout: how many
 # pillars sit inside the fade-visible range of the window, per side
 # (x: the left, screen-right side; y: the right), all bands.

@@ -332,6 +332,30 @@ func last_bar() -> int:
 	return _first_bar + _bar_z0.size() - 1
 
 
+# The probe (probe.gd): a fraction of every pillar band, and the slab's
+# thickness changed in place -- every tile box re-sized and re-materialed
+# (the material carries the box's half size for its seams and rim).
+func set_pillar_density(f: float) -> void:
+	for li in laps:
+		laps[li].monoliths.set_density(f)
+
+
+func set_slab_thickness(t: float) -> void:
+	for bar in _tiles:
+		var arr: Array = _tiles[bar]
+		var states: PackedInt32Array = _tile_state[bar]
+		for idx in arr.size():
+			var mi: MeshInstance3D = arr[idx]
+			if mi == null:
+				continue
+			var bm: BoxMesh = mi.mesh
+			if is_equal_approx(bm.size.y, t):
+				continue
+			bm.size.y = t
+			mi.position.y = -t * 0.5
+			mi.material_override = Mats.tile(states[idx], bm.size * 0.5, _outer(int(idx / Rules.ROWS)))
+
+
 # Monoliths inside the fade-visible range of the window, per side, over
 # every lap (tools/autoplay.gd measures the longest stretch with none).
 func monoliths_in_view(z_back: float) -> Vector2i:

@@ -258,8 +258,7 @@ func _ready() -> void:
 func _ready_endless() -> void:
 	BeatClock.set_endless(true)
 	var stream: AudioStream = load(BeatClock.ENDLESS_MUSIC)
-	stream.loop = true
-	stream.loop_offset = BeatClock.loop_start_t
+	BeatClock.set_loop(stream)
 	music.stream = stream
 	BeatClock.start_offset = BeatClock.ENDLESS_Z_ORIGIN_S
 	if runs_this_session > 0:
@@ -391,7 +390,11 @@ func _dev_url_switches() -> void:
 	if FrameMeter.url_param("grad") == "1":
 		Progress.save_enabled = false
 		Progress.graduated = true
-	if FrameMeter.url_param("autoplay") == "1":
+	# ?probe=1: the on-phone benchmark (probe.gd) -- the bot drives, the
+	# probe seeks and swaps setups. ?kill_bar=N: the bot stands still from
+	# bar N until one death (the death-spike measurement).
+	var probe := FrameMeter.url_param("probe") == "1"
+	if FrameMeter.url_param("autoplay") == "1" or probe:
 		Progress.save_enabled = false
 		_dev_autoplay = true
 		var ap: Object = load("res://tools/autoplay.gd").new()
@@ -401,7 +404,14 @@ func _dev_url_switches() -> void:
 		ap.attach_endless(self, BeatClock)
 		bot = ap
 		Rules.LIVES_OVERRIDE = 0
+		if FrameMeter.url_param("kill_bar") != "":
+			ap.kill_bar = int(FrameMeter.url_param("kill_bar"))
 		print("DEV autoplay=1 live=%s" % LapGen.ignore_verdicts)
+		if probe:
+			var pr: Node = load("res://prototype/probe.gd").new()
+			pr.name = "Probe"
+			pr.scene = self
+			add_child(pr)
 
 
 # Every material is drawn once before the run so no shader compiles in
@@ -1037,6 +1047,8 @@ func _log_death(cause: Dictionary, t: float, ht: float, z_back: float) -> void:
 			var bb: AABB = b
 			if bb.intersects_segment(cam_pos, eye) != null:
 				between.append("%s@z%.1f" % [h.kind, h.position.z])
+	if FrameMeter.active:
+		FrameMeter.trace_frames(150, "death at bar %d" % BeatClock.current_bar())
 	print("DEATH t=%.3f bar=%d beat=%d phase=%.2f player=(%.2f, %.2f, %.2f) on_ground=%s killer=%s at=(%.2f, %.2f, %.2f) rules_lethal_here=%s z_back=%.2f between_camera_and_player=%s" % [
 		t, BeatClock.bar_at(t), BeatClock.beat_in_bar_at(ht) + 1, BeatClock.beat_phase_at(ht),
 		p.x, p.y, p.z, player.on_ground, cause["kind"], kp.x, kp.y, kp.z, rules_here, z_back,
