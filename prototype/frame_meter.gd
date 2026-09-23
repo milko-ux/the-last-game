@@ -90,6 +90,7 @@ static var _t_ready := -1           # msec; TAP TO START
 static var page_s := -1.0           # the page span, measured once per page
 static var mono_note := ""          # the run scene: monoliths in view, left / right (the "black between" report)
 var taps := false                   # ?taps=1
+var _avg_ms := 0.0                  # the last readout's average, for the page
 var _taps: Array = []               # [position, seconds left]
 var _taps_label: Label
 var _taps_js_in := 0.0
@@ -378,6 +379,12 @@ func _process(delta: float) -> void:
 	if _refresh <= 0.0:
 		_refresh = REFRESH_S
 		_update_text()
+		# For tools/web_shot.py (dev, web only): the run's bar and state on
+		# the page, so a headless browser can shoot a given bar. Four times
+		# a second, in _process, never inside a frame callback.
+		if OS.has_feature("web"):
+			JavaScriptBridge.eval("window.pr_bar=%d;window.pr_state='%s';window.pr_frame_ms=%.2f" % [
+				BeatClock.current_bar() if BeatClock.running() else -1, "run" if BeatClock.running() else "idle", _avg_ms], true)
 	if taps:
 		_tick_taps(delta)
 
@@ -444,6 +451,7 @@ func _update_text() -> void:
 		cpu_worst = maxf(cpu_worst, _cpu[i])
 		n += 1
 	if n > 0:
+		_avg_ms = sum / n
 		text = "frame %.1f avg · %.1f worst     cpu %.1f avg · %.1f worst ms" % [sum / n, worst, cpu_sum / n, cpu_worst]
 		if BeatClock.endless and BeatClock.running():
 			# Audio vs clock (ms, - = audio behind) and how much has been slewed to follow it.
