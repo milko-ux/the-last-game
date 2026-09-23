@@ -21,6 +21,7 @@ const FROM_BAR := 9
 const TO_BAR := 12
 const SETTLE_S := 0.7
 const SETUPS := [
+	["warm-up", {}],           # thrown away: shader compiles and first draws land here, not in "all on"
 	["all on", {}],
 	["grain off", {"grain": false}],
 	["glow off", {"glow": false}],
@@ -85,7 +86,8 @@ func _process(delta: float) -> void:
 			_start(_i)
 			return
 		_retried = false
-		_rows.append([SETUPS[_i][0], _sum / maxf(_n, 1.0), _worst, _n, scene.deaths - _deaths0])
+		if _i > 0:
+			_rows.append([SETUPS[_i][0], _sum / maxf(_n, 1.0), _worst, _n, scene.deaths - _deaths0])
 		if _i + 1 < SETUPS.size():
 			_start(_i + 1)
 		else:
@@ -107,7 +109,8 @@ func _start(i: int) -> void:
 	_sum = 0.0
 	_worst = 0.0
 	_n = 0
-	_label.text = "PROBE %d / %d: %s" % [i + 1, SETUPS.size(), SETUPS[i][0]]
+	_label.text = "PROBE %d / %d: %s" % [i, SETUPS.size() - 1, SETUPS[i][0]] if i > 0 else "PROBE warm-up"
+	print("PROBE start %s" % SETUPS[i][0])
 
 
 # Everything back to "all on", then the setup's own change.
@@ -124,7 +127,8 @@ func _apply(change: Dictionary) -> void:
 func _finish() -> void:
 	_done = true
 	BeatClock.pause()
-	var lines := ["PROBE  bars %d-%d of lap 0, %s" % [FROM_BAR, TO_BAR, FrameMeter.load_info]]
+	var lines := ["PROBE  bars %d-%d of lap 0, %s  mem %d/%d MB" % [FROM_BAR, TO_BAR, FrameMeter.load_info,
+		int(Performance.get_monitor(Performance.MEMORY_STATIC) / 1048576.0), int(OS.get_static_memory_peak_usage() / 1048576.0)]]
 	lines.append("%-18s %7s %7s %6s %s" % ["setup", "avg ms", "worst", "frames", "deaths"])
 	for r in _rows:
 		lines.append("%-18s %7.1f %7.1f %6d %d" % [r[0], r[1], r[2], r[3], r[4]])
