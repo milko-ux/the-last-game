@@ -24,7 +24,25 @@ Every look screenshot now comes from **`tools/web_shot.py`**: the SERVED web bui
 
 **What still does not match the concept:** the pillars are boxy hulls, not carved stone (a bake from our own models is the next brief); the hero has no warm rim (§5); the floor's stone grain is noise, not relief; the far fog is one gradient, no volume.
 
-### NEXT, in this order (2026-09-23 night)
+### 2026-09-24 — PART 1 (back to 16.7) and STAGE B (baked stone with Blender): nine commits, exported, served
+
+**Part 1a, `?probe=1` (`0236868`):** the on-phone benchmark. The bot plays bars 9–12 of lap 0, the clock seeks back, the same bars play with the next setup — all on · grain off · glow off · MSAA off · all post off · half the pillars · thin slab — and a table of avg / worst / frames / deaths per setup ends it on screen. On the Mac every row is vsync-capped at 16.7; **the phone's table is what sets the defaults** (waiting on it).
+
+**Part 1b, the death spike (`578945b`):** found in the shipped shell. With `thread_support=false` Godot plays every stream as a Web Audio sample, and `Sample.getAudioBuffer()` returns `_duplicateAudioBuffer()` — every start (play, seek, unpause) copies the whole 165-s buffer, 35–60 ms here, 75 on the phone, whatever the codec (proved with Vorbis, 100 ms Ogg pages, QOA, a spare player). So `BeatClock.preroll()` at death seeks the muted song to the rewind time minus the freeze, in the freeze's first frame where nothing moves, and the rewind only unmutes: **rewind frame 68–104 ms → 10 ms.** A quarter-second of silence at death is the audible change. The track is a QOA-compressed WAV now (sample-exact loop; +3.2 MB).
+
+**Stage B — baked stone, everything under `tools/blender/` (headless, `bake_all.sh` regenerates it all; Blender 5.2.2 on the M3's Metal):**
+1. **The pillar kit (`f1877ac`):** six variants (panels, the circle motif, stacked blocks with joints, carved symbols, a slab, a capped one) and a lintel, each a low mesh (26–130 triangles) and a high mesh with the recesses cut in; a node stone material (grain, weathering, edge wear, grime) lit by OUR light plus a soft sky, baked high → low into one 2048 atlas, the light in the colour. Carvings face the lens; nothing is ever turned or tilted in the game. `monoliths.gd` merges kit variants into ONE mesh per band per strip, a pillar pair with the bridge every fifth bar. Fewer per bar and wider gaps than before: air between the towers.
+2. **The floor (`0a6658f`):** eight slate tiles with relief, bevelled edges, grain and seam occlusion, baked into a 2048×1024 atlas; the tile shader samples a variant per tile on the top face, armed / live magenta and the cyan rim stay in the shader; sides and pit walls stay procedural.
+3. **Hazards (`cfd6c06`):** AO baked into the clay's vertex colours (75 %), recesses get depth with no shader change; `LETHAL_LIVE` #ff2d95 → **#d8267f**, deeper and muted like the concept's walls, live still reads through the rim under ACES and glow.
+4. **Tuning (`fabd88b`):** the far band a little lighter and more fog; no leaning pillars.
+5. **Texture format:** the project imports ETC2/ASTC, the web preset ships ETC2/ASTC only (the phone's format; desktop Chrome decodes it through ANGLE), the atlases VRAM-compressed with mipmaps. **Pack: 23 496 556 → 27 741 728 bytes (+4.2 MB for the two atlases; the +3.2 MB audio of Part 1b is on top of that), under the +8 MB limit.** Whether iOS WebGL2 takes the ETC2 textures is the phone's to confirm — nothing here can.
+6. **Hand-off:** `docs/screenshots/b-bar1-vs-concept.png`, `b-bar11-vs-concept.png` (web build, real run). Bar 1: 62 266 triangles / 350 draw calls; bar 11: 65 622 / 370 (the Mac renderer's counts; before Stage B: 62 936 / 369 at bar 11 — the kit costs no triangles over the hulls).
+
+**What still does not match the concept:** the pillar carvings are shallow reliefs in a bake, not the concept's deep architectural cuts; the floor tiles' relief is soft; no warm rim on the hero; the fog is one gradient. And the phone's frame time with all of this on is unmeasured until the probe table arrives.
+
+### NEXT, in this order (2026-09-24)
+
+0. **Milko: run `?probe=1` on the phone and send the table**; then the defaults get set so the phone holds 16.7 with as much of the look as possible. Then the look against the concept (`b-*-vs-concept.png`), and whether the ETC2 textures show on iOS.
 
 0. **Phone test of the look pass** at `?level=1` bar 11 and in the real run: the look against the concept, the frame time with everything on, then `?grain=0`, `?glow=0`, `?msaa=0` one at a time if it is over 16.7; `?tonemap=agx` for a second opinion on the tonemapper; and whether the pillars now draw properly on the phone (they are the same shader family as the monoliths were, with the highp fix).
 
