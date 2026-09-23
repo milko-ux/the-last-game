@@ -10,7 +10,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BLENDER="${BLENDER:-/Applications/Blender.app/Contents/MacOS/Blender}"
 PX="${1:-2048}"; SAMPLES="${2:-64}"
-for script in pillars.py; do
+for script in pillars.py tiles.py hazard_ao.py; do
   echo "==> $script ($PX px, $SAMPLES samples)"
   "$BLENDER" -b --python "$HERE/$script" -- "$PX" "$SAMPLES" 2>&1 | grep -E "KIT DONE|TILES DONE|AO DONE|Traceback|Error" || true
 done
