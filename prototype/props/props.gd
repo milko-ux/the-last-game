@@ -174,12 +174,96 @@ static var _scenes := {}
 static var _mats := {}
 static var _shaders := {}
 static var _low := {}
+static var _kit := {}          # variant name -> Mesh (the low pillar from assets/models/kit)
+static var _kit_info := {}     # kit.json
+static var _atlas: Texture2D = null
+
+const KIT_DIR := "res://assets/models/kit/"
+
+# THE PILLAR KIT (brief stage B, 2026-09-24): built and baked in Blender
+# (tools/blender/pillars.py) from our own geometry -- the stone, the
+# light and the occlusion are in the atlas, so the shader is unshaded:
+# the atlas times a band's tint, then the same fog as everything else.
+const KIT_SHADER := """
+shader_type spatial;
+render_mode unshaded, fog_disabled;
+uniform sampler2D atlas : source_color, filter_linear_mipmap, repeat_disable;
+uniform vec3 tint : source_color = vec3(1.0);   // the band's colour, on the baked stone
+uniform float gain = 1.0;
+uniform vec3 side_fog = vec3(16.0, 60.0, 0.85);
+uniform float far_flatten = 0.6;
+FADE_HEAD
+varying highp vec3 world_pos;
+varying highp vec2 uv;
+
+void vertex() {
+	vec4 wp = MODEL_MATRIX * vec4(VERTEX, 1.0);
+	world_z = wp.z;
+	world_pos = wp.xyz;
+	uv = UV;
+	fog_sy = screen_y_of(PROJECTION_MATRIX * MODELVIEW_MATRIX * vec4(VERTEX, 1.0));
+}
+
+void fragment() {
+	float f = fade_amount();
+	if (f > 0.97) {
+		discard;
+	}
+	vec3 c = texture(atlas, uv).rgb * tint * gain;
+	float side = smoothstep(side_fog.x, side_fog.y, abs(world_pos.x)) * side_fog.z;
+	vec3 fog = fog_colour(fog_sy);
+	float away = max(f, side);
+	c = mix(c, (c + fog) * 0.5, smoothstep(0.0, 0.6, away) * far_flatten);
+	ALBEDO = low_fog(mix(c, fog, away), world_pos.y);
+}
+"""
+
+
+static func kit_info() -> Dictionary:
+	if _kit_info.is_empty():
+		var f := FileAccess.open(KIT_DIR + "kit.json", FileAccess.READ)
+		_kit_info = JSON.parse_string(f.get_as_text()) if f != null else {"sizes": {}}
+	return _kit_info
+
+
+# The kit's variant names, in kit.json's order (the lintel last).
+static func kit_names() -> Array:
+	return kit_info().get("sizes", {}).keys()
+
+
+static func kit_mesh(name: String) -> Mesh:
+	if not _kit.has(name):
+		_kit[name] = mesh_of_path(KIT_DIR + "pillar_" + name + ".glb")
+	return _kit[name]
+
+
+static func kit_size(name: String) -> Vector3:
+	var s: Array = kit_info()["sizes"][name]
+	return Vector3(float(s[0]), float(s[1]), float(s[2]))
+
+
+static func kit_atlas() -> Texture2D:
+	if _atlas == null:
+		_atlas = load(KIT_DIR + "pillar_atlas.png")
+	return _atlas
+
+
+static func mesh_of_path(path: String) -> Mesh:
+	var scene: PackedScene = load(path)
+	if scene == null:
+		return null
+	var inst := scene.instantiate()
+	var mi := _first_mesh(inst)
+	var mesh: Mesh = mi.mesh if mi != null else null
+	inst.free()
+	return mesh
 
 
 static func _shader(kind: String) -> Shader:
 	if not _shaders.has(kind):
 		var sh := Shader.new()
-		sh.code = (CLAY_SHADER if kind == "clay" else BUILDING_SHADER).replace("FADE_HEAD", Mats.fade_head()).replace("FADE_APPLY", Mats.FADE_APPLY)
+		var code: String = CLAY_SHADER if kind == "clay" else (KIT_SHADER if kind == "kit" else BUILDING_SHADER)
+		sh.code = code.replace("FADE_HEAD", Mats.fade_head()).replace("FADE_APPLY", Mats.FADE_APPLY)
 		_shaders[kind] = sh
 	return _shaders[kind]
 
@@ -237,12 +321,19 @@ static func building(far: bool = false) -> Material:
 const PILLAR_FADE := [Vector4(14.0, 27.0, 2.0, 10.0), Vector4(22.0, 52.0, 6.0, 20.0), Vector4(34.0, 92.0, 10.0, 30.0)]
 const PILLAR_FLATTEN := [0.3, 0.6, 0.85]
 
+# The baked stone reads ~0.35-0.9 in the atlas; a band's tint is what the
+# stone is multiplied by, so NEAR_PILLAR etc. are relative to a mid-grey
+# stone, not absolute colours (see WorldPalette).
+const PILLAR_GAIN := 1.7
+
 static func pillar(band: int) -> Material:
 	var key := "pillar_%d" % band
 	if not _mats.has(key):
 		var m := ShaderMaterial.new()
-		m.shader = _shader("building")
-		m.set_shader_parameter("colour", [WorldPalette.NEAR_PILLAR, WorldPalette.MID_PILLAR, WorldPalette.FAR_PILLAR][band])
+		m.shader = _shader("kit")
+		m.set_shader_parameter("atlas", kit_atlas())
+		m.set_shader_parameter("tint", [WorldPalette.NEAR_PILLAR, WorldPalette.MID_PILLAR, WorldPalette.FAR_PILLAR][band])
+		m.set_shader_parameter("gain", PILLAR_GAIN)
 		var f: Vector4 = PILLAR_FADE[band]
 		m.set_shader_parameter("fade", Quaternion(f.x, f.y, f.z, f.w))
 		m.set_shader_parameter("far_flatten", PILLAR_FLATTEN[band])

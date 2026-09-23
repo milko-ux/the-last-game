@@ -55,8 +55,7 @@ func prepare(bursts: Array) -> void:
 		for m in [Props.clay(false), Props.clay(true), Props.clay_safe(), white]:
 			_queue.append(_prop.bind(model, m, false))
 		_queue.append(_prop.bind(model, Props.clay(false), true))
-	# The pillar bands (monoliths.gd): a MultiMesh of the measured hull in
-	# each band's material, one instance each.
+	# The pillar bands (monoliths.gd): a kit pillar in each band's material.
 	for band in 3:
 		_queue.append(_pillars.bind(band))
 	# The drop shadows (brief 6): a MultiMesh is its own pipeline variant,
@@ -102,16 +101,7 @@ func _prop(model: String, mat: Material, mirror: bool) -> void:
 
 
 func _pillars(band: int) -> void:
-	var mi := MultiMeshInstance3D.new()
-	var mm := MultiMesh.new()
-	mm.transform_format = MultiMesh.TRANSFORM_3D
-	mm.mesh = Props.low_mesh("building_tall")
-	mm.instance_count = 1
-	mm.set_instance_transform(0, Transform3D.IDENTITY)
-	mi.multimesh = mm
-	mi.material_override = Props.pillar(band)
-	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	add_child(mi)
+	_mesh(Props.kit_mesh("plain"), Props.pillar(band))
 
 
 func _shadows() -> void:

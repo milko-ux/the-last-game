@@ -47,7 +47,7 @@ const MONOLITH_FAR := Color("#3a404a")
 # fading into the light fog. The brightness order of the concept: fog
 # lightest, floor the brightest thing in the play area, near pillars
 # darkest.
-const NEAR_PILLAR := Color("#141a20")
+const NEAR_PILLAR := Color("#10151b")
 const MID_PILLAR := Color("#222a34")
 const FAR_PILLAR := Color("#2f3744")
 const BUILDING_STONE := Color("#5c6272")
