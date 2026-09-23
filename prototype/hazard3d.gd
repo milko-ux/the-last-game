@@ -69,9 +69,7 @@ func boxes_at(t: float) -> Array:
 
 func _box_mesh(size: Vector3, mat: Material) -> MeshInstance3D:
 	var mi := MeshInstance3D.new()
-	var bm := BoxMesh.new()
-	bm.size = size
-	mi.mesh = bm
+	mi.mesh = Mats.box(size)
 	mi.material_override = mat
 	add_child(mi)
 	return mi

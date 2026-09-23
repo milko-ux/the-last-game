@@ -351,7 +351,10 @@ func set_slab_thickness(t: float) -> void:
 			var bm: BoxMesh = mi.mesh
 			if is_equal_approx(bm.size.y, t):
 				continue
-			bm.size.y = t
+			# The meshes are shared (Mats.box): swap to the one of the new
+			# size rather than resizing, which would rebuild it.
+			bm = Mats.box(Vector3(bm.size.x, t, bm.size.z))
+			mi.mesh = bm
 			mi.position.y = -t * 0.5
 			mi.material_override = Mats.tile(states[idx], bm.size * 0.5, _outer(int(idx / Rules.ROWS)))
 
@@ -448,8 +451,7 @@ func plan_first_z() -> float:
 
 func _slab(parent: Node3D, z_start: float, length: float) -> MeshInstance3D:
 	var mi := MeshInstance3D.new()
-	var bm := BoxMesh.new()
-	bm.size = Vector3(Rules.FIELD_WIDTH, THICK, length)
+	var bm := Mats.box(Vector3(Rules.FIELD_WIDTH, THICK, length))
 	mi.mesh = bm
 	mi.material_override = Mats.tile(TileState.SAFE, bm.size * 0.5, Vector2.ONE)
 	mi.position = Vector3(0.0, -THICK * 0.5, z_start + length * 0.5)
@@ -488,12 +490,7 @@ func _hazard(lap: Lap, spec: Dictionary) -> void:
 func _notes_and_checkpoints(lap: Lap, c, lap_plan: Dictionary) -> void:
 	for n in lap_plan["notes"]:
 		var mi := MeshInstance3D.new()
-		var sm := SphereMesh.new()
-		sm.radius = 0.4
-		sm.height = 0.8
-		sm.radial_segments = 12
-		sm.rings = 6
-		mi.mesh = sm
+		mi.mesh = Mats.sphere(0.4, 0.8, 12, 6)
 		mi.material_override = Mats.note()
 		mi.position = Vector3(float(n["x"]), 1.0, float(n["z"]))
 		lap.root.add_child(mi)
@@ -503,8 +500,7 @@ func _notes_and_checkpoints(lap: Lap, c, lap_plan: Dictionary) -> void:
 
 	for cp in lap_plan["checkpoints"]:
 		var mi := MeshInstance3D.new()
-		var bm := BoxMesh.new()
-		bm.size = Vector3(Rules.FIELD_WIDTH, 0.06, 0.3)
+		var bm := Mats.box(Vector3(Rules.FIELD_WIDTH, 0.06, 0.3))
 		mi.mesh = bm
 		mi.material_override = Mats.stone(WorldPalette.SAFE.darkened(0.45), bm.size * 0.5)
 		mi.position = Vector3(0.0, 0.03, c.z_at(float(cp["t"])))
@@ -530,8 +526,7 @@ func _bar_tiles(lap: Lap, bar: int, z0: float, z1: float) -> void:
 				arr[idx] = null
 				continue
 			var mi := MeshInstance3D.new()
-			var bm := BoxMesh.new()
-			bm.size = Vector3(Rules.TILE, THICK, depth)
+			var bm := Mats.box(Vector3(Rules.TILE, THICK, depth))
 			mi.mesh = bm
 			mi.material_override = Mats.tile(TileState.SAFE, bm.size * 0.5, _outer(col))
 			mi.position = Vector3(Rules.col_x(col), -THICK * 0.5, z0 + (row + 0.5) * depth)
@@ -549,17 +544,13 @@ static func _outer(col: int) -> Vector2:
 func _gate_mesh(parent: Node3D, z: float) -> void:
 	for x in [-Rules.half_width() - 0.2, Rules.half_width() + 0.2]:
 		var post := MeshInstance3D.new()
-		var bm := BoxMesh.new()
-		bm.size = Vector3(0.4, 3.2, 0.4)
-		post.mesh = bm
+		post.mesh = Mats.box(Vector3(0.4, 3.2, 0.4))
 		post.material_override = Mats.amber()
 		post.position = Vector3(x, 1.6, z)
 		parent.add_child(post)
 		_goal_posts.append(post)
 	var top := MeshInstance3D.new()
-	var tb := BoxMesh.new()
-	tb.size = Vector3(Rules.FIELD_WIDTH + 0.8, 0.4, 0.4)
-	top.mesh = tb
+	top.mesh = Mats.box(Vector3(Rules.FIELD_WIDTH + 0.8, 0.4, 0.4))
 	top.material_override = Mats.amber()
 	top.position = Vector3(0.0, 3.4, z)
 	parent.add_child(top)

@@ -430,6 +430,37 @@ FADE_APPLY
 static var _cache := {}
 static var _shaders := {}
 static var _tile_atlas: Texture2D = null
+
+# SHARED MESHES (2026-09-24). A BoxMesh or a SphereMesh is a GPU vertex
+# buffer (two, with the index buffer, plus a vertex array). Every tile,
+# checkpoint, slab, note and gate post used to make its own: about
+# 16,500 WebGL buffers created while a run loads, and a lap's worth
+# deleted in one frame each time a lap is passed. iOS Safari's GPU
+# process crashes on that kind of traffic (ui/ui.gd's header). One mesh
+# per distinct size, shared by everything that draws it, is the same
+# picture with a few dozen buffers.
+static var _meshes := {}
+
+
+static func box(size: Vector3) -> BoxMesh:
+	var key := "box %s" % [size.snapped(Vector3.ONE * 0.001)]
+	if not _meshes.has(key):
+		var bm := BoxMesh.new()
+		bm.size = size
+		_meshes[key] = bm
+	return _meshes[key]
+
+
+static func sphere(radius: float, height: float, radial_segments: int, rings: int) -> SphereMesh:
+	var key := "sphere %.3f %.3f %d %d" % [radius, height, radial_segments, rings]
+	if not _meshes.has(key):
+		var sm := SphereMesh.new()
+		sm.radius = radius
+		sm.height = height
+		sm.radial_segments = radial_segments
+		sm.rings = rings
+		_meshes[key] = sm
+	return _meshes[key]
 # The baked slate tiles (brief stage B, tools/blender/tiles.py): eight
 # variants in one atlas, relief and the light baked in.
 const TILE_ATLAS := "res://assets/models/kit/tile_atlas.png"
