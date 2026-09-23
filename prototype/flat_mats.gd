@@ -51,23 +51,26 @@ const FADE_BEHIND_END := 10.0
 # Tile seam width in world units (brief 2 section 1; 0.06 -> 0.03 on
 # 2026-09-19: the seams read as a neon grid), and the bright rim along the
 # slab's outer edge, on the top face and the top of the outer side faces.
-const SEAM_WIDTH := 0.03
-const SEAM_DARK := 0.35      # the seam groove: this much darker than the face (brief 6 section 4: was 0.12)
+const SEAM_WIDTH := 0.02     # look pass v2 section 4: thinner (0.03) and softer -- it read as graph paper
+const SEAM_SOFT := 0.015     # the seam's edge ramp, each side
+const SEAM_DARK := 0.22      # the seam groove: this much darker than the face (0.35 was a grid)
 const EDGE_WIDTH := 0.1
 # Brief 2b, the stone: grain, per-tile shade, occlusion at the seams.
 const GRAIN := 0.06
 const GRAIN_SCALE := 0.6
-const TILE_VARIATION := 0.08  # brief 6 section 4: +-8 % per tile (was 3)
+const TILE_VARIATION := 0.09  # +-9 % value per tile, and a slight hue shift with it (TILE_HUE_SHIFT)
+const TILE_HUE_SHIFT := 0.05  # per tile, toward blue or toward green
 const AO_WIDTH := 0.12
-const AO_AMOUNT := 0.18
+const AO_AMOUNT := 0.12       # was 0.18: with the seams softer the occlusion softens too
 # Brief 6 section 4, the floor becomes stone: a bevel band inside every
 # tile edge, shaded by the light (the two edges facing it a thin lighter
 # line, the two facing away a darker one) -- the cheapest thing that makes
 # a flat tile read as a slab with thickness -- and a faint broad sheen
 # toward the light on the face.
 const BEVEL_WIDTH := 0.08
-const BEVEL_AMOUNT := 0.16
-const SHEEN_AMOUNT := 0.07
+const BEVEL_AMOUNT := 0.16   # the highlight on the edges facing the light...
+const BEVEL_SHADE := 0.4     # ...and this fraction of it as a darkening on the edges facing away
+const SHEEN_AMOUNT := 0.09
 const SHEEN_POWER := 24.0
 # The height fog (brief 6 section 3): from this far below the field to
 # this far, at most this much toward BG_BOTTOM. The slab's underside is
@@ -313,6 +316,9 @@ uniform vec4 edge_colour : source_color;
 uniform vec4 slab_side : source_color;   // the body's stone: side faces, pit walls (brief 6 section 4)
 uniform float bevel_width = 0.08;
 uniform float bevel_amount = 0.16;
+uniform float bevel_shade = 0.4;
+uniform float seam_soft = 0.015;
+uniform float hue_shift = 0.05;
 uniform float sheen_amount = 0.07;
 uniform float sheen_power = 24.0;
 uniform vec3 half_size;      // the box's half extents (x, y, z)
@@ -366,7 +372,7 @@ void fragment() {
 		bool outer_face = (local_normal.x < -0.5 && outer.x > 0.5) || (local_normal.x > 0.5 && outer.y > 0.5);
 		if (outer_face) { rim = edge; }
 	}
-	float s = 1.0 - smoothstep(seam_width - 0.01, seam_width + 0.01, edge);
+	float s = 1.0 - smoothstep(seam_width - seam_soft, seam_width + seam_soft, edge);
 	float r = 1.0 - smoothstep(edge_width - 0.015, edge_width + 0.015, rim);
 	// Stone: grain in the face and sides, a per-tile shade, occlusion at the seams.
 	// The top is the face; the sides and pit walls are the slab's own dark
@@ -374,7 +380,10 @@ void fragment() {
 	vec3 n = normalize(world_n);
 	float g = grain(world_pos, top ? grain_scale : side_grain_scale) * grain_amount;
 	float v = (hash3(floor(tile_origin * 4.0)) * 2.0 - 1.0) * tile_variation;
-	vec3 stone = lit_tone(top ? face.rgb : slab_side.rgb, n) * (1.0 + g + v);
+	// A slight hue shift per tile as well as the value: toward blue on some, green on others.
+	float hs = (hash3(floor(tile_origin * 4.0) + vec3(3.0, 7.0, 11.0)) * 2.0 - 1.0) * hue_shift;
+	vec3 tint = vec3(1.0 - hs, 1.0 + hs * 0.5, 1.0 + hs);
+	vec3 stone = lit_tone(top ? face.rgb : slab_side.rgb, n) * (1.0 + g + v) * (top ? tint : vec3(1.0));
 	stone *= 1.0 - ao_amount * (1.0 - smoothstep(0.0, ao_width, edge));
 	if (top) {
 		// The bevel: a band inside each edge, lighter where the edge faces
@@ -388,7 +397,10 @@ void fragment() {
 		vec3 vdir = normalize(CAMERA_POSITION_WORLD - world_pos);
 		vec3 hv = normalize(normalize(pr_light_dir) + vdir);
 		float sheen = pow(max(dot(n, hv), 0.0), sheen_power) * sheen_amount;
-		stone *= 1.0 + (bevel_amount * clamp(bev, -1.0, 1.0) + sheen) * pr_light_on;
+		// A highlight on the edges facing the light, a milder darkening on the ones facing away.
+		float bevel = clamp(bev, -1.0, 1.0);
+		bevel = bevel > 0.0 ? bevel : bevel * bevel_shade;
+		stone *= 1.0 + (bevel_amount * bevel + sheen) * pr_light_on;
 	}
 	vec3 base = mix(stone, live.rgb, armed * pr_armed_pulse);
 	float rip = ripple_here();
@@ -658,6 +670,9 @@ static func tile(state: int, half: Vector3, outer: Vector2 = Vector2.ZERO) -> Ma
 		m.set_shader_parameter("slab_side", WorldPalette.SLAB_SIDE)
 		m.set_shader_parameter("bevel_width", BEVEL_WIDTH)
 		m.set_shader_parameter("bevel_amount", BEVEL_AMOUNT)
+		m.set_shader_parameter("bevel_shade", BEVEL_SHADE)
+		m.set_shader_parameter("seam_soft", SEAM_SOFT)
+		m.set_shader_parameter("hue_shift", TILE_HUE_SHIFT)
 		m.set_shader_parameter("sheen_amount", SHEEN_AMOUNT)
 		m.set_shader_parameter("sheen_power", SHEEN_POWER)
 		m.set_shader_parameter("live", WorldPalette.LETHAL_LIVE)
