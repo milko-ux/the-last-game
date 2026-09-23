@@ -34,6 +34,7 @@ const LETHAL_ARMED := Color("#5a1638")  # dark wine magenta, the warning state
 const LETHAL_LIVE := Color("#d8267f")   # magenta, lethal now -- deeper and more muted than the hot pink it was (stage B, 2026-09-24: the concept's walls), checked through ACES and glow
 const LETHAL_SEAM := Color("#ffd6ec")   # a live plate's seam: white-magenta
 const GOAL := Color("#ffb020")          # amber
+const HERO_RIM := Color("#ffb9a0")      # brief 6 section 5: the rim on the hero's side away from the light -- the only warm light in the world
 const MONOLITH := Color("#2a2f37")
 const MONOLITH_FAR := Color("#3a404a")
 # The carved stone of the building models (2026-09-20: their material is
@@ -47,7 +48,7 @@ const MONOLITH_FAR := Color("#3a404a")
 # fading into the light fog. The brightness order of the concept: fog
 # lightest, floor the brightest thing in the play area, near pillars
 # darkest.
-const NEAR_PILLAR := Color("#10151b")
+const NEAR_PILLAR := Color("#1b232c")   # a little lighter (polish 2026-09-24), so the carvings show up close
 const MID_PILLAR := Color("#222a34")
 const FAR_PILLAR := Color("#384150")   # a little lighter (stage B tuning): the far band fades more into the light fog
 const BUILDING_STONE := Color("#5c6272")

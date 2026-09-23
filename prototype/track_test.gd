@@ -323,8 +323,8 @@ var light_on := true
 # The finishing layer (brief 6 sections 7-8): what is on, and the
 # tonemapper. Defaults are the shipped look; the switches above flip them.
 const TONEMAP_DEFAULT := "aces"   # picked with web shots: AgX greys the magenta and the cyan, ACES keeps them (look pass v2 section 6)
-const GLOW_HDR_THRESHOLD := 0.82     # only the emissives bloom: the cyan rim, live magenta, amber
-const GLOW_INTENSITY := 0.45
+const GLOW_HDR_THRESHOLD := 0.9      # only the emissives bloom: the cyan rim, a live seam, amber (0.82 bloomed the plates)
+const GLOW_INTENSITY := 0.35
 const GLOW_STRENGTH := 0.9
 var finish := {"tonemap": TONEMAP_DEFAULT, "glow": true, "vignette": true, "grain": true, "msaa": true}
 var _finish: CanvasLayer

@@ -249,6 +249,12 @@ uniform float on_top = 0.92;
 uniform float ambient = 0.38;
 uniform float clay_grain = 0.04;     // brief 2b section 6: the same fine grain the world got
 uniform float specular = 0.4;
+// Brief 6 section 5 (2026-09-24): a warm fresnel rim on the side away
+// from the key light, tight. The only warm light in the world.
+global uniform vec3 pr_light_dir;
+uniform vec3 rim_colour : source_color = vec3(1.0, 0.725, 0.627);
+uniform float rim_strength = 0.5;
+uniform float rim_power = 4.0;
 // Brief 5 section 1: melt the baked leg stubs into the underside, so the
 // real legs are not a second pair. Any vertex BELOW the body's equator
 // and OUTSIDE the fitted body ellipsoid is pushed back onto that
@@ -304,7 +310,11 @@ void fragment() {
 	ALBEDO = c;
 	ROUGHNESS = 0.8;
 	SPECULAR = specular;
-	EMISSION = c * ambient;
+	vec3 n = normalize(NORMAL);
+	vec3 lv = normalize((VIEW_MATRIX * vec4(pr_light_dir, 0.0)).xyz);
+	float fresnel = pow(1.0 - clamp(dot(n, normalize(VIEW)), 0.0, 1.0), rim_power);
+	float away = smoothstep(0.0, 0.7, -dot(n, lv));
+	EMISSION = c * ambient + rim_colour * fresnel * away * rim_strength;
 }
 """
 
@@ -388,6 +398,7 @@ func _apply_material(n: Node) -> void:
 		m.set_shader_parameter("skin", src.albedo_texture if src != null else null)
 		m.set_shader_parameter("on_top", ON_TOP)
 		m.set_shader_parameter("ambient", AMBIENT)
+		m.set_shader_parameter("rim_colour", WorldPalette.HERO_RIM)
 		m.set_shader_parameter("melt", 1.0 if MELT_ON else 0.0)
 		m.set_shader_parameter("melt_xz", MELT_XZ)
 		m.set_shader_parameter("melt_edge", MELT_EDGE)

@@ -400,6 +400,7 @@ void fragment() {
 		vec3 baked_c = texture(tiles, tuv).rgb * tile_gain;
 		// The face colour relative to the slate the tile was baked in: a plate's magenta comes through.
 		stone = baked_c * (face.rgb / vec3(0.141, 0.192, 0.255)) * (1.0 + v * 0.5) * tint;
+		stone = min(stone, vec3(0.88));   // the floor never blooms: only the seam and the rim may
 	} else if (top) {
 		// The bevel: a band inside each edge, lighter where the edge faces
 		// the light, darker where it faces away; and the sheen.
@@ -687,12 +688,13 @@ static func tile(state: int, half: Vector3, outer: Vector2 = Vector2.ZERO) -> Ma
 		# the field.
 		var face_c := WorldPalette.TILE
 		match state:
-			2:   # lethal now: the face turns live (the grain washes out)
-				face_c = WorldPalette.LETHAL_LIVE
+			2:   # lethal now: the face turns live -- deeper than the hazards' magenta (polish 2026-09-24:
+				# the plates were the brightest thing on screen); the SEAM carries "live", bright and pulsing
+				face_c = WorldPalette.LETHAL_LIVE.darkened(0.3)
 			1:   # armed: the face tints toward the warning colour
 				face_c = WorldPalette.LETHAL_ARMED
 		m.set_shader_parameter("face", face_c)
-		m.set_shader_parameter("seam", face_c.darkened(SEAM_DARK))
+		m.set_shader_parameter("seam", WorldPalette.LETHAL_SEAM if state == 2 else face_c.darkened(SEAM_DARK))
 		m.set_shader_parameter("edge_colour", WorldPalette.TILE_EDGE)
 		m.set_shader_parameter("slab_side", WorldPalette.SLAB_SIDE)
 		m.set_shader_parameter("tiles", tile_atlas())

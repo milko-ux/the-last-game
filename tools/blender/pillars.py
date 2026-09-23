@@ -125,11 +125,11 @@ def v_plain(h):
     def deco(ob):
         # two recessed panels on the +x and -z faces (the lit faces), a joint every quarter
         for cz in (0.35 * h, 0.7 * h):
-            cut(ob, cutter_box("p", 0.44, 0.0, cz, 0.03, 0.26, 0.10 * h))
-            cut(ob, cutter_box("p", 0.0, 0.44, cz, 0.26, 0.03, 0.10 * h))
-            cut(ob, cutter_box("p", -0.44, 0.0, cz, 0.03, 0.26, 0.10 * h))
+            cut(ob, cutter_box("p", 0.44, 0.0, cz, 0.09, 0.26, 0.10 * h))
+            cut(ob, cutter_box("p", 0.0, 0.44, cz, 0.26, 0.09, 0.10 * h))
+            cut(ob, cutter_box("p", -0.44, 0.0, cz, 0.09, 0.26, 0.10 * h))
         for cz in (0.3 * h, 0.55 * h, 0.8 * h):
-            cut(ob, cutter_box("j", 0.0, 0.0, cz, 0.47, 0.47, 0.012))
+            cut(ob, cutter_box("j", 0.0, 0.0, cz, 0.47, 0.47, 0.03))
     return low, deco
 
 
@@ -138,9 +138,9 @@ def v_circle(h):
     def deco(ob):
         # the circle motif: a recessed disc with a ring, on the -z face and the +x face
         for (cx, cy, axis) in ((0.0, 0.45, 'Y'), (0.45, 0.0, 'X'), (-0.45, 0.0, 'X')):
-            cut(ob, cutter_cyl("c", cx, cy, 0.62 * h, 0.22, 0.06, axis))
+            cut(ob, cutter_cyl("c", cx, cy, 0.62 * h, 0.22, 0.14, axis))
             ring_in = cutter_cyl("r", cx, cy, 0.62 * h, 0.14, 0.2, axis)
-            cut(ob, cutter_cyl("r", cx, cy, 0.62 * h, 0.16, 0.05, axis))
+            cut(ob, cutter_cyl("r", cx, cy, 0.62 * h, 0.16, 0.12, axis))
             bpy.data.objects.remove(ring_in, do_unlink=True)
         for cz in (0.25 * h, 0.4 * h):
             cut(ob, cutter_box("j", 0.0, 0.0, cz, 0.47, 0.47, 0.012))
@@ -157,12 +157,12 @@ def v_stacked(h):
     def deco(ob):
         # deep joints between the blocks, a symbol on the third
         for i in range(1, n):
-            cut(ob, cutter_box("j", 0.0, 0.0, i * h / n, 0.55, 0.55, 0.014 * h))
+            cut(ob, cutter_box("j", 0.0, 0.0, i * h / n, 0.55, 0.55, 0.02 * h))
         cz = 2.5 * h / n
         for cy in (0.47, -0.47):
-            cut(ob, cutter_box("s", 0.0, cy, cz, 0.16, 0.03, 0.02))
-            cut(ob, cutter_box("s", 0.0, cy, cz + 0.06 * h, 0.16, 0.03, 0.02))
-            cut(ob, cutter_box("s", 0.0, cy, cz - 0.06 * h, 0.16, 0.03, 0.02))
+            cut(ob, cutter_box("s", 0.0, cy, cz, 0.16, 0.07, 0.03))
+            cut(ob, cutter_box("s", 0.0, cy, cz + 0.06 * h, 0.16, 0.07, 0.03))
+            cut(ob, cutter_box("s", 0.0, cy, cz - 0.06 * h, 0.16, 0.07, 0.03))
     return low, deco
 
 
@@ -174,12 +174,12 @@ def v_symbols(h):
         for k in range(4):
             cz = z + k * 0.17 * h
             if k % 2 == 0:
-                cut(ob, cutter_box("s", 0.0, 0.42, cz, 0.2, 0.03, 0.025))
-                cut(ob, cutter_box("s", 0.12, 0.42, cz + 0.05 * h, 0.05, 0.03, 0.05))
+                cut(ob, cutter_box("s", 0.0, 0.42, cz, 0.2, 0.08, 0.035))
+                cut(ob, cutter_box("s", 0.12, 0.42, cz + 0.05 * h, 0.05, 0.08, 0.06))
             else:
-                cut(ob, cutter_cyl("s", 0.0, 0.42, cz, 0.12, 0.06, 'Y'))
-        cut(ob, cutter_box("p", 0.42, 0.0, 0.5 * h, 0.03, 0.22, 0.3 * h))
-        cut(ob, cutter_box("p", -0.42, 0.0, 0.5 * h, 0.03, 0.22, 0.3 * h))
+                cut(ob, cutter_cyl("s", 0.0, 0.42, cz, 0.12, 0.16, 'Y'))
+        cut(ob, cutter_box("p", 0.42, 0.0, 0.5 * h, 0.09, 0.22, 0.3 * h))
+        cut(ob, cutter_box("p", -0.42, 0.0, 0.5 * h, 0.09, 0.22, 0.3 * h))
     return low, deco
 
 
@@ -187,8 +187,8 @@ def v_slab(h):
     low = [(0.0, 0.05 * h, 0.55, 0.3), (0.05 * h, 0.95 * h, 0.5, 0.24), (0.95 * h, h, 0.53, 0.28)]
     def deco(ob):
         for cz in (0.3 * h, 0.6 * h):
-            cut(ob, cutter_box("p", 0.0, 0.24, cz, 0.3, 0.03, 0.11 * h))
-        cut(ob, cutter_cyl("c", 0.0, 0.24, 0.82 * h, 0.16, 0.06, 'Y'))
+            cut(ob, cutter_box("p", 0.0, 0.24, cz, 0.3, 0.08, 0.11 * h))
+        cut(ob, cutter_cyl("c", 0.0, 0.24, 0.82 * h, 0.16, 0.16, 'Y'))
         for cz in (0.45 * h, 0.75 * h):
             cut(ob, cutter_box("j", 0.0, 0.0, cz, 0.6, 0.6, 0.012))
     return low, deco
@@ -199,9 +199,9 @@ def v_capped(h):
     def deco(ob):
         for cz in (0.3 * h, 0.5 * h, 0.7 * h):
             cut(ob, cutter_box("j", 0.0, 0.0, cz, 0.45, 0.45, 0.01))
-        cut(ob, cutter_box("p", 0.4, 0.0, 0.48 * h, 0.03, 0.2, 0.28 * h))
-        cut(ob, cutter_box("p", -0.4, 0.0, 0.48 * h, 0.03, 0.2, 0.28 * h))
-        cut(ob, cutter_box("p", 0.0, 0.4, 0.48 * h, 0.2, 0.03, 0.28 * h))
+        cut(ob, cutter_box("p", 0.4, 0.0, 0.48 * h, 0.09, 0.2, 0.28 * h))
+        cut(ob, cutter_box("p", -0.4, 0.0, 0.48 * h, 0.09, 0.2, 0.28 * h))
+        cut(ob, cutter_box("p", 0.0, 0.4, 0.48 * h, 0.2, 0.09, 0.28 * h))
     return low, deco
 
 
@@ -244,11 +244,11 @@ def stone_material():
     links.new(geo.outputs["Pointiness"], wearramp.inputs["Fac"])
     mixw = nodes.new("ShaderNodeMix"); mixw.data_type = 'RGBA'; mixw.blend_type = 'ADD'; mixw.inputs["Factor"].default_value = 0.22
     links.new(mixg.outputs[2], mixw.inputs[6]); links.new(wearramp.outputs["Color"], mixw.inputs[7])
-    ao = nodes.new("ShaderNodeAmbientOcclusion"); ao.inputs["Distance"].default_value = 0.5; ao.samples = 8
+    ao = nodes.new("ShaderNodeAmbientOcclusion"); ao.inputs["Distance"].default_value = 0.8; ao.samples = 8
     grime = nodes.new("ShaderNodeValToRGB"); grime.color_ramp.elements[0].position = 0.15; grime.color_ramp.elements[1].position = 0.75
     grime.color_ramp.elements[0].color = (0.35, 0.35, 0.4, 1)
     links.new(ao.outputs["AO"], grime.inputs["Fac"])
-    mixa = nodes.new("ShaderNodeMix"); mixa.data_type = 'RGBA'; mixa.blend_type = 'MULTIPLY'; mixa.inputs["Factor"].default_value = 0.5
+    mixa = nodes.new("ShaderNodeMix"); mixa.data_type = 'RGBA'; mixa.blend_type = 'MULTIPLY'; mixa.inputs["Factor"].default_value = 0.7
     links.new(mixw.outputs[2], mixa.inputs[6]); links.new(grime.outputs["Color"], mixa.inputs[7])
     links.new(mixa.outputs[2], bsdf.inputs["Base Color"])
     return m
@@ -293,8 +293,8 @@ bpy.ops.uv.pack_islands(margin=0.012)
 bpy.ops.object.mode_set(mode='OBJECT')
 
 scene.render.bake.use_selected_to_active = True
-scene.render.bake.cage_extrusion = 0.12
-scene.render.bake.max_ray_distance = 0.3
+scene.render.bake.cage_extrusion = 0.2
+scene.render.bake.max_ray_distance = 0.45
 scene.render.bake.use_clear = False
 scene.render.bake.margin = 6
 first = True
