@@ -1,15 +1,53 @@
 # Phase R prototype — "an album you survive"
 
-## Where we are (2026-09-22) — start here
+## Where we are (2026-09-23) — start here
 
-**The game is ONE ENDLESS RUN** (`PHASE_E_BRIEF_1_ENDLESS.md`): how far can you get. **Stage 1 (the run) is built and accepted. Stage 2 is DONE: the menu passed on the phone, the leaderboard is live-checked against the real Talo API end to end. Tonight's three additions (the short consent copy, PAUSE, and the UI-pass backlog below) are built and exported; the phone test of section 8 + pause is what remains.** Everything below is newest first; this section is the whole state, the rest is the detail behind it.
+**The game is ONE ENDLESS RUN** (`PHASE_E_BRIEF_1_ENDLESS.md`): how far can you get. **Stage 1 (the run) is built and accepted. Stage 2 is DONE: the menu passed on the phone, the leaderboard is live-checked against the real Talo API end to end.** Today (2026-09-23): **the foot bug is found and fixed** (it was not what the README guessed — see below), and **brief 6 sections 1 + 2 (the light and the drop shadows) are built**, three local commits, NOT exported yet. Everything below is newest first; this section is the whole state, the rest is the detail behind it.
 
-### NEXT, in this order (Milko, 2026-09-22 night)
+### NEXT, in this order (2026-09-23)
 
-1. **Phone test** of what is serving now: register, run, PAUSE (RESUME / RESTART / HOME), die, the rank line, the board. Then Stage 2 is closed.
-2. **The foot bug** — the two prints (`creature.gd:460` teleport guard, `player3d.gd:70` snap) that settle it, then the `_place_legs` skip. See "KNOWN ISSUE" below.
-3. **Brief 6 sections 1 + 2 as one slice** (`PHASE_A_BRIEF_6_LIGHT.md`): one light direction as a global uniform, then drop shadows, creature first. Zero net draw calls — the shadows replace the creature's blob ring.
+1. **Export and phone test** of today's three commits at `?level=1`, bar 11: the frame time with `?light=1` and `?light=0` (the brief's own acceptance: the new look must hold 16.7 ms average), the look of the shadows and the stone tones, and whether the foot drag is gone. `Progress.UNLOCK_ALL` is still on (dev build). Not exported yet because the section-8 + pause phone test of the served build was still pending.
+2. **Phone test of the served build** (unchanged from last night): register, run, PAUSE, die, the rank line, the board. Then Stage 2 is closed.
+3. **Brief 6 sections 3–8** (fog colour and depth, the stone floor, the hero rim, hazards as beings, glow, air and frame) — in the brief's order, one commit each.
 4. **The UI pass** — the backlog just below, with the references in `docs/concept/UI/` (`ref-menu.png`, `ref-button-layers.png`, `ref-button-states.png`). Not started; nothing in the references has been acted on.
+
+### 2026-09-23 — THE FOOT BUG, found: it was never the fall
+
+**The README's hypothesis is dead.** The two prints ran (`player3d.gd`'s snap logging the depth, `creature.gd`'s leash logging the frame the raw distance peaks): the worst frame of the run (3.21 units) WAS the snap frame (a 1.18-unit snap up out of a pit) — but the snap was only a trigger, and the same 2.1-unit spike happened at frame 1206 of the same run with **no fall at all**, at a sharp turn. A 30-frame ring-buffer trace around every spike then showed the mechanism, and it is three lines, all in `creature.gd`:
+
+1. **Every reset that puts the feet home — landing (a jump or a fall), a sharp turn (`_plant_swinging_foot`), a teleport, a respawn — sets `_last_lp = [0.0, 0.5]`, which parks foot 1 EXACTLY on the swing boundary.** The swing-entry test was `was < 0.5`, which is false at 0.5, so foot 1's first swing after any reset never refreshed `_foot_from`: it lerped from wherever it last lifted, a stride ago, 2–3 units behind the hip, and swam forward over five frames to catch up. **That is the dragged foot.** Fix: a PLANTED foot found in the swing half is starting its swing now (`was < 0.5 or _down[i]`); `_feet_home()` now also marks the feet planted and resets their from/to; a sharp turn refreshes the other foot's origin. **3.21 → 1.90.**
+2. **The tidy-up step home (`_settle_feet`) kept its target fixed where the hip was when the step began** — only the leash's flick re-aimed — and the creature can start walking again inside the step's 0.18 s. Measured outrun by 1.9 units. Fix: it re-aims at the hip every frame, like the flick. **1.90 → 1.66.**
+3. **A corrective step could steal the other foot's running step** (`_step_now` overwrote `_settling`), leaving that foot standing in mid-air, "planted" 0.4 units up, dragged at the leash limit until its swing came round; and the leash's step trigger tested `_down`, which the leash itself clears on the foot it pulls in, so the foot never stepped. Fix: no step starts while one is under way, and "planted" for the trigger is the cycle's word (stance half) not `_down`'s. **1.66 → 1.04 — below the leash (1.116): the clamp was never reached in that run.**
+
+**Numbers, `tools/autoplay.gd` level 1, 60 fps, 20 bars, unclamped worst:** before 1.80–3.22 (README), after **1.04 / 1.16 / 1.26** over three clean runs, and **1.28 over endless laps 0–2** (456 s, deaths 0). The bot is real time, so runs differ; the clamp still catches a frame now and then by ≤ 0.16 units — drawn as a leg at full stretch for a frame, not a foot left behind. Validator: level 1 `deaths=0`, laps 0–2 `deaths=0`. **Judge it on the phone**: the bot never jumps, and the jump landing is reset case 1.
+
+**The second bug (`_place_legs` skipping the draw on a teleport frame) is fixed in the same commit:** only the measurement skips a ported frame now; the leg is always drawn. The diagnostic prints and the trace are NOT in the commit.
+
+### 2026-09-23 — BRIEF 6 sections 1 + 2: the light, and things sit on the floor
+
+Screenshots (web renderer, 2400×1080, level 1): `docs/screenshots/l-before-after-bar1.png` and `l-before-after-bar11.png` (`light=0` against the new look), `l-bar1-vs-concept.png`, and the four singles `l-bar1.png` / `l-bar1-light0.png` / `l-bar11.png` / `l-bar11-light0.png`. **`tools/shot.gd` is as flaky as documented** — half its captures are the LOADING frame; the pairs above are the ones that carried a real draw-call count, and the bar-1 pair is about two seconds apart (the tool's clock is not the run's).
+
+**Section 1 — one light, one direction, everywhere** (`palette.gd`, `flat_mats.gd`, `props/props.gd`, `camera_rig.gd`, `project.godot`, `frame_meter.gd`, `track_test.gd`, `menu.gd`, `tools/shot.gd`).
+- The scene's `CreatureLight` IS the light. `CameraRig.publish_light(light)` publishes its direction (toward the light, the node's +z: `(0.36, 0.80, −0.48)` — from the viewer's upper left, 53° up, which is what the brief asked for and what the creature was already lit by) as the global uniform `pr_light_dir`, once, from both scenes. The rig also keeps it in `CameraRig.light_dir` for the shadows. `project.godot` carries the same value as the default.
+- `lit_tone()` in the shared shader head (`Mats.fade_head()` — the palette's numbers are written into the shader text there, the one place they meet): three tones by the face's normal, **top / lit side / shadow side = 1.00 / 0.74 / 0.46** (`WorldPalette.LIGHT_TOP/SIDE/SHADE`), the shadow side pulled 15 % toward `SHADE_TINT #0f1a26`. Hard steps with a hair of smoothstep so a facet on the boundary does not shimmer. The TILE shader (tiles, slab sides, pit walls, `stone()` = the checkpoint markers and pillars) and the BUILDING shader (monoliths) use it. **The tile's `side` colour is gone**: a slab's sides and a pit's walls are the FACE colour in the side tones, so `WorldPalette.TILE_SIDE` was deleted. The building shader's own light direction, its smooth 0.45→1.3 ramp and "top 12 % lighter" are replaced.
+- **`BUILDING_STONE` / `_FAR` start 30 % lighter** (`#5c6272` / `#4f5664`): the tones top out at 1.0 where the old ramp lit a facet to 1.3, so without this every monolith simply went darker (seen in the first screenshot). Milko's numbers, from the screenshots.
+- The lit shaders (creature, clay, gloss) already use the real light; they agree by construction — same node.
+- **`?light=0`** (a dev URL switch; `tools/shot.gd light=0`) is the old look, exact: the tones are mixed out by `pr_light_on`, the building shader keeps its old ramp under that switch at the old colour scale, and the shadows fade to nothing. `set_light()` in `track_test.gd`.
+- Cost: no draw calls, a few ALU ops per world pixel. Triangles/draw calls at bar 1 / bar 11 with the light on and off at the same moment: **328 / 343 draw calls both ways** (see below for the flakiness caveat).
+- **Honest note:** a live plate's SIDE face (only visible on the slab edge or a pit wall) in the shadow tone is `#661640`-ish, close to `LETHAL_ARMED` — the plate's state is read from its top, which is untouched, but it is a colour that now exists on screen. Colour meaning on top faces is unchanged: magenta / cyan / amber are never re-hued.
+
+**Section 2 — drop shadows** (`prototype/shadows.gd` NEW, `creature.gd`, `hazard3d.gd` + the five hazards, `prewarm.gd`, `track_test.gd`, `menu.gd`).
+- **One `MultiMeshInstance3D`, one draw call, every shadow in the world**: the creature's body and both feet, each gate / sweeper train (one rounded bar per side, from the gap's edge to the last shown segment), slammers, orbiter pillars and orbs, volley orbs, notes. **It replaced the creature's blob (`_ring`, deleted), so the net is zero draw calls** — measured the same count with the light on and off, 328 at bar 1, 343 at bar 11.
+- Each caster calls `cast_round()` / `cast_bar()` on it every frame after posing (the node runs at `process_priority 100`); nothing is allocated per frame, CAP 160 instances. The shape is a signed distance in the quad's UV (round, or a rounded bar), a darker core under the contact point, a soft edge, and the world's distance fade so a shadow never outlives its floor.
+- **They obey the light**: offset along `pr_light_dir` on the floor by the height above the floor × tan(light angle) — 0.75 per unit here — growing (`GROW` 0.35 / unit) and fading (`SHADOW_MAX_ALPHA` 0.55 at contact → 0.15 at the 2.0-unit jump apex). A slammer's shadow tightens as it drops; a volley orb's runs along the floor under it.
+- **The thing the brief did not say, found with the quads painted red:** a shadow the exact size of the footprint is INVISIBLE — the caster stands on it and covers it, and the creature draws on top of everything. So a shadow spreads `SPREAD` 0.55 beyond the footprint, and leans along the light by `SELF_OFFSET` 0.2 of the caster's own height. That is what makes them read at all, and what makes a pillar read as lit from one side.
+- **No floor, no shadow** (`Field.floor_at` at the shadow's own centre): nothing hangs over a pit. Hazard shadows follow the posed nodes (hazard_math for the song time), so they hold in hit-stop and rewind with the song.
+- `prewarm.gd` draws one instance of the MultiMesh with the real material before the run (a MultiMesh is its own pipeline variant); the menu gives it its own build frame (`_build_shadows`, step 4).
+- `light=0` has NO creature blob any more — the blob is gone for good; the A/B for section 2 is shadows against none.
+
+**Acceptance, this slice:** layout hashes levels 1–6 identical (`tools/plan_stats.gd`, before/after); validator bot level 1 `deaths=0` and endless laps 0–2 `deaths=0`; **`rules.gd` untouched**; every changed script parse-checked; every shader compiles (the first version did not — `tint` collided with the clay shader's uniform, caught by the headless bot's dummy renderer). **The phone reading is still to do** (NEXT 1). Draw-call numbers come from `tools/shot.gd`, whose paired captures vary run to run (286–328 at "bar 1" because it does not always shoot the same frame); the on/off pairs quoted are same-frame pairs.
+
+**What still does not match the concept:** the fog is one grey (section 3), the floor is still a dark sheet (section 4), no rim on the hero (5), hazards still read as pink cones at the wash strength they have (6), no glow (7).
 
 ### UI PASS BACKLOG (written down 2026-09-22, not built)
 
@@ -111,7 +149,7 @@ Milko accepted the menu and asked for one change first: the creature was standin
 | Phase A brief 5 (the walk) | **Sections 1-5 done**, accepted by Milko "for now" on 2026-09-21. Pushed: `25a2445`, `fe2e784`, `8ff427b`, `f460f67`. |
 | Brief 5 section 6 (the tail) | **SKIPPED on purpose.** This model has no tail, it has two rear flippers, so the brief's z-range sway would swing both together. Milko: handle it when the model is regenerated. |
 | Code health check | **DONE 2026-09-22.** Read-only pass, then six commits of housekeeping. See below. |
-| Brief 6 (light) | Not started. Sections 1+2 are the agreed next build. |
+| Brief 6 (light) | **Sections 1+2 built 2026-09-23**, local commits, not exported. Sections 3–8 next. |
 
 ### 2026-09-22 — the housekeeping session (no gameplay or art changed)
 
@@ -131,7 +169,7 @@ A read-only health check first, then the fixes Milko approved. **No game code wa
 
 **Known warnings, deliberately left** (full list in the session's report): two real footguns in the legacy 2D files — a parameter named `scale` in `entities/board.gd:160` and a local named `tr` in `ui/account_panel.gd:447`, both shadowing Godot built-ins. Not biting anything today. The ~30 "return value discarded" warnings are Godot noise. The integer divisions in `beat_clock.gd` and `rules.gd` were each checked and are all deliberate floor divisions.
 
-### KNOWN ISSUE — a foot can still be dragged in the real game
+### (FIXED 2026-09-23, see above — kept as the record of the hunt) KNOWN ISSUE — a foot can still be dragged in the real game
 
 The leash (brief 5A) guarantees `distance(foot, hip) <= LEG_H * LEG_STRETCH_MAX` on the hip and foot the capsule is actually drawn between, so **a foot can never be drawn detached from the body again**. In the walk rig the gait never even reaches the clamp.
 
