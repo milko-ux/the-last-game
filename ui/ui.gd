@@ -9,6 +9,19 @@ extends Node2D
 # IMPORTANT: the glass control drawing below is carried over
 # unchanged from the version Milko confirmed feels good on a real
 # phone. Treat any change to it as a change to a non-negotiable.
+#
+# DRAWN ONCE, MOVED EVERY FRAME (2026-09-24): the controls used to be
+# redrawn from scratch every frame. Every draw_circle / draw_arc is a
+# polygon, and a polygon is a GPU vertex buffer that is built and
+# deleted again the next frame -- 24 of them, 60 times a second, about
+# 2,800 WebGL buffer deletes a second measured in WebKit. iOS Safari's
+# GPU process has a bug in its buffer bookkeeping that this churn
+# trips (a crash in gl::Buffer::getMemorySize, the tab dies with "a
+# problem repeatedly occurred"). So the same shapes, with the same
+# numbers, are now drawn into four child layers ONCE, and each frame
+# only moves them (position), fades them (modulate.a, which multiplies
+# every alpha exactly as `strength` did) or, for the JUMP flash and the
+# stick's grab / release, redraws the one layer whose shape changed.
 # ============================================================
 
 signal jump_pressed
@@ -91,9 +104,30 @@ var jump_touch_id := -1
 var jump_flash := 0.0
 var stick_fade := 0.0
 
+# The four layers (see the header): the JUMP disc, the stick's base disc,
+# the resting crosshair + MOVE label, the knob. A layer paints with the
+# Callable it is given, on itself.
+class Layer extends Node2D:
+	var painter: Callable
+	func _draw() -> void:
+		painter.call(self)
+
+var _jump_layer: Layer
+var _base_layer: Layer
+var _rest_layer: Layer
+var _knob_layer: Layer
+# `strength` (0.85 .. 1.6) only ever scales alphas, so the base and the
+# knob are painted at the maximum and faded with modulate.a.
+const STRENGTH_MAX := 0.85 + 0.75
+var _jump_drawn := -1.0        # the `pressed` the JUMP layer was last painted with
+
 
 func _ready() -> void:
 	_style_name_edit()
+	_jump_layer = _layer(_paint_jump)
+	_base_layer = _layer(_paint_base)
+	_rest_layer = _layer(_paint_rest)
+	_knob_layer = _layer(_paint_knob)
 	_name_edit.text_submitted.connect(_on_name_submitted)
 	_name_edit.focus_exited.connect(_finish_name_edit)
 
@@ -150,10 +184,15 @@ func _process(delta: float) -> void:
 	if jump_flash > 0.0:
 		jump_flash -= delta * 4.0
 
-	# Smooth fade when the stick is grabbed / released.
+	# Smooth fade when the stick is grabbed / released. It lands exactly on
+	# the target (a lerp alone never does), so the layers below stop
+	# changing once the fade is over.
 	var target: float = 1.0 if stick_touch_id != -1 else 0.0
 	stick_fade = lerp(stick_fade, target, clamp(delta * 12.0, 0.0, 1.0))
+	if absf(stick_fade - target) < 0.002:
+		stick_fade = target
 
+	_update_touch_layers()
 	queue_redraw()
 
 
@@ -326,28 +365,34 @@ func confirm_jump() -> void:
 # Fakes frosted glass with layered translucent fills, a bright
 # top rim highlight, and a soft outer bloom.
 # ============================================================
-func draw_glass_disc(c: Vector2, r: float, tint: Color, strength: float) -> void:
+# `ci` is the CanvasItem the disc is painted on: one of the layers, or
+# this node. The shapes and numbers are the ones Milko approved.
+func draw_glass_disc(ci: CanvasItem, c: Vector2, r: float, tint: Color, strength: float) -> void:
 	# soft outer bloom
-	draw_circle(c, r * 1.18, Color(tint.r, tint.g, tint.b, 0.05 * strength))
-	draw_circle(c, r * 1.08, Color(tint.r, tint.g, tint.b, 0.05 * strength))
+	ci.draw_circle(c, r * 1.18, Color(tint.r, tint.g, tint.b, 0.05 * strength))
+	ci.draw_circle(c, r * 1.08, Color(tint.r, tint.g, tint.b, 0.05 * strength))
 
 	# frosted body: layered so the centre reads slightly denser
-	draw_circle(c, r, Color(1, 1, 1, 0.045 * strength))
-	draw_circle(c, r * 0.94, Color(tint.r, tint.g, tint.b, 0.05 * strength))
-	draw_circle(c, r * 0.55, Color(1, 1, 1, 0.03 * strength))
+	ci.draw_circle(c, r, Color(1, 1, 1, 0.045 * strength))
+	ci.draw_circle(c, r * 0.94, Color(tint.r, tint.g, tint.b, 0.05 * strength))
+	ci.draw_circle(c, r * 0.55, Color(1, 1, 1, 0.03 * strength))
 
 	# outer rim
-	draw_arc(c, r, 0.0, TAU, 64, Color(1, 1, 1, 0.22 * strength), 1.5)
-	draw_arc(c, r, 0.0, TAU, 64, Color(tint.r, tint.g, tint.b, 0.35 * strength), 2.5)
+	ci.draw_arc(c, r, 0.0, TAU, 64, Color(1, 1, 1, 0.22 * strength), 1.5)
+	ci.draw_arc(c, r, 0.0, TAU, 64, Color(tint.r, tint.g, tint.b, 0.35 * strength), 2.5)
 
 	# top-edge specular highlight (the thing that sells "glass")
-	draw_arc(c, r * 0.99, -PI * 0.92, -PI * 0.08, 32, Color(1, 1, 1, 0.42 * strength), 2.0)
-	draw_arc(c, r * 0.80, -PI * 0.80, -PI * 0.32, 24, Color(1, 1, 1, 0.14 * strength), 5.0)
+	ci.draw_arc(c, r * 0.99, -PI * 0.92, -PI * 0.08, 32, Color(1, 1, 1, 0.42 * strength), 2.0)
+	ci.draw_arc(c, r * 0.80, -PI * 0.80, -PI * 0.32, 24, Color(1, 1, 1, 0.14 * strength), 5.0)
 
 
 func centre_text(font, text: String, c: Vector2, size: int, col: Color) -> void:
+	centre_text_on(self, font, text, c, size, col)
+
+
+func centre_text_on(ci: CanvasItem, font, text: String, c: Vector2, size: int, col: Color) -> void:
 	var w: float = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
-	draw_string(font, c - Vector2(w * 0.5, -size * 0.35), text,
+	ci.draw_string(font, c - Vector2(w * 0.5, -size * 0.35), text,
 		HORIZONTAL_ALIGNMENT_LEFT, -1, size, col)
 
 
@@ -378,22 +423,38 @@ func _draw() -> void:
 
 	if show_hud:
 		_draw_hud(screen, font)
-	_draw_touch_controls(screen, font)
+	# The touch controls are the four layers (children draw above this).
 
 
-func _draw_touch_controls(screen: Vector2, font) -> void:
+# ============================================================
+# TOUCH CONTROLS: four layers, painted once, moved every frame.
+# ============================================================
+func _layer(painter: Callable) -> Layer:
+	var l := Layer.new()
+	l.painter = painter
+	l.visible = false
+	add_child(l)
+	return l
+
+
+# Every frame: where the layers sit, how faded they are, and whether the
+# JUMP layer needs repainting (only while its flash is animating).
+func _update_touch_layers() -> void:
+	var screen := get_viewport_rect().size
+	var show := not (portrait() or showing_menu or showing_results)
+	_jump_layer.visible = show
+	_base_layer.visible = show
+	_knob_layer.visible = show
+	if not show:
+		_rest_layer.visible = false
+		return
+
 	# ---------- JUMP BUTTON ----------
-	var jb := Vector2(screen.x - CTRL_MARGIN.x, screen.y - CTRL_MARGIN.y)
+	_jump_layer.position = Vector2(screen.x - CTRL_MARGIN.x, screen.y - CTRL_MARGIN.y)
 	var pressed: float = clamp(jump_flash, 0.0, 1.0)
-	var r := JUMP_BTN_RADIUS * (1.0 + pressed * 0.06)
-
-	draw_glass_disc(jb, r, Palette.EDGE, 1.0 + pressed * 0.9)
-
-	if pressed > 0.0:
-		draw_arc(jb, r * (1.0 + (1.0 - pressed) * 0.35), 0.0, TAU, 48,
-			Color(Palette.EDGE.r, Palette.EDGE.g, Palette.EDGE.b, 0.35 * pressed), 2.0)
-
-	centre_text(font, "JUMP", jb, 18, Color(1, 1, 1, 0.75 + pressed * 0.25))
+	if pressed != _jump_drawn:
+		_jump_drawn = pressed
+		_jump_layer.queue_redraw()
 
 	# ---------- MOVEMENT STICK ----------
 	var resting := Vector2(CTRL_MARGIN.x, screen.y - CTRL_MARGIN.y)
@@ -409,28 +470,53 @@ func _draw_touch_controls(screen: Vector2, font) -> void:
 		knob = base + d
 
 	var strength := 0.85 + stick_fade * 0.75
+	_base_layer.position = base
+	_base_layer.modulate.a = strength / STRENGTH_MAX
+	_rest_layer.position = resting
+	_rest_layer.visible = not active
+	_knob_layer.position = knob
+	_knob_layer.modulate.a = strength / STRENGTH_MAX
 
-	draw_glass_disc(base, STICK_RADIUS, Palette.PLAYER, strength)
 
-	# faint direction crosshair inside the ring
-	if not active:
-		var cross := Color(1, 1, 1, 0.10)
-		draw_line(base + Vector2(-16, 0), base + Vector2(16, 0), cross, 1.0)
-		draw_line(base + Vector2(0, -16), base + Vector2(0, 16), cross, 1.0)
+func _paint_jump(ci: CanvasItem) -> void:
+	var pressed := _jump_drawn
+	var r := JUMP_BTN_RADIUS * (1.0 + pressed * 0.06)
 
-	# knob
-	draw_circle(knob, STICK_KNOB * 1.15, Color(Palette.PLAYER.r, Palette.PLAYER.g, Palette.PLAYER.b, 0.08 * strength))
-	draw_circle(knob, STICK_KNOB, Color(1, 1, 1, 0.10 * strength))
-	draw_circle(knob, STICK_KNOB * 0.92, Color(Palette.PLAYER.r, Palette.PLAYER.g, Palette.PLAYER.b, 0.14 * strength))
-	draw_arc(knob, STICK_KNOB, 0.0, TAU, 40, Color(1, 1, 1, 0.45 * strength), 1.8)
-	draw_arc(knob, STICK_KNOB * 0.96, -PI * 0.88, -PI * 0.12, 24, Color(1, 1, 1, 0.5 * strength), 2.0)
+	draw_glass_disc(ci, Vector2.ZERO, r, Palette.EDGE, 1.0 + pressed * 0.9)
+
+	if pressed > 0.0:
+		ci.draw_arc(Vector2.ZERO, r * (1.0 + (1.0 - pressed) * 0.35), 0.0, TAU, 48,
+			Color(Palette.EDGE.r, Palette.EDGE.g, Palette.EDGE.b, 0.35 * pressed), 2.0)
+
+	centre_text_on(ci, ThemeDB.fallback_font, "JUMP", Vector2.ZERO, 18, Color(1, 1, 1, 0.75 + pressed * 0.25))
+
+
+func _paint_base(ci: CanvasItem) -> void:
+	draw_glass_disc(ci, Vector2.ZERO, STICK_RADIUS, Palette.PLAYER, STRENGTH_MAX)
+
+
+# The resting stick only: the faint direction crosshair inside the ring
+# and the MOVE label. Neither follows `strength`, so this is its own
+# layer, hidden while the stick is held.
+func _paint_rest(ci: CanvasItem) -> void:
+	var cross := Color(1, 1, 1, 0.10)
+	ci.draw_line(Vector2(-16, 0), Vector2(16, 0), cross, 1.0)
+	ci.draw_line(Vector2(0, -16), Vector2(0, 16), cross, 1.0)
+	centre_text_on(ci, ThemeDB.fallback_font, "MOVE", Vector2(0, STICK_RADIUS + 26), 13,
+		Color(1, 1, 1, 0.35))
+
+
+func _paint_knob(ci: CanvasItem) -> void:
+	var strength := STRENGTH_MAX
+	var knob := Vector2.ZERO
+	ci.draw_circle(knob, STICK_KNOB * 1.15, Color(Palette.PLAYER.r, Palette.PLAYER.g, Palette.PLAYER.b, 0.08 * strength))
+	ci.draw_circle(knob, STICK_KNOB, Color(1, 1, 1, 0.10 * strength))
+	ci.draw_circle(knob, STICK_KNOB * 0.92, Color(Palette.PLAYER.r, Palette.PLAYER.g, Palette.PLAYER.b, 0.14 * strength))
+	ci.draw_arc(knob, STICK_KNOB, 0.0, TAU, 40, Color(1, 1, 1, 0.45 * strength), 1.8)
+	ci.draw_arc(knob, STICK_KNOB * 0.96, -PI * 0.88, -PI * 0.12, 24, Color(1, 1, 1, 0.5 * strength), 2.0)
 	# tiny specular dot
-	draw_circle(knob + Vector2(-STICK_KNOB * 0.34, -STICK_KNOB * 0.36),
+	ci.draw_circle(knob + Vector2(-STICK_KNOB * 0.34, -STICK_KNOB * 0.36),
 		STICK_KNOB * 0.16, Color(1, 1, 1, 0.35 * strength))
-
-	if not active:
-		centre_text(font, "MOVE", resting + Vector2(0, STICK_RADIUS + 26), 13,
-			Color(1, 1, 1, 0.35))
 
 
 # Locked tiers are shown, not hidden — seeing what you haven't earned yet

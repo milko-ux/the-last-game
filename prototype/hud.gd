@@ -67,7 +67,19 @@ func _process(delta: float) -> void:
 	end_alpha = minf(1.0, end_alpha + delta * 3.0) if end_shown else 0.0
 	if word_alpha > 0.0 and word == "":
 		word_alpha = maxf(0.0, word_alpha - delta * 2.5)
-	queue_redraw()
+	# Repaint only when something drawn has changed (2026-09-24). Every
+	# draw_circle / draw_arc below is a GPU buffer built and deleted per
+	# repaint, and iOS Safari's GPU process crashes on that churn (see
+	# ui/ui.gd's header). Steady play repaints nothing.
+	var key := [endless, end_shown, end_alpha, paused, countin, fill, best, ticks, lit, word, word_alpha,
+		lives, lives_max, shield, shield_armed, shield_pop, show_pause, end_distance, end_best, end_new_best,
+		end_rank, end_join, get_viewport_rect().size]
+	if key != _drawn_key:
+		_drawn_key = key
+		queue_redraw()
+
+
+var _drawn_key: Array = []
 
 
 func show_word(w: String) -> void:
