@@ -39,6 +39,14 @@ class_name FrameMeter
 #
 #   FRAME 41.3 ms  bar=12 beat=1 t=34.21  events=[downbeat, gate jump x2]
 #
+# ?taps=1 (2026-09-23, the "taps land in the wrong place" report): a dot
+# where the game received each tap, for TAPS_SHOW_S, and a line of the
+# browser's own numbers (inner size, the canvas rect, the visual
+# viewport's offset, device pixel ratio) next to Godot's window size --
+# read through JavaScriptBridge once a second, in _process, never inside
+# a frame callback. Not in URL_SWITCHES: it must not skip the menu, since
+# the menu is where the taps went wrong.
+#
 # ON in debug builds and while Progress.UNLOCK_ALL (the dev unlock
 # switch) is true, so Milko sees it on the phone in the dev web
 # export. OFF in a release with the unlock switch off: the node is
@@ -56,6 +64,8 @@ class_name FrameMeter
 
 const WINDOW_S := 2.0
 const SPIKE_MS := 25.0
+const TAPS_SHOW_S := 2.5
+const TAPS_JS := "(function(){var c=document.querySelector('canvas');if(!c)return 'no canvas';var r=c.getBoundingClientRect();var v=window.visualViewport;function f(x){return Math.round(x*10)/10}return 'inner '+f(innerWidth)+'x'+f(innerHeight)+'  canvas rect '+f(r.x)+','+f(r.y)+' '+f(r.width)+'x'+f(r.height)+'  px '+c.width+'x'+c.height+'  vv off '+(v?f(v.offsetLeft)+','+f(v.offsetTop)+' scale '+f(v.scale):'-')+'  scroll '+f(scrollX)+','+f(scrollY)+'  dpr '+f(devicePixelRatio)})()"
 # The probe tool lowers this to see more frames; the game never touches it.
 static var spike_ms := SPIKE_MS
 const REFRESH_S := 0.25
@@ -78,6 +88,10 @@ static var _t_tap := -1             # msec; -1 = this load did not start with a 
 static var _t_label := -1           # msec; the loading label's first painted frame
 static var _t_ready := -1           # msec; TAP TO START
 static var page_s := -1.0           # the page span, measured once per page
+var taps := false                   # ?taps=1
+var _taps: Array = []               # [position, seconds left]
+var _taps_label: Label
+var _taps_js_in := 0.0
 static var label_timed_out := false
 # A wait for a PAINTED frame may never last longer than this: if the
 # frames do not come (a browser that will not paint, a stalled renderer),
@@ -298,6 +312,43 @@ func _ready() -> void:
 	var tail := Tail.new()
 	tail.meter = self
 	add_child(tail)
+	taps = url_param("taps") == "1"
+	if taps:
+		_taps_label = Label.new()
+		_taps_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_taps_label.position = Vector2(622.0 - 900.0, 110.0)
+		_taps_label.size = Vector2(900.0, 60.0)
+		_taps_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		_taps_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_taps_label.add_theme_font_size_override("font_size", 12)
+		_taps_label.add_theme_color_override("font_color", Color(0.4, 1.0, 0.9, 0.95))
+		_taps_label.text = "taps: tap anywhere"
+		add_child(_taps_label)
+
+
+# Every press, before any screen has had it (this node runs first): where
+# Godot says it landed, in the canvas's units.
+func _input(event: InputEvent) -> void:
+	if not taps:
+		return
+	var press: bool = (event is InputEventScreenTouch and event.pressed) \
+		or (event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT)
+	if press:
+		_taps.append([event.position, TAPS_SHOW_S])
+		queue_redraw()
+
+
+func _draw() -> void:
+	if not taps:
+		return
+	var origin := get_global_position()
+	for t in _taps:
+		var a: float = clampf(float(t[1]) / TAPS_SHOW_S, 0.0, 1.0)
+		var p: Vector2 = t[0] - origin
+		draw_circle(p, 14.0, Color(1.0, 0.2, 0.6, 0.35 * a))
+		draw_circle(p, 4.0, Color(1.0, 1.0, 1.0, a))
+		draw_line(p - Vector2(22, 0), p + Vector2(22, 0), Color(1.0, 0.2, 0.6, a), 1.0)
+		draw_line(p - Vector2(0, 22), p + Vector2(0, 22), Color(1.0, 0.2, 0.6, a), 1.0)
 
 
 func _exit_tree() -> void:
@@ -326,6 +377,31 @@ func _process(delta: float) -> void:
 	if _refresh <= 0.0:
 		_refresh = REFRESH_S
 		_update_text()
+	if taps:
+		_tick_taps(delta)
+
+
+func _tick_taps(delta: float) -> void:
+	var live: Array = []
+	for t in _taps:
+		t[1] = float(t[1]) - delta
+		if float(t[1]) > 0.0:
+			live.append(t)
+	if live.size() != _taps.size() or not live.is_empty():
+		queue_redraw()
+	_taps = live
+	_taps_js_in -= delta
+	if _taps_js_in <= 0.0:
+		_taps_js_in = 1.0
+		var vis := get_viewport().get_visible_rect().size
+		var win := DisplayServer.window_get_size()
+		var line := "godot window %dx%d  canvas %.0fx%.0f" % [win.x, win.y, vis.x, vis.y]
+		if not _taps.is_empty():
+			var last: Vector2 = _taps[-1][0]
+			line += "  last tap %.0f,%.0f" % [last.x, last.y]
+		if OS.has_feature("web"):
+			line += "\n" + str(JavaScriptBridge.eval(TAPS_JS))
+		_taps_label.text = line
 
 
 # Runs last in the frame: closes the update-time measurement.
