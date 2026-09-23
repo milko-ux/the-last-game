@@ -27,6 +27,16 @@ const PLAYER_SPEED_FACTOR := 1.8
 const LETHAL_BEAT_FRACTION := 0.4
 const PIT_MAX_Z := 3.0               # a pit deeper than this in z is not jumpable
 const FALL_DEATH_Y := -3.0
+# THE PIT LOOPHOLE (Milko, 2026-09-23). A player who has fallen into a pit
+# used to be lifted back onto the floor by walking sideways onto it, from
+# any depth above FALL_DEATH_Y -- a 1.2-unit fall was measured surviving
+# that way, and the validator bot relied on it without knowing. A player
+# deeper than this below the floor can no longer land on it: the pit keeps
+# them. A landing that CROSSES the floor from above (a jump coming down)
+# is exempt whatever its overshoot, or a long frame would kill a normal
+# landing (11.9 units/s at touchdown is 0.2 units per 60 fps frame, 0.4 at
+# 30, more on a hitch).
+const LAND_GRACE_Y := -0.3
 
 # The window's death line sits this far in front of the scrolled back
 # edge, so it is drawn on screen (one tile-row above the frame bottom

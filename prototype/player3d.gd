@@ -66,8 +66,12 @@ func tick(delta: float, z_back: float, z_front: float, field: Node3D) -> void:
 		on_ground = false
 	if not on_ground:
 		vy -= GRAVITY_PX * WORLD_PER_PX * delta
+		var y_prev := y
 		y += vy * delta
-		if y <= 0.0 and floor_here:
+		# Landing: from above the floor (a jump coming down), or from no
+		# deeper than the grace -- deeper than that is a pit, and a pit
+		# keeps you (Rules.LAND_GRACE_Y).
+		if y <= 0.0 and floor_here and (y_prev > 0.0 or y >= Rules.LAND_GRACE_Y):
 			y = 0.0
 			vy = 0.0
 			on_ground = true

@@ -12,6 +12,10 @@ extends SceneTree
 #                    before and after, and the drift 2 s on -- the proof the
 #                    song and the clock stayed together; no screenshot)
 #   ... light=0     (brief 6's light off: the flat look, for a before/after pair)
+#   ... pair=1      (the SAME frame twice: save `out` with the light on, pause the
+#                    clock, turn the light off, save `out`-light0.png; the exact
+#                    before/after the brief asks for -- two runs never shoot the
+#                    same moment, this tool's clock being what it is)
 #
 # Opens the run scene, starts it, waits until the song reaches the
 # given bar (plus `after` seconds), saves the frame and quits. Audio
@@ -42,6 +46,8 @@ var _killed := false
 var seq := 1                 # seq=N step=S: N frames S seconds apart from the bar (out-01.png ...)
 var pause_check := false     # pause=1: see the header
 var light := true            # light=0: the pre-brief-6 flat look
+var pair := false            # pair=1: see the header
+var _pair_wait := -1
 var _pc_stage := 0
 var _pc_wait := 0.0
 var _pc := {}
@@ -81,6 +87,16 @@ func _process(_delta: float) -> bool:
 		# scene is still being set up and a foot can sit anywhere.
 		test.player.creature.reset_reach_seen()
 		return false
+	if _pair_wait >= 0:
+		# The clock is paused: the world holds. Two frames for the uniform to
+		# reach the GPU, then the same picture with the light off.
+		_pair_wait -= 1
+		if _pair_wait == 0:
+			var img2 := root.get_viewport().get_texture().get_image()
+			var name2 := out.get_basename() + "-light0." + out.get_extension()
+			print("SHOT saved=%s err=%d (the same frame, light=0)" % [name2, img2.save_png(name2)])
+			return true
+		return false
 	if _frames_after >= 0:
 		# The three frames between deciding to shoot and shooting are not
 		# guaranteed: an unattended run can die in them, and the retry
@@ -116,6 +132,11 @@ func _process(_delta: float) -> bool:
 				test.player.creature.ground_speed()])
 			print("LEASH unclamped worst %.4f" % test.player.creature.max_raw())
 			_print_triangle_budget()
+			if pair:
+				clock.pause()
+				test.set_light(false)
+				_pair_wait = 3
+				return false
 			return true
 		return false
 	var t: float = clock.song_time()
@@ -228,6 +249,7 @@ func _setup_args() -> void:
 			"step": step = float(kv[1])
 			"pause": pause_check = kv[1] == "1"
 			"light": light = kv[1] != "0"
+			"pair": pair = kv[1] == "1"
 
 
 func _setup() -> void:

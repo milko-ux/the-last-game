@@ -107,7 +107,7 @@ static func verdict_key(k: Dictionary) -> String:
 # readable (the editor and every headless tool, i.e. everywhere a verdict
 # is ever MADE) stored_verdict() also checks the scripts themselves and
 # refuses the file if they moved without a bump.
-const LAYOUT_VERSION := 1
+const LAYOUT_VERSION := 2   # 2: rules.gd LAND_GRACE_Y (the pit loophole), 2026-09-23
 const LAYOUT_SCRIPTS := ["res://prototype/placement.gd", "res://prototype/rules.gd",
 		"res://prototype/hazard_math.gd", "res://prototype/fairness.gd"]
 const LAYOUT_DATA := ["res://levels/curriculum.json", "res://assets/audio/fuffens_beatmap.json"]
