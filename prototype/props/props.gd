@@ -83,8 +83,9 @@ void fragment() {
 	}
 	// Into the fog at this screen height: a far hazard lightens, never blackens.
 	ALBEDO = mix(c, fog_colour(fog_sy), f);
-	ROUGHNESS = 0.8;
-	SPECULAR = 0.35;
+	// Matte clay (look pass v2 section 5): less plastic gloss.
+	ROUGHNESS = 0.95;
+	SPECULAR = 0.12;
 	EMISSION = (c * ambient + rim_colour.rgb * fr * (rim_strength + 0.5 * pulse)) * (1.0 - f);
 }
 """
@@ -192,9 +193,12 @@ static func clay(live: bool) -> Material:
 		m.set_shader_parameter("tint", WorldPalette.LETHAL_LIVE if live else WorldPalette.LETHAL_ARMED)
 		m.set_shader_parameter("live", WorldPalette.LETHAL_LIVE)
 		m.set_shader_parameter("rim_colour", WorldPalette.LETHAL_SEAM)
-		m.set_shader_parameter("tint_amount", 0.75 if live else 0.55)
+		# Brief 6 section 6 / look pass v2 section 5: the wash comes down so the
+		# key light can model the form -- live 75 -> 45 %, armed 55 -> 35 %.
+		# Live must still be unmistakable: its rim is up (1.0 -> 1.3).
+		m.set_shader_parameter("tint_amount", 0.45 if live else 0.35)
 		m.set_shader_parameter("armed", 0.0 if live else 1.0)
-		m.set_shader_parameter("rim_strength", 1.0 if live else 0.0)
+		m.set_shader_parameter("rim_strength", 1.3 if live else 0.0)
 		m.set_shader_parameter("fade", Quaternion(Mats.FADE_AHEAD_START, Mats.FADE_AHEAD_END, Mats.FADE_BEHIND_START, Mats.FADE_BEHIND_END))
 		_mats[key] = m
 	return _mats[key]

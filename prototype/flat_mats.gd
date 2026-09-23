@@ -272,7 +272,7 @@ shader_type spatial;
 render_mode fog_disabled, specular_schlick_ggx;
 uniform vec4 albedo : source_color;
 uniform vec4 rim_colour : source_color;
-uniform float roughness = 0.22;
+uniform float roughness = 0.5;      // look pass v2 section 5: matte, less plastic (was 0.22)
 uniform float inner_glow = 0.25;
 uniform float rim_amount = 0.5;
 FADE_HEAD
@@ -297,7 +297,7 @@ void fragment() {
 	ALBEDO = mix(albedo.rgb, fog_colour(fog_sy), f);
 	ROUGHNESS = roughness;
 	METALLIC = 0.0;
-	SPECULAR = 0.7;
+	SPECULAR = 0.4;
 	EMISSION = (albedo.rgb * inner_glow + rim_colour.rgb * fr * rim_amount) * (1.0 - f);
 }
 """
