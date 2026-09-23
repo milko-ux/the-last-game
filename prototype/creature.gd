@@ -533,7 +533,14 @@ func _step_cycle(delta: float) -> void:
 	# rather than riding the limit every frame.
 	var lead := _gspeed * delta
 	for i in 2:
-		if _down[i] and _foot[i].distance_to(_hip(i)) + lead > REACH * LEASH_STEP:
+		# "Planted" here is the CYCLE's word, not _down's: the leash clears
+		# _down on a foot it has to pull in, and that foot then never
+		# stepped -- it rode the limit, re-clamped every frame, until its
+		# swing came round (2026-09-23). And only while no step is under
+		# way: a step that starts while the other foot is mid-step steals
+		# that step's clock, and the other foot is left standing in the air.
+		var stance_half := fposmod(_stride + (0.5 if i == 1 else 0.0), 1.0) < 0.5
+		if _settling < 0 and (_down[i] or stance_half) and _foot[i].distance_to(_hip(i)) + lead > REACH * LEASH_STEP:
 			_step_now(i, stride_len)
 	for i in 2:
 		_foot_t[i] += delta
@@ -559,7 +566,16 @@ func _step_cycle(delta: float) -> void:
 			# SWING: from where it lifted to its next plant point, in an
 			# arc. The target is re-aimed every frame, so a direction
 			# change mid-step still lands correctly.
-			if was < 0.5:
+			# A PLANTED foot found in the swing half is starting its swing
+			# NOW, whatever `was` says (2026-09-23, the foot-drag bug):
+			# every reset -- landing, a sharp turn, a teleport, a respawn
+			# -- sets _last_lp to [0.0, 0.5], which parks foot 1 exactly
+			# on this boundary, and `was < 0.5` then never fired for it.
+			# Its first swing after the reset lerped from wherever
+			# _foot_from was left a stride ago: 2-3 units behind the hip,
+			# the foot swimming forward to catch up. Measured 3.21 on a
+			# landing and 2.11 on a turn; both are this line.
+			if was < 0.5 or _down[i]:
 				_foot_from[i] = _foot[i]
 				_down[i] = false
 			_foot_to[i] = _plant_point(i, stride_len)
@@ -605,6 +621,13 @@ func _advance_settle(i: int, delta: float) -> void:
 	# the next recovery, and the next.
 	if _settle_dur <= RECOVER_STEP_S + 0.001:
 		_foot_to[i] = _plant_point(i, _stride_len if _stride_len > 0.0 else STRIDE_MIN)
+	else:
+		# The tidy-up step home (_settle_feet) too: it aims at where home
+		# IS, not where it was when the step began. The creature can start
+		# walking again inside the step's 0.18 s, and a target fixed at
+		# the old hip was outrun by 1.9 units (2026-09-23, the bot).
+		_foot_to[i] = _hip(i)
+		_foot_to[i].y = _floor_y()
 	if _settle_u >= 1.0:
 		_foot[i] = _foot_to[i]
 		_foot[i].y = _floor_y()
@@ -674,6 +697,9 @@ func _plant_swinging_foot() -> void:
 			footfall.emit(i, 0.5)
 			_stride = fposmod(0.5 if i == 1 else 0.0, 1.0)
 			_last_lp = [fposmod(_stride, 1.0), fposmod(_stride + 0.5, 1.0)]
+			# The OTHER foot starts its swing next frame, from where it is
+			# now -- not from where it last lifted (2026-09-23).
+			_foot_from[1 - i] = _foot[1 - i]
 			return
 
 
@@ -867,6 +893,11 @@ func _feet_home() -> void:
 	for i in 2:
 		_foot[i] = _hip(i)
 		_foot[i].y = _floor_y()
+		# Home IS planted: the next swing must start from here, not from
+		# where the foot last lifted (see the swing branch of _step_cycle).
+		_foot_from[i] = _foot[i]
+		_foot_to[i] = _foot[i]
+		_down[i] = true
 
 
 func _floor_y() -> float:
@@ -902,12 +933,15 @@ func _place_legs(uniform: float) -> void:
 		var to_hip := foot.distance_to(hip)
 		# A frame on which the creature was PUT somewhere is not a frame
 		# of walking: the body moves before the feet hear about it, and
-		# measuring it says 9.9 units about a 1.1-unit leg.
-		if _ported:
-			continue
-		_max_reach_seen = maxf(_max_reach_seen, to_hip)
-		if _down[i]:
-			_max_reach_planted = maxf(_max_reach_planted, to_hip)
+		# measuring it says 9.9 units about a 1.1-unit leg. Only the
+		# MEASUREMENT skips such a frame. The leg is still drawn -- this
+		# used to `continue` here, so on every teleport frame the legs
+		# kept last frame's transform while the body had already moved
+		# (2026-09-23).
+		if not _ported:
+			_max_reach_seen = maxf(_max_reach_seen, to_hip)
+			if _down[i]:
+				_max_reach_planted = maxf(_max_reach_planted, to_hip)
 		# Brief 5 section 4: the feet splay outward through the landing
 		# squash, then come back as the squash releases.
 		var splay := _punch(_land_t, LAND_IN_S, LAND_OUT_S) * LAND_SPLAY
