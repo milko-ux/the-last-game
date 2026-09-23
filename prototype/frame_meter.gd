@@ -1,5 +1,6 @@
 extends Label
 class_name FrameMeter
+const BlackBox := preload("res://prototype/blackbox.gd")
 # ============================================================
 # FRAME METER — dev only. A small line in the top-right corner:
 # the average and the worst frame time (ms) over the last 2 seconds,
@@ -103,6 +104,7 @@ static func trace_frames(n: int, what: String) -> void:
 	_trace_events = []
 	_trace_what = what
 var taps := false                   # ?taps=1
+var _box_label: Label
 var _avg_ms := 0.0                  # the last readout's average, for the page
 var _taps: Array = []               # [position, seconds left]
 var _taps_label: Label
@@ -268,6 +270,7 @@ static func load_mark(step: String, note: String = "", always: bool = false) -> 
 	var now := Time.get_ticks_msec()
 	load_log.append([step, float(now - _load_last) / 1000.0, note, always])
 	_load_last = now
+	BlackBox.record("load %s %.1fs %s" % [step, float(load_log[-1][1]), note])
 
 
 static func load_line() -> String:
@@ -327,6 +330,18 @@ func _ready() -> void:
 	var tail := Tail.new()
 	tail.meter = self
 	add_child(tail)
+	BlackBox.start()
+	if BlackBox.last_session != "":
+		_box_label = Label.new()
+		_box_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_box_label.position = Vector2(622.0 - 980.0, 130.0)
+		_box_label.size = Vector2(980.0, 400.0)
+		_box_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		_box_label.add_theme_font_size_override("font_size", 11)
+		_box_label.add_theme_color_override("font_color", Color(1.0, 0.45, 0.4, 0.95))
+		_box_label.text = "LAST SESSION ENDED AT:\n" + BlackBox.last_session
+		add_child(_box_label)
+		print("BLACK BOX, last session:\n" + BlackBox.last_session)
 	taps = url_param("taps") == "1"
 	if taps:
 		_taps_label = Label.new()
@@ -403,6 +418,7 @@ func _process(delta: float) -> void:
 		if _load_hide_in < 0.0:
 			_load_label.visible = false
 			_load_hide_in = -2.0
+	BlackBox.heartbeat(delta, BeatClock.current_bar() if BeatClock.running() else -1, _avg_ms)
 	_refresh -= delta
 	if _refresh <= 0.0:
 		_refresh = REFRESH_S

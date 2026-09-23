@@ -1,4 +1,5 @@
 extends Node3D
+const BlackBox := preload("res://prototype/blackbox.gd")
 # ============================================================
 # TRACK TEST — the Phase R run scene. The referee: owns lives,
 # deaths, notes/combo, the current checkpoint, and decides death
@@ -76,6 +77,7 @@ var combo_max := 1          # the longest streak this run
 var furthest_t := 0.0       # furthest song time reached this run (distance)
 var score := 0
 var _freeze := 0.0
+var _last_cause := {}                # the death the black box records
 var _start_delay := 0.0
 var _run_started_ms := 0
 var _fair_warning := ""
@@ -905,6 +907,7 @@ func _tick_run(delta: float) -> void:
 	if not cause.is_empty():
 		FrameMeter.note("death")
 		_log_death(cause, t, ht, z_back)
+		_last_cause = cause
 		_die()
 		motion.on_death(_killer_node(cause), cause["pos"], player.position)
 		return
@@ -1049,6 +1052,8 @@ func _log_death(cause: Dictionary, t: float, ht: float, z_back: float) -> void:
 			var bb: AABB = b
 			if bb.intersects_segment(cam_pos, eye) != null:
 				between.append("%s@z%.1f" % [h.kind, h.position.z])
+	BlackBox.deaths += 1
+	BlackBox.record("death at bar %d (%s)" % [BeatClock.current_bar(), _last_cause.get("kind", "?")])
 	if FrameMeter.active:
 		FrameMeter.trace_frames(150, "death at bar %d" % BeatClock.current_bar())
 	print("DEATH t=%.3f bar=%d beat=%d phase=%.2f player=(%.2f, %.2f, %.2f) on_ground=%s killer=%s at=(%.2f, %.2f, %.2f) rules_lethal_here=%s z_back=%.2f between_camera_and_player=%s" % [

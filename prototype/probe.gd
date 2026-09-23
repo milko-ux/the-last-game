@@ -1,4 +1,5 @@
 extends Node
+const BlackBox := preload("res://prototype/blackbox.gd")
 # ============================================================
 # ?probe=1 — THE ON-PHONE BENCHMARK (look pass v2, 2026-09-24). The
 # validator bot plays bars 9-12 of lap 0 of the real run, then the clock
@@ -111,6 +112,7 @@ func _start(i: int) -> void:
 	_n = 0
 	_label.text = "PROBE %d / %d: %s" % [i, SETUPS.size() - 1, SETUPS[i][0]] if i > 0 else "PROBE warm-up"
 	print("PROBE start %s" % SETUPS[i][0])
+	BlackBox.record("probe %s" % SETUPS[i][0])
 
 
 # Everything back to "all on", then the setup's own change.

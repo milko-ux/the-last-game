@@ -1,4 +1,5 @@
 extends Node
+const BlackBox := preload("res://prototype/blackbox.gd")
 # ============================================================
 # BEAT CLOCK (autoload `BeatClock`) — the one source of truth for
 # "where are we in the song?".
@@ -365,6 +366,8 @@ func preroll(t: float, freeze_s: float) -> void:
 		_player.stream_paused = false
 		_player.play(local_t(from))
 	_preroll_t = t
+	BlackBox.seeks += 1
+	BlackBox.record("preroll to %.1f" % t)
 
 
 func seek(t: float) -> void:
@@ -379,6 +382,8 @@ func seek(t: float) -> void:
 	# Across the seam too: the audio goes to the place INSIDE the loop, the
 	# clock (and with it the lap) to the run time asked for.
 	var t0 := Time.get_ticks_usec()
+	BlackBox.seeks += 1
+	BlackBox.record("seek to %.1f (%s)" % [t, "prerolled" if _preroll_t >= 0.0 else "restart"])
 	if _preroll_t >= 0.0 and absf(_preroll_t - t) < 0.001:
 		# The song is already there (preroll at death): only unmute.
 		_player.volume_db = _volume_db
