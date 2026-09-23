@@ -33,15 +33,15 @@ A mobile game built in Godot 4 (GDScript). **One endless run, driven by music.**
 
 ## The pivot — what's live and what's history
 
-The project began as an isometric neon-synthwave maze game with 30 hand-authored levels (Phases 0–3: touch controls, difficulty tiers, a Talo backend for accounts and leaderboards). **That game still exists in the repo but is no longer what's being built.** The synthwave art direction is dropped.
+The project began as an isometric neon-synthwave maze game with 30 hand-authored levels (Phases 0–3: touch controls, difficulty tiers, a Talo backend for accounts and leaderboards). **That game is no longer what's being built, and since 2026-09-23 it is no longer in the repo (tag `archive/2d-game`).** The synthwave art direction is dropped.
 
-The 2D game's files (`main.gd`, `main.tscn`, `entities/`, `ui/`, `levels.json`, and the `Iso`/`Profile`/`Consent`/`Talo` autoloads) are kept, and **some of them are not history at all**.
+The isometric maze itself (`main.gd`, `main.tscn`, `entities/`, `levels.json`, `autoload/iso.gd`, `tools/check_levels.py`) was DELETED on 2026-09-23 — it lives at the git tag `archive/2d-game`. What remains of the 2D game (`ui/`, and the `Profile`/`Consent`/`Talo`/`Palette`/`Progress` autoloads) **is not history at all**.
 
 **Do not "clean up" the 2D code.** Phase E Stage 2 (the menu and the leaderboard) is built on it: `autoload/talo.gd` is the only file in the project that talks to the internet, `autoload/consent.gd` owns GDPR consent and the self-declared country, and `ui/leaderboard_screen.gd` + `ui/account_panel.gd` are the screens. `autoload/palette.gd` and `autoload/progress.gd` are already read by the prototype's HUD and unlock logic. All of these must stay in the export.
 
-What IS history: `main.gd`, `main.tscn`, `entities/`, `levels.json`, `autoload/iso.gd`, `autoload/profile.gd`, `tools/check_levels.py` — the isometric maze itself. Nothing new may depend on those.
+`autoload/profile.gd` stays too: the menu's nickname (RANDOM / EDIT) is `Profile`. Every file in the repo is now reachable from `prototype/menu.tscn`, the autoloads, `tools/` or the export preset (the scan of 2026-09-23); the model sources in `assets/models/` and the two tempo MP3s are reached by paths built at runtime.
 
-Briefs, in order: `PHASE_R_BRIEF.md` + `PHASE_R_ADDENDUM_1..4.md`, then `PHASE_E_BRIEF_1_ENDLESS.md` (the endless run, which supersedes the level-based game), then `PHASE_A_BRIEF_1..6` (art: creature, world, motion, props, walk, light).
+Briefs, in order: `docs/briefs/done/PHASE_R_BRIEF.md` + `PHASE_R_ADDENDUM_1..4.md` (done), then `PHASE_E_BRIEF_1_ENDLESS.md` (the endless run, which supersedes the level-based game; live), then `docs/briefs/done/PHASE_A_BRIEF_1..5` (art: creature, world, materials, motion, props, walk; done) and `PHASE_A_BRIEF_6_LIGHT.md` (light; live, sections 1–4 built).
 
 ## Art direction
 
@@ -71,7 +71,7 @@ The goal is a **premium, modern 2026 look. No AI slop.** Everything in frame sho
 Godot 4.7.1 lives at `/Users/benim/Downloads/Godot.app/Contents/MacOS/Godot` — not on PATH, call the full path.
 
 ```
-tools/package_web.sh "Web (Phase R)"     # export + zip, refuses a stale zip
+tools/package_web.sh                     # export + zip ("Web (Phase R)" is the default and the only preset), refuses a stale zip
 tools/serve.py tls                       # HTTPS on the LAN, port 8443, self-signed
 ```
 
@@ -110,8 +110,8 @@ To get it back for a session: Project → Project Settings → Plugins → enabl
 
 **`assets/`** — `audio/fuffens_endless.ogg` + `fuffens_beatmap.json` (the live pair) · `models/` (source GLBs) · `models/lod/` (the decimated copies the game actually loads).
 
-**Legacy, not the current game:** `main.gd`, `main.tscn`, `entities/`, `ui/`, `levels.json`, `autoload/{iso,profile,consent,talo}.gd`, `tools/check_levels.py`.
+**From the 2D game, still live:** `ui/` (the touch controls, the account panel, the leaderboard screen) and `autoload/{profile,consent,talo,palette,progress}.gd`. The maze itself is gone (tag `archive/2d-game`).
 
 ## Deep-dives, read on demand
 
-`docs/PHASE_LOG.md` (the phase-by-phase history) · `docs/2D_GLOW.md` · `docs/2D_HAZARD_COLLISION.md` · `docs/2D_ROCK_TEXTURES.md` · `docs/TALO_GOTCHAS.md` · `docs/TALO_SETUP.md` — the four 2D docs concern the legacy game; the Talo ones matter again if accounts return.
+`docs/PHASE_LOG.md` (the phase-by-phase history) · `docs/briefs/done/` (the finished briefs) · `docs/2D_GLOW.md` · `docs/2D_HAZARD_COLLISION.md` · `docs/2D_ROCK_TEXTURES.md` · `docs/TALO_GOTCHAS.md` · `docs/TALO_SETUP.md` — the three 2D docs concern the deleted maze; the Talo ones are live (the leaderboard).

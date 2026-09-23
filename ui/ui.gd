@@ -157,16 +157,6 @@ func _process(delta: float) -> void:
 	queue_redraw()
 
 
-# The direction the player wants to move, in WORLD space.
-func move_dir() -> Vector2:
-	var dir := Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")
-	if stick_touch_id != -1:
-		var drag := stick_current - stick_origin
-		if drag.length() > STICK_DEADZONE:
-			dir = Iso.screen_dir_to_world(drag.normalized())
-	return dir
-
-
 func set_status(idx: int, count: int, l: int, d: int, is_dead: bool) -> void:
 	level_index = idx
 	level_count = count

@@ -12,14 +12,12 @@ config_version=5
 
 config/name="THE LAST GAME"
 config/version="0.8.0"
-run/main_scene="res://main.tscn"
+run/main_scene="res://prototype/menu.tscn"
 config/features=PackedStringArray("4.7", "Mobile")
 config/icon="res://icon.svg"
-run/main_scene.phase_r="res://prototype/menu.tscn"
 
 [autoload]
 
-Iso="*res://autoload/iso.gd"
 Palette="*res://autoload/palette.gd"
 Progress="*res://autoload/progress.gd"
 Profile="*res://autoload/profile.gd"
