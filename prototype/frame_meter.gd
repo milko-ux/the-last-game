@@ -489,7 +489,13 @@ func _update_text() -> void:
 		# Memory (2026-09-24, the iOS tab kill): the engine's own allocations
 		# now and at their peak, and which compressed texture formats the GPU
 		# took -- a phone that shows no etc2 is unpacking the atlases to RGBA.
-		text += "     mem %d/%d MB" % [int(Performance.get_monitor(Performance.MEMORY_STATIC) / 1048576.0), int(OS.get_static_memory_peak_usage() / 1048576.0)]
+		# A release template tracks no engine allocations (0/0), so on the web
+		# the number is the browser's JS heap where it exposes one (Chrome;
+		# Safari has no performance.memory and shows n/a).
+		if OS.has_feature("web"):
+			text += "     heap " + str(JavaScriptBridge.eval("performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1048576) + ' MB' : 'n/a'", true))
+		else:
+			text += "     mem %d MB" % int(Performance.get_monitor(Performance.MEMORY_STATIC) / 1048576.0)
 		text += "  tex " + ("etc2 " if OS.has_feature("etc2") else "") + ("astc " if OS.has_feature("astc") else "") + ("s3tc" if OS.has_feature("s3tc") else "")
 	# Only when a step was added: laying out a wrapped label is not free.
 	if _load_label.visible and (load_log.size() != _load_shown or _t_ready < 0):

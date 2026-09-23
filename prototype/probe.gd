@@ -127,8 +127,8 @@ func _apply(change: Dictionary) -> void:
 func _finish() -> void:
 	_done = true
 	BeatClock.pause()
-	var lines := ["PROBE  bars %d-%d of lap 0, %s  mem %d/%d MB" % [FROM_BAR, TO_BAR, FrameMeter.load_info,
-		int(Performance.get_monitor(Performance.MEMORY_STATIC) / 1048576.0), int(OS.get_static_memory_peak_usage() / 1048576.0)]]
+	var heap: String = str(JavaScriptBridge.eval("performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1048576) + ' MB' : 'n/a'", true)) if OS.has_feature("web") else "-"
+	var lines := ["PROBE  bars %d-%d of lap 0, %s  heap %s" % [FROM_BAR, TO_BAR, FrameMeter.load_info, heap]]
 	lines.append("%-18s %7s %7s %6s %s" % ["setup", "avg ms", "worst", "frames", "deaths"])
 	for r in _rows:
 		lines.append("%-18s %7.1f %7.1f %6d %d" % [r[0], r[1], r[2], r[3], r[4]])
