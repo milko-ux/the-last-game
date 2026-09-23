@@ -62,7 +62,14 @@ var tempo := 1.0
 # ------------------------------------------------------------
 const LOOP_START_BAR := 1
 const LOOP_END_BAR := 73
-const ENDLESS_MUSIC := "res://assets/audio/fuffens_endless.ogg"
+# A WAV that Godot's importer compresses to QOA (2026-09-24; it was an
+# OGG): a QOA stream seeks in constant time and decodes cheaper than
+# Vorbis, and the Vorbis playback's setup was the death spike (a rewind's
+# play(pos) cost 53-86 ms in Chrome on the Mac, 75 on the phone). The
+# loop points are baked in by the importer (fuffens_endless.wav.import:
+# loop forward from bar 1's downbeat); set_loop() sets them again from the
+# beatmap so the two can never disagree.
+const ENDLESS_MUSIC := "res://assets/audio/fuffens_endless.wav"
 # The run-up the z axis is measured from (level 1's song offset). Fixed,
 # so the course sits at the same z whether the run starts with the full
 # run-up or the short retry one.
@@ -181,6 +188,19 @@ func set_tempo(t: float) -> void:
 
 func music_path() -> String:
 	return MUSIC_BASE + tempo_suffix(tempo) + ".mp3"
+
+
+# The endless track loops from bar 1's downbeat back to itself. One place
+# for the run scene and the clock test.
+func set_loop(stream: AudioStream) -> void:
+	if stream is AudioStreamWAV:
+		var wav: AudioStreamWAV = stream
+		wav.loop_mode = AudioStreamWAV.LOOP_FORWARD
+		wav.loop_begin = int(round(loop_start_t * wav.mix_rate))
+		wav.loop_end = int(round(wav.get_length() * wav.mix_rate))
+	else:
+		stream.loop = true
+		stream.loop_offset = loop_start_t
 
 
 func _load() -> void:
@@ -318,6 +338,35 @@ func start(stream_player: AudioStreamPlayer) -> void:
 
 
 # Checkpoint rewind: the song jumps to t and song_time() returns t.
+var last_seek_cost := ""   # dev: what the seek cost, ms (the death spike, 2026-09-24)
+# THE DEATH SPIKE (2026-09-24). This export runs the web build without
+# threads, and there Godot plays every stream as a Web Audio "sample":
+# the shipped shell's Sample.getAudioBuffer() returns
+# _duplicateAudioBuffer(), so EVERY start -- play(pos), seek(), an
+# unpause -- copies the whole 165-second buffer (58 MB of floats): 35-60
+# ms in Chrome on the Mac, 75 on the phone, whatever the codec (measured
+# with Vorbis, with 100 ms Ogg pages, and with QOA). So the rewind's
+# restart is moved to where nothing moves: preroll() at death seeks the
+# muted song to the rewind time minus the freeze, the song runs on
+# silently through the freeze and arrives at the rewind time exactly when
+# the rewind lands, and seek() then touches only the clock.
+var _preroll_t := -1.0
+var _volume_db := 0.0
+
+func preroll(t: float, freeze_s: float) -> void:
+	if _player == null or not _running:
+		return
+	_volume_db = _player.volume_db
+	_player.volume_db = -80.0
+	var from := maxf(t - freeze_s, 0.0)
+	if _player.playing and not _player.stream_paused:
+		_player.seek(local_t(from))
+	else:
+		_player.stream_paused = false
+		_player.play(local_t(from))
+	_preroll_t = t
+
+
 func seek(t: float) -> void:
 	if _player == null:
 		return
@@ -329,12 +378,21 @@ func seek(t: float) -> void:
 	_drift_age = 0.0
 	# Across the seam too: the audio goes to the place INSIDE the loop, the
 	# clock (and with it the lap) to the run time asked for.
-	if _player.playing and not _player.stream_paused:
+	var t0 := Time.get_ticks_usec()
+	if _preroll_t >= 0.0 and absf(_preroll_t - t) < 0.001:
+		# The song is already there (preroll at death): only unmute.
+		_player.volume_db = _volume_db
+		last_seek_cost = "prerolled"
+	elif _player.playing and not _player.stream_paused:
 		_player.seek(local_t(t))
 	else:
 		_player.stream_paused = false
 		_player.play(local_t(t))
+	_preroll_t = -1.0
+	var t1 := Time.get_ticks_usec()
 	_resync_indices()
+	if last_seek_cost != "prerolled":
+		last_seek_cost = "audio %.1f resync %.1f" % [float(t1 - t0) / 1000.0, float(Time.get_ticks_usec() - t1) / 1000.0]
 
 
 # Death freeze: time stands still, hazards hold their pose, music stops.

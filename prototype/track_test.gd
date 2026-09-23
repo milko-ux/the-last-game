@@ -1125,6 +1125,11 @@ func _die() -> void:
 	_death_z = player.position.z
 	_freeze = DEATH_FREEZE_LIVES_S if lives_enabled() else DEATH_FREEZE_S
 	player.creature.play_death(_freeze)
+	# The song goes silent and pre-rolls to the rewind time NOW, in the
+	# freeze's first frame, where nothing moves (BeatClock.preroll: the
+	# death spike). The rewind then costs the world only.
+	if not (lives_enabled() and lives <= 0):   # (lives are already down one here)
+		BeatClock.preroll(_rewind_target(), _freeze)
 	if endless:
 		Progress.record_distance(LapGen.SEASON_SEED, distance_m)
 	else:
@@ -1238,27 +1243,42 @@ func _on_auth_changed() -> void:
 		_post_distance()
 
 
+# Where a rewind goes: the checkpoint, or the start.
+func _rewind_target() -> float:
+	return float(checkpoint["resume_t"]) if not checkpoint.is_empty() else BeatClock.start_offset
+
+
 func _rewind() -> void:
-	var t := BeatClock.start_offset
+	var t := _rewind_target()
 	var x := 0.0
 	var z := _start_z
 	if not checkpoint.is_empty():
-		t = float(checkpoint["resume_t"])
 		x = float(checkpoint["x"])
 		z = float(checkpoint["z"])
+	var t_a := Time.get_ticks_usec()
 	player.reset_to(x, z)
 	player.dead = false
 	player.creature.play_respawn()
+	var t_b := Time.get_ticks_usec()
 	motion.on_rewind(_death_z, z)
+	var t_c := Time.get_ticks_usec()
 	FrameMeter.note("rewind (song seek)")
 	BeatClock.seek(t)
+	var t_d := Time.get_ticks_usec()
 	var z_back := BeatClock.z_at(t)
 	# Permanent log, like DEATH: where the song and the world went back to.
 	print("REWIND t=%.3f lap=%d bar=%d audio=%.3f z_back=%.2f player=(%.2f, %.2f) checkpoint_bar=%d lives=%s" % [
 		t, BeatClock.lap_at(t), BeatClock.bar_at(t), BeatClock.local_t(t), z_back, x, z,
 		int(checkpoint.get("bar", 0)), str(lives) if lives_enabled() else "off"])
 	rig.set_window(z_back)
+	var t_e := Time.get_ticks_usec()
 	_update_world(BeatClock.hazard_time(), z_back)
+	var t_f := Time.get_ticks_usec()
+	if FrameMeter.active:
+		# The death spike (2026-09-24): where the rewind frame's time goes.
+		print("REWIND COST respawn %.1f  motion %.1f  seek %.1f (%s)  window %.1f  world %.1f ms" % [
+			float(t_b - t_a) / 1000.0, float(t_c - t_b) / 1000.0, float(t_d - t_c) / 1000.0, BeatClock.last_seek_cost,
+			float(t_e - t_d) / 1000.0, float(t_f - t_e) / 1000.0])
 	state = State.RUN
 
 

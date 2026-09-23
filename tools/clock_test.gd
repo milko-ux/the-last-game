@@ -85,8 +85,7 @@ func _initialize() -> void:
 func _start_live() -> void:
 	player = AudioStreamPlayer.new()
 	var stream: AudioStream = load(clock.ENDLESS_MUSIC)
-	stream.loop = true
-	stream.loop_offset = clock.loop_start_t
+	clock.set_loop(stream)
 	player.stream = stream
 	player.volume_db = -80.0
 	root.add_child(player)
