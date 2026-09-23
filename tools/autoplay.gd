@@ -76,6 +76,18 @@ var min_fps := 999
 # Monolith coverage (2026-09-23, the "empty black between" report): per
 # frame, how many monoliths are in the fade-visible range on each side;
 # the longest stretch of run (in z units = metres) with none on a side.
+# Jumping pits (2026-09-23): the real jump (player3d.jump), timed from the
+# real jump constants and the bot's own speed so the pit sits centred in
+# the jump. Only pits: the trigger is Field.floor_at along the bot's own
+# velocity, never a hazard. A pit the jump cannot clear with JUMP_MIN_MARGIN
+# to spare on both sides is reported as a layout problem, not worked around.
+const JUMP_MIN_MARGIN := 0.3
+const JUMP_LOOK_STEP := 0.1
+var _jumps := 0
+var _jump_land_min := INF
+var _jump_takeoff_min := INF
+var _pit_problems: Array = []
+var _pit_problem_keys := {}
 var _mono_gap := [0.0, 0.0]        # longest gap so far, left / right
 var _mono_gap_at := [0.0, 0.0]     # where it began
 var _mono_run := [-1.0, -1.0]      # z where the current gap began, -1 = none
@@ -120,6 +132,7 @@ func _process(_delta: float) -> bool:
 		if done:
 			_print_leash()
 			_print_monoliths()
+			_print_jumps()
 			print("AUTOPLAY endless mode=%s seed=%d start_lap=%d laps=%d grad=%s deaths=%d at_bars=%s notes=%d lap_reached=%d run_s=%.0f min_fps=%d" % [
 				mode, seed, start_lap, laps, grad, test.deaths, str(death_bars), test.notes, clock.current_lap(),
 				clock.song_time() - clock.start_offset, min_fps])
@@ -128,6 +141,7 @@ func _process(_delta: float) -> bool:
 	if done:
 		_print_leash()
 		_print_monoliths()
+		_print_jumps()
 		print("AUTOPLAY mode=%s level=%d seed=%d bars<=%d deaths=%d at_bars=%s notes=%d state=%d goal=%s min_fps=%d" % [
 			mode, level, seed, max_bar, test.deaths, str(death_bars), test.notes, test.state,
 			"yes" if test.state == test.State.WON else "no", min_fps])
@@ -242,7 +256,78 @@ func move_dir(scene: Node) -> Vector2:
 	if dist < 0.06:
 		return Vector2.ZERO
 	var v := d / dist
-	return Vector2(-v.x, v.y)
+	var out := Vector2(-v.x, v.y)
+	_jump_if_pit(scene, out)
+	return out
+
+
+# A one-tile pit on the bot's line of travel: jump it with the player's
+# real jump, launched so the pit sits in the middle of the jump. The
+# runtime falls the player when the floor under its CENTRE goes, so the
+# look-ahead samples exactly that, along the velocity the player will
+# have: (dir.x * SCREEN_X, dir.y) * speed, as player3d.tick moves it.
+func _jump_if_pit(scene: Node, dir: Vector2) -> void:
+	var player = scene.player
+	if test.state != test.State.RUN or not player.on_ground or dir.length() < 0.01:
+		return
+	var field = scene.field
+	var speed: float = Rules.player_speed(field.knobs_at(player.position.z)) * minf(dir.length(), 1.0)
+	if speed <= 0.01:
+		return
+	var heading := Vector2(dir.x * player.SCREEN_X, dir.y).normalized()
+	var airtime: float = 2.0 * player.JUMP_VELOCITY_PX / player.GRAVITY_PX
+	var reach := airtime * speed
+	var p := Vector2(player.position.x, player.position.z)
+	var entry := -1.0
+	var exit := -1.0
+	var s := 0.0
+	var hw: float = Rules.half_width()
+	# Look one jump ahead for an edge; once one is found, look a further
+	# jump for the far edge (a pit longer than a jump has no clearable far
+	# edge anyway). The first version stopped at one jump from the player
+	# and called a pit seen 5 units out "endless" (2026-09-23).
+	while s <= (reach + 1.0 if entry < 0.0 else entry + reach + 0.5):
+		var q := p + heading * s
+		# Past the field's side or past what is built there is no floor
+		# either, and that is the edge of the world, not a pit.
+		if absf(q.x) > hw or q.y >= field.outro_z1 or q.y < field.runup_z0:
+			break
+		var has_floor: bool = field.floor_at(q.x, q.y)
+		if entry < 0.0 and not has_floor:
+			entry = s
+		elif entry >= 0.0 and has_floor:
+			exit = s
+			break
+		s += JUMP_LOOK_STEP
+	if entry < 0.0:
+		return
+	var gap := (exit - entry) if exit >= 0.0 else INF
+	var margin := (reach - gap) * 0.5
+	if margin < JUMP_MIN_MARGIN:
+		var key := "%.0f,%.0f" % [p.x + heading.x * entry, p.y + heading.y * entry]
+		if not _pit_problem_keys.has(key):
+			_pit_problem_keys[key] = true
+			var e := p + heading * entry
+			_pit_problems.append("pit at (%s) gap %.1f > jump reach %.1f - 2 x %.1f (speed %.2f) [from (%.1f,%.1f) heading (%.2f,%.2f); entry bar %d, floor there %s; runup_z0 %.0f outro_z1 %.0f; last sample s=%.1f]" % [
+				key, gap, reach, JUMP_MIN_MARGIN, speed, p.x, p.y, heading.x, heading.y, field.bar_at_z(e.y), str(field.floor_at(e.x, e.y)), field.runup_z0, field.outro_z1, s])
+		return
+	# Launch when the near edge is one margin away (checked every frame, so
+	# within one frame's travel of it): the far edge is then `margin` short
+	# of the landing point too.
+	if entry <= margin:
+		if player.jump():
+			_jumps += 1
+			_jump_takeoff_min = minf(_jump_takeoff_min, entry)
+			_jump_land_min = minf(_jump_land_min, reach - exit)
+
+
+func _print_jumps() -> void:
+	if _jumps > 0:
+		print("JUMPS %d pits jumped; narrowest landing margin %.2f units, narrowest take-off %.2f units" % [_jumps, _jump_land_min, _jump_takeoff_min])
+	else:
+		print("JUMPS 0")
+	for pp in _pit_problems:
+		print("LAYOUT PROBLEM " + pp)
 
 
 # For the windowed tools (shot.gd, frame_probe.gd), which drive a scene
@@ -361,7 +446,9 @@ func _naive_target(scene: Node) -> Variant:
 #    through the gap fits — straight, or diagonally riding the gap;
 #  - a walk under way is re-checked every frame and abandoned when it
 #    stops fitting (a person swerves);
-#  - never goes for notes, never jumps.
+#  - never goes for notes. (Both bots jump ONE-TILE PITS, and nothing
+#    else -- see _jump_if_pit -- since 2026-09-23, when the pit loophole
+#    that used to carry a walk across closed.)
 # ------------------------------------------------------------
 func _human_target_for(scene: Node) -> Variant:
 	var t: float = clock.hazard_time()
