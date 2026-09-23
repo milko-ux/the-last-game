@@ -116,8 +116,14 @@ global uniform vec4 pr_ripple;      // z centre, half width, strength
 global uniform float pr_build_front;
 global uniform vec3 pr_light_dir;   // toward the light; the CreatureLight's +z
 global uniform float pr_light_on;   // 1, or 0 for the pre-brief-6 flat look
-varying float world_z;
-varying float fog_sy;               // the pixel's screen height, 0 = top, 1 = bottom
+// Every varying is highp (2026-09-23, the phone's flat uncarved slabs):
+// a world position at z 700+ interpolated at the fragment stage's
+// default precision on iOS is a half float, 0.5 units coarse, which
+// turns a world-position noise into a constant and a derivative-based
+// normal into garbage. Chrome on the Mac never drops precision, which is
+// why no screenshot here showed it.
+varying highp float world_z;
+varying highp float fog_sy;               // the pixel's screen height, 0 = top, 1 = bottom
 
 FOG_FUNCTIONS
 
@@ -223,9 +229,9 @@ uniform float shimmer_speed = 0.15;   // units / s of vertical drift
 uniform float shimmer_contrast = 0.04;
 uniform float half_height = 1.5;
 FADE_HEAD
-varying vec3 world_pos;
-varying vec3 world_n;
-varying float local_y;
+varying highp vec3 world_pos;
+varying highp vec3 world_n;
+varying highp float local_y;
 
 void vertex() {
 	vec4 wp = MODEL_MATRIX * vec4(VERTEX, 1.0);
@@ -267,8 +273,8 @@ uniform float roughness = 0.22;
 uniform float inner_glow = 0.25;
 uniform float rim_amount = 0.5;
 FADE_HEAD
-varying vec3 world_pos;
-varying vec3 world_n;
+varying highp vec3 world_pos;
+varying highp vec3 world_n;
 
 void vertex() {
 	vec4 wp = MODEL_MATRIX * vec4(VERTEX, 1.0);
@@ -325,11 +331,11 @@ uniform float tile_variation = 0.03; // +-3 % per tile from a hash of its positi
 uniform float ao_width = 0.12;      // fake occlusion this far in from every seam...
 uniform float ao_amount = 0.18;     // ...this much darker
 FADE_HEAD
-varying vec3 local_pos;
-varying vec3 local_normal;
-varying vec3 world_n;
-varying vec3 world_pos;
-varying vec3 tile_origin;
+varying highp vec3 local_pos;
+varying highp vec3 local_normal;
+varying highp vec3 world_n;
+varying highp vec3 world_pos;
+varying highp vec3 tile_origin;
 
 void vertex() {
 	vec4 wp = MODEL_MATRIX * vec4(VERTEX, 1.0);

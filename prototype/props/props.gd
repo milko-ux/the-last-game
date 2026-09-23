@@ -55,9 +55,9 @@ uniform float rim_strength = 0.0;        // 1.0 when live
 uniform float ambient = 0.35;
 uniform float grain_amount = 0.04;
 FADE_HEAD
-varying vec3 world_pos;
-varying vec3 world_n;
-varying vec3 vcol;
+varying highp vec3 world_pos;
+varying highp vec3 world_n;
+varying highp vec3 vcol;
 
 void vertex() {
 	vec4 wp = MODEL_MATRIX * vec4(VERTEX, 1.0);
@@ -124,7 +124,7 @@ uniform float band_dark = 0.03;
 uniform vec3 side_fog = vec3(16.0, 60.0, 0.85);   // |x| start, end, most it may take
 uniform float far_flatten = 0.6;     // how much of its contrast a monolith loses before its colour goes
 FADE_HEAD
-varying vec3 world_pos;
+varying highp vec3 world_pos;
 
 void vertex() {
 	vec4 wp = MODEL_MATRIX * vec4(VERTEX, 1.0);
@@ -144,8 +144,11 @@ void fragment() {
 	if (f > 0.97) {
 		discard;
 	}
-	// The facet's own normal, turned toward the camera.
-	vec3 n = normalize(cross(dFdx(world_pos), dFdy(world_pos)));
+	// The facet's own normal, turned toward the camera. From the position
+	// RELATIVE to the camera: the same derivative, but small numbers, so
+	// it survives any precision the fragment stage is run at.
+	highp vec3 rel = world_pos - CAMERA_POSITION_WORLD;
+	vec3 n = normalize(cross(dFdx(rel), dFdy(rel)));
 	if (dot(n, CAMERA_POSITION_WORLD - world_pos) < 0.0) {
 		n = -n;
 	}

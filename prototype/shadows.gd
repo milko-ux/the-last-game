@@ -70,7 +70,7 @@ render_mode unshaded, cull_disabled, fog_disabled, depth_draw_never;
 uniform vec4 fill : source_color = vec4(0.0, 0.0, 0.0, 1.0);
 uniform float soft = 0.45;
 FADE_HEAD
-varying vec4 inst;   // alpha, core, width / length, unused
+varying highp vec4 inst;   // alpha, core, width / length, unused
 
 void vertex() {
 	world_z = (MODEL_MATRIX * vec4(VERTEX, 1.0)).z;

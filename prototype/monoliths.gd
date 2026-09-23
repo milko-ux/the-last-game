@@ -63,6 +63,11 @@ var _detailed := PackedByteArray()
 var _meshes := {}                # model name -> Mesh
 var _shown_lo := 0
 var _shown_hi := 0
+# ?detail=0 never swaps in the carved copy, ?detail=2 always does (near
+# ones); the default is the range below. A phone-side switch (2026-09-23):
+# the phone showed flat uncarved slabs where the Mac showed carvings, and
+# whether the carved copy is what fails there is one tap to find out.
+static var detail_mode := -1
 
 
 # Part of the seed: the level (the dev path) or SEASON_SEED + lap.
@@ -156,7 +161,14 @@ func set_window(z_back: float) -> void:
 	for i in range(lo, hi):
 		_nodes[i].visible = true
 		var d := _z[i] - z_back
+		if detail_mode < 0:
+			var dm := FrameMeter.url_param("detail")
+			detail_mode = int(dm) if dm != "" else 1
 		var want := 1 if _far[i] == 0 and d > -DETAIL_BEHIND and d < DETAIL_AHEAD else 0
+		if detail_mode == 0:
+			want = 0
+		elif detail_mode == 2 and _far[i] == 0:
+			want = 1
 		if want != _detailed[i]:
 			_detailed[i] = want
 			_nodes[i].mesh = _meshes[_kinds[i] + ("_hi" if want == 1 else "")]

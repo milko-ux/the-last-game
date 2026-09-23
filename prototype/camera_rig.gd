@@ -123,7 +123,7 @@ const FAR_SHADER := """
 shader_type spatial;
 render_mode unshaded, fog_disabled;
 uniform float tone = 0.93;
-varying float fog_sy;
+varying highp float fog_sy;
 FOG_FUNCTIONS
 
 void vertex() {
