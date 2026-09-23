@@ -40,7 +40,17 @@ Every look screenshot now comes from **`tools/web_shot.py`**: the SERVED web bui
 
 **What still does not match the concept:** the pillar carvings are shallow reliefs in a bake, not the concept's deep architectural cuts; the floor tiles' relief is soft; no warm rim on the hero; the fog is one gradient. And the phone's frame time with all of this on is unmeasured until the probe table arrives.
 
+### 2026-09-24 (later) — the iOS tab kill, the probe's warm-up, a polish round: five commits
+
+**1. The crash (`452253c`).** Safari reloaded the page at `?probe=1`'s first seek, twice, then "a problem repeatedly occurred": a memory kill. The cause was on record: the shell's `Sample.getAudioBuffer()` returns `_duplicateAudioBuffer()` — every start of the song copies 58 MB. The probe seeks right after loading, at the memory peak; a run's deaths come later, after the transients are collected (why 6–8 deaths did not kill it). **`tools/package_web.sh` patches the exported `index.js`** so the sample hands out the one buffer it decoded (Web Audio allows any number of source nodes on one buffer); the pattern must match exactly once or the script refuses. Measured on the Mac in Chrome: the probe's eight seeks, **JS heap 109 MB → 49 MB**; twenty deaths in a row, 53 MB at the end — no growth. The rest of the budget, measured or reasoned: the atlases ship ETC2/ASTC only and the readout now prints which formats the GPU took (`tex etc2 astc s3tc` on the Mac; **if the phone shows no `etc2`, it is unpacking them to RGBA: 21 + 10 MB instead of 2.8 + 1.4**); the merged pillar strips are ~40 KB each and 9 exist at a time; the prewarm rack is freed after loading. Peak estimate on the phone, before: wasm heap ~250 MB + the decoded song 58 MB + one duplicate per start 58 MB (two or three alive before Safari's GC ran) + the 3D buffers ~20 MB ≈ 450–500 MB at a seek burst; after: ~330 MB, and flat across seeks. `?kill_bar=N&kill_count=20` makes the bot die twenty times for the check; **the 20-death run and the full probe on the phone are Milko's to confirm.**
+
+**2. The probe's warm-up (`ff0a226`):** a thrown-away first pass, so compiles land nowhere in the table. The readout's memory line is the JS heap on the web (Chrome; Safari shows n/a — a release template tracks no engine allocations).
+
+**3. Polish (`4ebec4d`):** live plates muted (LETHAL_LIVE darkened 30 % on the slate, the SEAM bright and pulsing carries "live", the floor capped so it never blooms, glow threshold 0.9 / intensity 0.35); the hero's warm rim (`HERO_RIM #ffb9a0`, 0.5, tight, away from the light); pillar carvings cut three times deeper in the bake with more grime, the near band a step lighter. Pack 27 742 992 bytes.
+
 ### NEXT, in this order (2026-09-24)
+
+0. **Milko, on the phone:** (a) `?probe=1` all the way to the table — send it; (b) a normal run with 20 deaths in a row; (c) the `tex` and `heap` words on the readout; (d) the polish against the concept. Then the defaults get set from the table.
 
 0. **Milko: run `?probe=1` on the phone and send the table**; then the defaults get set so the phone holds 16.7 with as much of the look as possible. Then the look against the concept (`b-*-vs-concept.png`), and whether the ETC2 textures show on iOS.
 
