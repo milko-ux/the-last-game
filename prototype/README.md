@@ -14,7 +14,33 @@
 
 **3. The rotation question, what the code says (the phone's `win` will settle it):** `FrameMeter.load_info` ("3D 0.75 of 1179 x 2085") is a string built ONCE, in `_apply_render_scale()` at the run's load, from `DisplayServer.window_get_size()` at that moment. 1179 × 2085 is the phone in portrait with Safari's bars (1179 × 2556 minus 471 px). The canvas itself follows the browser window (`canvas_resize_policy=2`, adaptive, plus the resize kick in `head_include`), and `scaling_3d_scale` is a fraction of whatever the viewport is — so after a rotation the 3D renders at the new size and only the label is stale. What the number says is that **the run loaded while Safari reported portrait** (the phone was in portrait at that moment, or iOS had not yet reported the rotation). The heartbeat's `win WxH` and the `resize` lines now show the live size every 2 s; a run that keeps `win 1179x2085` while the phone is in landscape would be a real bug, a `resize 2556x1179` line after rotation is the label being stale and nothing else.
 
-**Milko, on the phone (the served build is `db5683e`, exported 22:10):**
+**4. WHAT THE PHONE SAID (22:30–22:34, three sessions in `../the-last-game-build/blackbox.log`, all three ended with a clean `pagehide` — no kill, no context lost, no JS error):**
+
+- **The glitch is the death storm, not the rewinds working as designed.** `?autoplay=1&kill_bar=6&kill_count=20`: the first death (a gate, bar 1) at page 20.5 s, then **198 deaths in 55 s, one every 0.28 s, all `back_edge` at the respawn point** (`z 10.2`). Every rewind's `seek to 8.0` is followed on the same frame by a death line saying `clock 17.83`, then `18.11`, `18.40`…: **the clock never goes back** — it lands `target + (page time − ~11 s)` — so the window's back edge is 10 s of song past the respawn point and the bot dies where it lands, forever. The song itself DID seek (from the `heard` values: 7.8 after the preroll to 7.75, 96.9 after the one to 96.83). `?probe=1` (267 deaths): identical, from its very first `seek to 30.9 (restart)` → `clock 35.10` on the same frame.
+- **The run from the menu is CORRECT:** `seek to 8.0` → `0.5s after: clock 8.45, heard 7.59` → `2.0s after: clock 9.94, heard 8.97`; five real deaths (fall ×4, orbiter), every rewind landed. Its drift base is −900 ms (the phone's known constant); the two broken runs show **+42 ms** — a different audio clock from the start.
+- **So the offset is in the clock, per start/seek, only in runs that open straight into the run with no tap** (`?autoplay=1`, `?probe=1`). The suspect: `_time_delay = get_time_to_next_mix() + get_output_latency()`, added at every `start()`/`seek()` — if the audio server's mix never ran (iOS keeps the AudioContext suspended until a gesture; the samples play, the mix loop does not), `get_time_to_next_mix()` is a large NEGATIVE number that grows with page time, and that is exactly the shape measured. **`ce9884b` writes those raw numbers on every clock line** (`mix -a/+b lat c delay d pos e`) and a `start at` line; the 20-death link once more on the phone proves or disproves it. **The fix candidate, not made:** clamp `_time_delay` to ≥ 0 (a negative latency is nonsense by construction) — one line in `beat_clock.gd`; the normal run's delay is sane, so it changes nothing there.
+- **And the original tab kill fits:** before `452253c` every seek copied the 58 MB song buffer; the storm seeks 3.5 times a second; 200 MB/s of transient buffers is the memory kill "at the first rewind", in exactly the two links that storm and never in a run from the menu. The shared buffer removed the kill; the storm remained; now it is measured.
+- **Rotation: answered.** The page loaded in portrait (`inner 393x695`, window `1179x2085`); at 16.7 s a `resize 2556x849` line — the render follows the rotation, only the label was stale. 849 (not 1179) = Safari's bars stay visible in landscape in the browser; the home-screen app (`standalone`) runs at 2556x1179.
+
+**5. Loading, the phone's own numbers (section 2 of the brief; three sessions, hotspot link):**
+
+| Step | 20-death run | probe | menu run (home-screen app) |
+|---|---|---|---|
+| HTML | 0.07 s | 0.04 s | 0.07 s |
+| `index.wasm` 37.7 MB (raw) | 0.4–10.6 s | 0.3–6.3 s | 0.3–12.6 s |
+| `index.pck` 26.5 MB (raw), in parallel | 0.4–8.5 s | 0.3–5.7 s | 0.3–12.0 s |
+| wasm compile (streamed) | ends with the download | same | same |
+| engine main | 10.7 s | ~6.4 s | ~12.7 s |
+| first frame painted | 11.7 s | 7.3 s | 13.5 s |
+| menu built | – | – | 1.0 s |
+| tap → scene + music + validate | – | – | 0.2 s |
+| nodes | 0.3 s | 0.3 s | 0.3 s |
+| prewarm (51 items, textures + shaders) | 1.9 s | 1.9 s | 1.8 s |
+| **run ready** | **14.0 s** | **9.6 s** | **18.7 s** (menu at 14.2) |
+
+The Mac, same files from localhost: everything before "first frame" is 1.5 s. **The download is 6–12 s of the 10–15** (64 MB at 5–10 MB/s on the hotspot; the server sends both files raw and `no-store`); everything after it is a steady 3.3 s (engine 1.0 + nodes 0.3 + prewarm 1.9), plus the menu's 1.0 s. Song decode does not appear as a step: the song ships as QOA (`compress/mode=2`, ~6 MB) and becomes the 58 MB Web Audio buffer inside the shell at first play. **Suggested cuts, NOT made:** (1) serve compressed — `index.wasm` gzip 9.6 MB / brotli 7.5 MB (from 37.7), `index.pck` 22.7 MB (barely: its content is already compressed) → the wasm's 10 s becomes ~2 s; any real host (itch, a CDN) does this by default, so this is mostly a dev-loop cost; (2) drop the three tempo MP3s from the pack (10.3 MB of the 26.5; only `?level=N` uses them) → the pck's 8 s becomes ~5 s; (3) let the browser cache the wasm in production (`no-store` is the dev rule); (4) the after-download 3.3 s is the real floor — prewarm 1.9 s could overlap the menu, later.
+
+**Milko, on the phone, next (the served build is `ce9884b`, exported 22:45): `https://172.20.10.2:8443/?autoplay=1&kill_bar=6&kill_count=20` once more, close the tab after the storm; the `start at` line and the first death's `delay` number decide it.** The earlier three links, for the record:
 - `https://172.20.10.2:8443/?autoplay=1&kill_bar=6&kill_count=20` — let it glitch (or die), then close the tab.
 - `https://172.20.10.2:8443/?probe=1` — the same.
 - A normal run from the menu with a few deaths, for the comparison — `https://172.20.10.2:8443/`.
