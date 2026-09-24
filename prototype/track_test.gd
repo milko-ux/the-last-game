@@ -1053,7 +1053,7 @@ func _log_death(cause: Dictionary, t: float, ht: float, z_back: float) -> void:
 			if bb.intersects_segment(cam_pos, eye) != null:
 				between.append("%s@z%.1f" % [h.kind, h.position.z])
 	BlackBox.deaths += 1
-	BlackBox.record("death at bar %d (%s)" % [BeatClock.current_bar(), _last_cause.get("kind", "?")])
+	BlackBox.record("death at bar %d (%s) z %.1f  %s" % [BeatClock.current_bar(), cause["kind"], p.z, BeatClock.clock_vs_song()])
 	if FrameMeter.active:
 		FrameMeter.trace_frames(150, "death at bar %d" % BeatClock.current_bar())
 	print("DEATH t=%.3f bar=%d beat=%d phase=%.2f player=(%.2f, %.2f, %.2f) on_ground=%s killer=%s at=(%.2f, %.2f, %.2f) rules_lethal_here=%s z_back=%.2f between_camera_and_player=%s" % [

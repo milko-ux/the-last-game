@@ -207,6 +207,7 @@ static func first_frame_painted() -> void:
 	if page_s >= 0.0:
 		return
 	page_s = _page_ms() / 1000.0
+	BlackBox.record("first frame painted")
 
 
 # Milliseconds since the page was opened (web), or since the engine
@@ -418,7 +419,8 @@ func _process(delta: float) -> void:
 		if _load_hide_in < 0.0:
 			_load_label.visible = false
 			_load_hide_in = -2.0
-	BlackBox.heartbeat(delta, BeatClock.current_bar() if BeatClock.running() else -1, _avg_ms)
+	BlackBox.heartbeat(delta, BeatClock.current_bar() if BeatClock.running() else -1, _avg_ms,
+		BeatClock.audio_drift_ms() if BeatClock.running() else 0.0)
 	_refresh -= delta
 	if _refresh <= 0.0:
 		_refresh = REFRESH_S

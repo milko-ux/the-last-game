@@ -308,6 +308,20 @@ func _fold_bar(bar: int) -> Vector2i:
 	return Vector2i(j / loop_bars, LOOP_START_BAR + j % loop_bars)
 
 
+# Where the song REALLY is (seconds inside the loop, latency-compensated);
+# -1 when nothing plays. The black box writes it next to the clock at
+# every death and after every seek: "does the song follow the seek?"
+func heard_time() -> float:
+	if _player == null or not _player.playing:
+		return -1.0
+	return _player.get_playback_position() + AudioServer.get_time_since_last_mix() - AudioServer.get_output_latency()
+
+
+# The clock and the song in one line for the black box.
+func clock_vs_song() -> String:
+	return "clock %.2f (local %.2f) heard %.2f drift %+d ms (base %+d)" % [song_time(), local_t(song_time()), heard_time(), int(audio_drift_ms()), int(_drift_base * 1000.0)]
+
+
 # How far the audio really is from where the clock says it is (ms, +
 # = audio ahead). Dev read-out only; nothing is corrected with it.
 func audio_drift_ms() -> float:
@@ -353,6 +367,13 @@ var last_seek_cost := ""   # dev: what the seek cost, ms (the death spike, 2026-
 # the rewind lands, and seek() then touches only the clock.
 var _preroll_t := -1.0
 var _volume_db := 0.0
+# The black box (2026-09-24): at each SEEK_CHECKS_S after every seek, one
+# line with the clock against the song, from _process -- never inside a
+# callback. (Chrome on the Mac: the heard position had not moved 0.5 s
+# after a seek and had 2 s later, hence two checks.)
+const SEEK_CHECKS_S := [0.5, 2.0]
+var _since_seek := 0.0
+var _seek_checks_done := SEEK_CHECKS_S.size()
 
 func preroll(t: float, freeze_s: float) -> void:
 	if _player == null or not _running:
@@ -367,7 +388,7 @@ func preroll(t: float, freeze_s: float) -> void:
 		_player.play(local_t(from))
 	_preroll_t = t
 	BlackBox.seeks += 1
-	BlackBox.record("preroll to %.1f" % t)
+	BlackBox.record("preroll to %.1f (song from %.2f)  before: %s" % [t, from, clock_vs_song()])
 
 
 func seek(t: float) -> void:
@@ -383,7 +404,9 @@ func seek(t: float) -> void:
 	# clock (and with it the lap) to the run time asked for.
 	var t0 := Time.get_ticks_usec()
 	BlackBox.seeks += 1
-	BlackBox.record("seek to %.1f (%s)" % [t, "prerolled" if _preroll_t >= 0.0 else "restart"])
+	BlackBox.record("seek to %.1f (%s)  heard %.2f" % [t, "prerolled" if _preroll_t >= 0.0 else "restart", heard_time()])
+	_since_seek = 0.0
+	_seek_checks_done = 0
 	if _preroll_t >= 0.0 and absf(_preroll_t - t) < 0.001:
 		# The song is already there (preroll at death): only unmute.
 		_player.volume_db = _volume_db
@@ -682,6 +705,11 @@ func _resync_indices() -> void:
 
 
 func _process(delta: float) -> void:
+	if _seek_checks_done < SEEK_CHECKS_S.size() and _running:
+		_since_seek += delta
+		if _since_seek >= float(SEEK_CHECKS_S[_seek_checks_done]):
+			BlackBox.record("%.1fs after seek: %s" % [_since_seek, clock_vs_song()])
+			_seek_checks_done += 1
 	if not _running or _paused:
 		return
 	var before := _smooth_t

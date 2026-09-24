@@ -16,12 +16,26 @@ URL kept dying for no visible reason.
 Always sends Cache-Control: no-store. Without it browsers pin Godot's
 index.pck and silently run an OLD build while every file on disk looks
 correct — that has cost hours twice.
+
+THE BLACK BOX PHONES HOME (2026-09-24, the iOS crash hunt). The game's
+black box (prototype/blackbox.gd) sends every line it records to
+POST /bb?s=<session id> with navigator.sendBeacon, and this server
+appends each line, with the Mac's clock and that session id, to
+    ../the-last-game-build/blackbox.log
+(next to the build folder, never inside it). When iOS kills the tab,
+localStorage may or may not survive; the lines that reached the Mac
+are the record. Read it with:  tail -f ../the-last-game-build/blackbox.log
 """
-import http.server, ssl, os, sys, socket, subprocess
+import http.server, ssl, os, sys, socket, subprocess, threading, datetime, urllib.parse
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 BUILD = os.path.join(ROOT, "..", "the-last-game-build", "phase-r")
 CERT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".certs")
+
+
+LOG_PATH = ""            # set in main(): <build folder>/../blackbox.log
+_log_lock = threading.Lock()
+_sessions_seen = set()
 
 
 class NoCache(http.server.SimpleHTTPRequestHandler):
@@ -32,6 +46,36 @@ class NoCache(http.server.SimpleHTTPRequestHandler):
 
     def log_message(self, *a):
         pass
+
+    # The black box: POST /bb?s=<session id>, body = one line (or several,
+    # newline-separated). Appended as "<Mac time>  <session>  <line>".
+    def do_POST(self):
+        url = urllib.parse.urlsplit(self.path)
+        if url.path != "/bb":
+            self.send_response(404)
+            self.end_headers()
+            return
+        sid = urllib.parse.parse_qs(url.query).get("s", ["-"])[0][:24]
+        try:
+            n = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            n = 0
+        body = self.rfile.read(min(n, 65536)).decode("utf-8", "replace") if n > 0 else ""
+        stamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+        lines = [l for l in body.split("\n") if l.strip()]
+        with _log_lock:
+            try:
+                with open(LOG_PATH, "a") as f:
+                    if sid not in _sessions_seen:
+                        _sessions_seen.add(sid)
+                        f.write("%s  %s  --- session from %s\n" % (stamp, sid, self.client_address[0]))
+                        print("black box: new session %s from %s" % (sid, self.client_address[0]), flush=True)
+                    for l in lines:
+                        f.write("%s  %s  %s\n" % (stamp, sid, l[:1000]))
+            except OSError as e:
+                print("black box: cannot write %s: %s" % (LOG_PATH, e), flush=True)
+        self.send_response(204)
+        self.end_headers()
 
 
 def lan_ip() -> str:
@@ -80,6 +124,8 @@ def main() -> None:
         BUILD = os.path.join(ROOT, dirs[0])
     if not os.path.isdir(BUILD):
         sys.exit(f"No build at {BUILD} — run tools/package_web.sh first.")
+    global LOG_PATH
+    LOG_PATH = os.path.abspath(os.path.join(BUILD, "..", "blackbox.log"))
     os.chdir(BUILD)
 
     port = 8443 if tls else 8099
@@ -94,6 +140,7 @@ def main() -> None:
         print(f"https://{lan_ip()}:{port}   (accept the certificate warning once)")
     else:
         print(f"http://localhost:{port}")
+    print(f"black box log: {LOG_PATH}")
     print("Ctrl-C to stop.", flush=True)
     httpd.serve_forever()
 
