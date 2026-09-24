@@ -42,6 +42,23 @@ static var seeks := 0
 static var deaths := 0
 static var _armed := false
 
+# THE BOOT LINE (2026-09-24, "why does the phone load in 12-15 s"): the
+# browser's own Resource Timing for index.js / index.wasm / index.pck
+# (start-end in page seconds, bytes over the wire), the HTML's arrival,
+# the wasm instantiate (window.pr_wasm, from the wrapper in the export
+# preset's head_include; the shell streams it, so download and compile
+# overlap and the compile tail is its end minus index.wasm's end), and
+# when Godot's main started. Read
+# once, at start(); the load steps then follow on the same clock.
+const BOOT_JS := """(function(){try{
+var o=[];var n=performance.getEntriesByType('navigation')[0];
+if(n)o.push('html '+(n.responseEnd/1000).toFixed(2)+'s');
+performance.getEntriesByType('resource').forEach(function(e){var f=e.name.split('/').pop().split('?')[0];
+ if(f=='index.js'||f=='index.wasm'||f=='index.pck'){var b=e.transferSize||e.encodedBodySize||0;
+ o.push(f+' '+(e.startTime/1000).toFixed(1)+'-'+(e.responseEnd/1000).toFixed(1)+'s '+(b?(b/1048576).toFixed(1)+' MB':'size n/a'))}});
+if(window.pr_wasm)o.push('wasm '+(window.pr_wasm[2]||'instantiate')+' '+(window.pr_wasm[0]/1000).toFixed(1)+'-'+(window.pr_wasm[1]/1000).toFixed(1)+'s');
+return o.join(', ')}catch(e){return 'n/a '+e}})()"""
+
 # Installed once: the session id, the beacon sender, and the page-side
 # event listeners. `%s` = KEY. No `%` anywhere else in here.
 const INSTALL_JS := """(function(){try{
@@ -83,6 +100,7 @@ static func start() -> void:
 	JavaScriptBridge.eval(INSTALL_JS % [KEY, JS_LINES], true)
 	_last_win = DisplayServer.window_get_size()
 	record("session start %s %dx%d  engine main at %.1fs" % [OS.get_name(), _last_win.x, _last_win.y, _page_offset_ms / 1000.0])
+	record("boot " + str(JavaScriptBridge.eval(BOOT_JS, true)))
 
 
 # Seconds since the page was opened (the same clock as performance.now()).
