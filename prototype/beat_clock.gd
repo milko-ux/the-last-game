@@ -317,9 +317,20 @@ func heard_time() -> float:
 	return _player.get_playback_position() + AudioServer.get_time_since_last_mix() - AudioServer.get_output_latency()
 
 
-# The clock and the song in one line for the black box.
+# The clock and the song in one line for the black box -- and the audio
+# server's own clock behind both (2026-09-24, the phone: after a seek the
+# clock landed page-time-minus-engine-start AHEAD of the target in the bot
+# and probe runs, on target in a run from the menu; the suspect is
+# _time_delay, which is built from these):
+#   mix -a/+b   seconds since the last mix / to the next one
+#   lat c       the output latency
+#   delay d     _time_delay as the last start / seek computed it
+#   pos e       the player's raw playback position
 func clock_vs_song() -> String:
-	return "clock %.2f (local %.2f) heard %.2f drift %+d ms (base %+d)" % [song_time(), local_t(song_time()), heard_time(), int(audio_drift_ms()), int(_drift_base * 1000.0)]
+	return "clock %.2f (local %.2f) heard %.2f drift %+d ms (base %+d)  mix -%.2f/%+.2f lat %.3f delay %+.2f pos %.2f" % [
+		song_time(), local_t(song_time()), heard_time(), int(audio_drift_ms()), int(_drift_base * 1000.0),
+		AudioServer.get_time_since_last_mix(), AudioServer.get_time_to_next_mix(), AudioServer.get_output_latency(), _time_delay,
+		_player.get_playback_position() if _player != null else -1.0]
 
 
 # How far the audio really is from where the clock says it is (ms, +
@@ -350,6 +361,7 @@ func start(stream_player: AudioStreamPlayer) -> void:
 	_running = true
 	_resync_indices()
 	set_process(true)
+	BlackBox.record("start at %.1f  %s" % [start_offset, clock_vs_song()])
 
 
 # Checkpoint rewind: the song jumps to t and song_time() returns t.
