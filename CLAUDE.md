@@ -94,6 +94,7 @@ A Godot web build needs a **secure context**: plain `http://<LAN-IP>` fails with
 - [ ] `tools/` ships deliberately — `?autoplay=1` loads `res://tools/autoplay.gd`. The MP3s do NOT ship (`*.mp3` in `exclude_filter`); the old levels (`level=N`) exist for the headless tools only.
 - [x] `talo.cfg` is in BOTH presets' `include_filter` (2026-09-22). Keep it there: `.cfg` is not a resource and the exporter drops it silently, and the build then ships with no leaderboard and no error. The key is safe to ship as scoped — `docs/TALO_SETUP.md`, "The access key".
 - [ ] Bump `application/config/version` in `project.godot` — every leaderboard entry carries it as `build`.
+- [ ] iOS preset: bundle ID `se.badingo.thelastgame` (not `.dev`), the paid team's Team ID (not `PICKINXCODE`), a real icon, and decide `user_data/accessible_from_files_app` (on for the black box's log).
 
 ### The Godot MCP plugin is disabled on purpose
 
