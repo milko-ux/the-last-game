@@ -243,9 +243,9 @@ func _draw() -> void:
 	_rects = {}
 
 	if distance_mode:
-		# The menu behind has dimmed its live world already; this only
-		# settles the middle a little more so the rows read.
-		draw_rect(Rect2(Vector2.ZERO, screen), Color(0.04, 0.05, 0.08, 0.12), true)
+		# The dim over the menu's live world, drawn here, BEHIND the rows
+		# (the menu's own dim was drawn over them). Same darkness as before.
+		draw_rect(Rect2(Vector2.ZERO, screen), Color(0.04, 0.05, 0.08, 0.65), true)
 		_draw_distance(screen, font, cx)
 		return
 
@@ -328,14 +328,13 @@ func _draw_list(font, cx: float, lx: float, top: float, list_w: float, row_h: fl
 		_rects["retry"] = rr
 		draw_rect(rr, Color(0, 0, 0, 0.3), true)
 		draw_rect(rr, Color(1, 1, 1, 0.3), false, 1.0)
-		_centre(font, "RETRY", rr.get_center(), 13, Color(1, 1, 1, 0.8))
+		_centre(font, "RETRY", rr.get_center(), 13, Color.WHITE)
 	elif entries.is_empty():
 		var msg := "NOBODY HAS CLEARED THE LOOP YET" if board_finishers else "NOBODY HERE YET"
 		if distance_mode:
 			msg = "NOBODY HAS RUN YET"
-		_centre(font, msg, Vector2(cx, top + 100.0), 16, Color(1, 1, 1, 0.5))
-		_centre(font, "Be the first.", Vector2(cx, top + 128.0), 13,
-			Color(Palette.GOAL.r, Palette.GOAL.g, Palette.GOAL.b, 0.7))
+		_centre(font, msg, Vector2(cx, top + 100.0), 16, Color.WHITE)
+		_centre(font, "Be the first.", Vector2(cx, top + 128.0), 13, Palette.GOAL)
 	else:
 		var start := view_page * rows
 		for i in range(start, mini(start + rows, entries.size())):
@@ -348,14 +347,14 @@ func _draw_list(font, cx: float, lx: float, top: float, list_w: float, row_h: fl
 		_rects["prev"] = pr
 		draw_rect(pr, Color(0, 0, 0, 0.25), true)
 		draw_rect(pr, Color(1, 1, 1, 0.25), false, 1.0)
-		_centre(font, "< PREV", pr.get_center(), 12, Color(1, 1, 1, 0.7))
+		_centre(font, "< PREV", pr.get_center(), 12, Color.WHITE)
 	if (view_page + 1) * rows < entries.size() \
 			or (not _last_server_page and not entries.is_empty()):
 		var nr := Rect2(Vector2(cx + 20.0, py), Vector2(90.0, th))
 		_rects["next"] = nr
 		draw_rect(nr, Color(0, 0, 0, 0.25), true)
 		draw_rect(nr, Color(1, 1, 1, 0.25), false, 1.0)
-		_centre(font, "NEXT >", nr.get_center(), 12, Color(1, 1, 1, 0.7))
+		_centre(font, "NEXT >", nr.get_center(), 12, Color.WHITE)
 
 	# --- Join banner for guests: full-width, bottom of screen ---
 	if not Talo.logged_in():
@@ -375,14 +374,13 @@ func _draw_list(font, cx: float, lx: float, top: float, list_w: float, row_h: fl
 # centred, the two tabs centred under it, then the list. The frame
 # readout (dev builds) lives top-right, so nothing is put there.
 func _draw_distance(screen: Vector2, font, cx: float) -> void:
-	_centre(font, "LEADERBOARD", Vector2(cx, 34.0), 24, Color(1, 1, 1, 0.92))
-	_centre(font, "SEASON  ·  furthest distance", Vector2(cx, 58.0), 11,
-		Color(Palette.TEXT.r, Palette.TEXT.g, Palette.TEXT.b, 0.7))
+	_centre(font, "LEADERBOARD", Vector2(cx, 34.0), 24, Color.WHITE)
+	_centre(font, "SEASON  ·  furthest distance", Vector2(cx, 58.0), 11, Palette.TEXT)
 
 	var back := Rect2(Vector2(88.0, 18.0), Vector2(110.0, TAP))
 	_rects["back"] = back
 	Hud.glass_pill(self, back, Palette.TEXT, 0.8)
-	_centre(font, "< BACK", back.get_center(), 13, Color(1, 1, 1, 0.85))
+	_centre(font, "< BACK", back.get_center(), 13, Color.WHITE)
 
 	# GLOBAL / MY COUNTRY, centred. MY COUNTRY only when there is one to show.
 	var tw := 150.0
@@ -394,19 +392,18 @@ func _draw_distance(screen: Vector2, font, cx: float) -> void:
 		var cr := Rect2(Vector2(cx + 6.0, ty), Vector2(tw, TAP))
 		_rects["scope_country"] = cr
 		Hud.glass_pill(self, cr, Palette.EDGE if scope_country else Palette.TEXT, 1.0 if scope_country else 0.55)
-		_centre(font, "MY COUNTRY", cr.get_center() + Vector2(0, -6), 12, Color(1, 1, 1, 0.95 if scope_country else 0.55))
-		_centre(font, Consent.country, cr.get_center() + Vector2(0, 10), 11,
-			Color(Palette.EDGE.r, Palette.EDGE.g, Palette.EDGE.b, 0.9 if scope_country else 0.45))
+		_centre(font, "MY COUNTRY", cr.get_center() + Vector2(0, -6), 12, Color.WHITE if scope_country else Palette.TEXT)
+		_centre(font, Consent.country, cr.get_center() + Vector2(0, 10), 11, Palette.EDGE if scope_country else Palette.TEXT)
 	_rects["scope_global"] = gr
 	Hud.glass_pill(self, gr, Palette.EDGE if not scope_country else Palette.TEXT, 1.0 if not scope_country else 0.55)
-	_centre(font, "GLOBAL", gr.get_center(), 13, Color(1, 1, 1, 0.95 if not scope_country else 0.55))
+	_centre(font, "GLOBAL", gr.get_center(), 13, Color.WHITE if not scope_country else Palette.TEXT)
 
 	var top := 172.0
 	var row_h := 36.0
 	var list_w := minf(680.0, screen.x - 176.0)
 	var lx := cx - list_w * 0.5
 	var panel := Rect2(Vector2(lx - 10.0, top - 10.0), Vector2(list_w + 20.0, DISTANCE_ROWS * row_h + 20.0))
-	draw_rect(panel, Color(0.04, 0.05, 0.08, 0.5), true)
+	draw_rect(panel, Color(0.04, 0.05, 0.08, 0.7), true)
 	Hud.glass_pill(self, panel, Palette.EDGE, 0.5)
 	_draw_list(font, cx, lx, top, list_w, row_h, panel, screen)
 
@@ -421,21 +418,23 @@ func _draw_row(font, entry: Dictionary, index: int, pos: Vector2, w: float, h: f
 		_glow_rect(row, Palette.EDGE, 0.8, 1.0)
 		draw_rect(Rect2(row.position, Vector2(3.0, row.size.y)), Palette.EDGE, true)
 	elif index % 2 == 0:
-		draw_rect(row, Color(1, 1, 1, 0.02), true)
+		draw_rect(row, Color(1, 1, 1, 0.05), true)
 
-	var name_col := Palette.EDGE if mine else Palette.TEXT
+	# Every word on a row is solid (2026-09-29): the rank and the country
+	# step back by colour (Palette.TEXT), never by transparency.
+	var name_col := Palette.EDGE if mine else Color.WHITE
 	var ty := pos.y + h * 0.5 + 5.0
 	var rank := index + 1
 
 	# Top 3 read bigger and brighter — the rest of the list stays quiet.
 	var rank_size := 15
-	var rank_col := Color(1, 1, 1, 0.45)
+	var rank_col := Palette.TEXT
 	if rank == 1:
 		rank_size = 22
 		rank_col = Palette.GOAL
 	elif rank <= 3:
 		rank_size = 18
-		rank_col = Color(1, 1, 1, 0.75)
+		rank_col = Color.WHITE
 
 	draw_string(font, Vector2(pos.x + 12.0, ty), "#%d" % rank,
 		HORIZONTAL_ALIGNMENT_LEFT, -1, rank_size, rank_col)
@@ -457,7 +456,7 @@ func _draw_row(font, entry: Dictionary, index: int, pos: Vector2, w: float, h: f
 	var result_col := Palette.TEXT
 	if distance_mode:
 		result = Hud.metres(int(score))
-		result_col = Color(1, 1, 1, 0.9)
+		result_col = Color.WHITE
 	elif board_finishers:
 		result = "%d DEATHS" % int(score)
 	else:
@@ -476,7 +475,7 @@ func _draw_row(font, entry: Dictionary, index: int, pos: Vector2, w: float, h: f
 
 	if not country.is_empty():
 		draw_string(font, Vector2(pos.x + w - 44.0, ty), country,
-			HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(1, 1, 1, 0.4))
+			HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Palette.TEXT)
 
 
 func _centre(font, text: String, c: Vector2, size: int, col: Color) -> void:

@@ -676,10 +676,11 @@ func draw_overlay(c: CanvasItem) -> void:
 		return
 
 	# The leaderboard is a whole screen, not a sheet: while it is up the
-	# menu draws nothing of its own but the dim, and the world stays live
-	# behind it.
+	# menu draws nothing of its own, and the world stays live behind it.
+	# Not even the dim: this Overlay is added after the leaderboard, so it
+	# draws OVER it, and a dim here was a 60 % dark sheet over every row
+	# (2026-09-29, "barely visible" on the phone). The screen dims itself.
 	if lb_screen.visible:
-		c.draw_rect(Rect2(Vector2.ZERO, screen), Color(0.04, 0.05, 0.08, 0.6), true)
 		return
 
 	var a := _alpha
