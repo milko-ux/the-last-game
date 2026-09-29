@@ -14,7 +14,14 @@ Roadmap: `docs/ROADMAP.md`. **Step 1 (stable and fast) is DONE; we are on step 2
 4. **The Xcode project:** `../the-last-game-build/ios/TheLastGame.xcodeproj` (`godot --headless --path . --export-debug "iOS" ../the-last-game-build/ios/TheLastGame.ipa`; pck 17.4 MB). **Checked: `xcodebuild … -sdk iphoneos CODE_SIGNING_ALLOWED=NO build` → BUILD SUCCEEDED**, the app 115 MB (debug). Info.plist: landscape left/right, display name The Last Game, 0.8.0, iOS 15.0+.
 
 **NEXT:**
-- **Milko:** the click-by-click steps (in the session reply of 2026-09-29): sign into Xcode, personal team, cable, Developer Mode, Run. Then on the phone: a normal run (the frame readout on the app vs 16.7), the leaderboard (native Talo), sound and haptics, both landscape sides, whether the Dynamic Island covers any UI (nothing in the code reads the safe area; the web build had the same exposure), and `blackbox.log` in the Files app.
+- **Milko:** the click-by-click steps below: sign into Xcode, personal team, cable, Developer Mode, Run.
+  - **A. Sign in:** Xcode → menu bar **Xcode → Settings… → Accounts** → **+** (bottom left) → **Apple Account** → Continue → sign in. A team "Milko Vasquez (Personal Team)" appears.
+  - **B. Open the project:** `! open ../the-last-game-build/ios/TheLastGame.xcodeproj`
+  - **C. Team:** left sidebar, the blue **TheLastGame** icon at the top → under TARGETS **TheLastGame** → tab **Signing & Capabilities** → tick **Automatically manage signing** → **Team: Milko Vasquez (Personal Team)**. Bundle Identifier must read `se.badingo.thelastgame.dev`; a red error there → copy its text to Claude.
+  - **D. Cable:** plug in, unlock, "Trust This Computer?" → **Trust** + passcode.
+  - **E. Developer Mode** (appears only after the phone has met Xcode): iPhone **Settings → Privacy & Security → Developer Mode** → on → **Restart** → unlock → **Turn On** + passcode.
+  - **F. Run:** Xcode's top bar, the device next to **TheLastGame** → your iPhone (first time: "Preparing iPhone…", wait) → **▶ Run** (⌘R). First launch fails "Untrusted Developer": iPhone **Settings → General → VPN & Device Management → Developer App → your Apple ID → Trust → Trust**, then **▶ Run** again. Console for the `BB` lines: **View → Debug Area → Activate Console** (⇧⌘C). Free-team signing lasts 7 days; Run again to renew.
+  - If a step fails: the exact error text, and which step. Then on the phone: a normal run (the frame readout on the app vs 16.7), the leaderboard (native Talo), sound and haptics, both landscape sides, whether the Dynamic Island covers any UI (nothing in the code reads the safe area; the web build had the same exposure), and `blackbox.log` in the Files app.
 - **Then here:** put Milko's real Team ID into the preset (Xcode writes it into the exported project's `DEVELOPMENT_TEAM` once he picks his team), so a re-export needs no clicks.
 - **On approval:** bundle ID → `se.badingo.thelastgame`, the paid team's ID, TestFlight.
 
