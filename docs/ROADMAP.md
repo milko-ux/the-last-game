@@ -8,7 +8,7 @@ Agreed with Milko: 2026-09-24/29. This is the one plan every session works from,
 
 ---
 
-## 1. Stable and fast — IN PROGRESS
+## 1. Stable and fast — DONE 2026-09-29
 The web test build must be reliable, so the testing isn't fighting the tools.
 - Understand the glitch on `?autoplay=1&kill_bar=6&kill_count=20` and `?probe=1`. The black box now reports to the Mac (`blackbox.log`).
 - Cut the load time. The phone showed 12–15 s at the last test (engine file 37.7 MB + game data 26.5 MB, sent uncompressed).
@@ -19,7 +19,12 @@ The web test build must be reliable, so the testing isn't fighting the tools.
 - the normal run holds about 16.7 ms (60 fps)
 - the load time is known, and cut where it's cheap
 
-## 2. Native iPhone build (TestFlight) — moved up on 2026-09-24
+**Result (the phone, 2026-09-29, over the hotspot):**
+- The glitch was a clock bug, not the phone: with no tap, iOS never runs the audio mix, and the clock landed every rewind ~10 s too far. Fixed (`2154b2f`). The 20-death link, `?probe=1` and a run from the menu: no storm, no context loss, every session ended cleanly.
+- Load: the download is 22.7 MB instead of 64 MB (gzip + the song MP3s out of the pack). Downloads finished at 0.6–1.8 s instead of 8.5–12.6 s; first frame 2.3–4.2 s instead of 7.3–13.5 s; the menu is up at 4.1 s instead of 14.2 s.
+- Graphics defaults from the probe table (all on 19.5 ms, glow off 16.9): glow off, everything else on. The run from the menu before that change read 16.7–18.4 ms; the next normal run is the first reading with glow off.
+
+## 2. Native iPhone build (TestFlight) — NEXT (moved up on 2026-09-24)
 The game ships as an app, so we test what players will actually run instead of Safari.
 - **Milko:** sign up for the Apple Developer Program now (approval can take days).
 - Code: Godot iOS export → Xcode → TestFlight. The same tests as step 1, but on the app.

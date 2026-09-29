@@ -1,8 +1,30 @@
 # Phase R prototype — "an album you survive"
 
-## Where we are (2026-09-24, late) — start here
+## Where we are (2026-09-29) — start here
 
-Roadmap: `docs/ROADMAP.md`. We are on step 1 (stable and fast); step 2 is the native iPhone build (TestFlight).
+Roadmap: `docs/ROADMAP.md`. **Step 1 (stable and fast) is DONE; we are on step 2, the native iPhone build (TestFlight).** Step 2 starts when Milko's Apple Developer Program membership is approved.
+
+### 2026-09-29 — ROADMAP STEP 1 CLOSED: the storm fixed, the load cut, the defaults set: six commits, exported, served
+
+**Round 1 (three commits, then the phone):**
+1. **The death storm (`2154b2f`).** With no tap (`?autoplay=1`, `?probe=1`) iOS never runs Godot's audio mix, so `AudioServer.get_time_to_next_mix()` is minus the page time; added into `_time_delay` at every start/seek it put the clock ~10 s past every rewind. `_time_delay` is clamped at ≥ 0 (`BeatClock._output_delay()`); the black box writes `delay d (raw r)`. Reproduced on the Mac first: headless Chrome with no tap shows raw −7.8 / −30.5 / −53.3 s, and with the clamp every rewind lands (`0.5s after seek: clock 8.50`). Headless: validator lap 0 deaths=0, the 3-death rewind test and hashes 1–3 identical before/after.
+2. **The MP3s out of the pack (`8ffa2cf`).** `*.mp3` in the preset's `exclude_filter`, the `?level=N` switch removed (the only thing in the game that played them), the run scene's default stream gone. On disk they stay: the headless tools' `level=N` and `make_endless_audio.py` (it cuts the WAV from the MP3). `index.pck` 27.75 → 17.43 MB.
+3. **gzip in `tools/serve.py` (`861d8b9`)** for `.wasm` / `.pck` / `.js`, made once per file version in memory; `no-store` stays. wasm 39.5 → 10.1 MB, pck 17.4 → 13.7 MB. (No brotli: not in Python's standard library.)
+
+**What the phone said (three sessions over the hotspot, `blackbox.log` from line 1836; every one ended with a clean `pagehide`, no context loss):**
+- **The storm is gone.** The 20-death link: 16 deaths (Milko closed the tab), one every 22.8 s at bar 7 — the kill test standing still — and every rewind landed (`seek to 8.0` → `0.5s after: clock 8.49`). The first start read `raw -9.80`, exactly the suspect. The probe: 1 death in 11 seeks.
+- **Load, page time, 09-24 → 09-29:** download done 8.5–12.6 s → **0.6–1.8 s** (22.7 MB over the wire instead of 64); first frame 7.3–13.5 → **2.3–4.2 s**; menu up 14.2 → **4.1 s**; run ready (probe) 9.6 → **5.9 s**. One outlier: the kill link's prewarm took 7.3 s (the other two 1.8 and 2.1) — the first load of a fresh build; watch whether it repeats.
+- **The probe table (Milko's phone, avg / worst / frames):** all on 19.5 / 23 / 402 · grain off 19.6 / 22 / 400 · glow off 16.9 / 23 / 467 · MSAA off 16.9 / 49 / 459 · all post off 16.7 / 20 / 469 · half the pillars 17.4 / 22 / 450 · thin slab 19.7 / 23 / 399. Honest read: MSAA off and half the pillars saved about as much as glow off, and the last row (all on but the slab) was back at 19.7, so part of the spread may be the phone's own state.
+- The normal run from the menu (glow still on then): 16.7 ms in its first heartbeats, 18.0–18.4 later.
+
+**Round 2 (three commits):**
+4. **Glow off by default (`6c81f6a`)**, Milko's call from the table; `?glow=1` turns it back on. `FINISH_DEFAULT` in `track_test.gd` is the shipped look; the probe measures against it, so its rows are now `shipped · grain off · glow ON · MSAA off · all post off · half the pillars · thin slab`.
+5. **The leaderboard is readable (`90610ef`).** The menu's Overlay is added after the leaderboard screen, so its 60 % dim was drawn OVER every row. The menu draws nothing while the leaderboard is up; the screen dims the world itself, behind its rows; every text is solid (rank and country step back by colour, not transparency). `docs/screenshots/lb-before-dim.png` / `lb-after-solid.png`.
+6. **"audio -68241 (-1)" was display only (`9200624`)** — the no-tap mix stall again (the song position + 81 s since the last mix, wrapped around the 144 s loop); the drift follower ignored it (1 ms corrected). The readout now says `audio: no mix (no tap yet)` when the last mix is over 1 s old.
+
+**NEXT:**
+- **Milko, on the phone:** `https://172.20.10.2:8443/` — a normal run from the menu (the first frame-time reading with glow off: does it hold ~16.7?), and the leaderboard. If it does not hold, `?probe=1` again: its "shipped" row is now the real default.
+- **Step 2:** the Apple Developer Program sign-up (Milko), then Godot iOS export → Xcode → TestFlight.
 
 **The game is ONE ENDLESS RUN** (`PHASE_E_BRIEF_1_ENDLESS.md`): how far can you get. **Stage 1 (the run) is built and accepted. Stage 2 is DONE: the menu passed on the phone, the leaderboard is live-checked against the real Talo API end to end.** 2026-09-23, morning: the foot bug found and fixed, brief 6 sections 1 + 2 built — **phone verdict: feet, shadows and 16.7 ms ACCEPTED.** Afternoon (the second brief, below): the cold-start tap offset, the monolith gap (measured, not reproduced), the pit loophole, brief 6 §3 (fog, Milko's corrected version) and §4 (the stone floor and the thick slab). Exported and served. Everything below is newest first; this section is the whole state, the rest is the detail behind it.
 
