@@ -25,8 +25,16 @@ appends each line, with the Mac's clock and that session id, to
 (next to the build folder, never inside it). When iOS kills the tab,
 localStorage may or may not survive; the lines that reached the Mac
 are the record. Read it with:  tail -f ../the-last-game-build/blackbox.log
+
+COMPRESSED (2026-09-29, roadmap step 1). index.wasm, index.pck and the .js
+go out gzipped when the browser asks for it (every Safari does): the phone
+downloaded 64 MB raw over the hotspot, 6-12 s of its 10-15 s load. The
+gzip is made once per file version (size + mtime), in memory, and made
+again when a new export lands. Still no-store: the phone re-downloads
+every load, only smaller. (gzip, not brotli: brotli would save ~2 MB more
+on the wasm but is not in Python's standard library.)
 """
-import http.server, ssl, os, sys, socket, subprocess, threading, datetime, urllib.parse
+import http.server, ssl, os, sys, socket, subprocess, threading, datetime, urllib.parse, gzip, io
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 BUILD = os.path.join(ROOT, "..", "the-last-game-build", "phase-r")
@@ -37,6 +45,22 @@ LOG_PATH = ""            # set in main(): <build folder>/../blackbox.log
 _log_lock = threading.Lock()
 _sessions_seen = set()
 
+GZIP_SUFFIXES = (".wasm", ".pck", ".js")
+_gz_cache = {}           # path -> ((mtime_ns, size), gzipped bytes)
+_gz_lock = threading.Lock()
+
+
+def gzipped(path: str) -> bytes:
+    st = os.stat(path)
+    key = (st.st_mtime_ns, st.st_size)
+    with _gz_lock:
+        hit = _gz_cache.get(path)
+        if hit is None or hit[0] != key:
+            with open(path, "rb") as f:
+                hit = (key, gzip.compress(f.read(), 6))
+            _gz_cache[path] = hit
+        return hit[1]
+
 
 class NoCache(http.server.SimpleHTTPRequestHandler):
     def end_headers(self):
@@ -46,6 +70,20 @@ class NoCache(http.server.SimpleHTTPRequestHandler):
 
     def log_message(self, *a):
         pass
+
+    def send_head(self):
+        path = self.translate_path(self.path)
+        if (path.endswith(GZIP_SUFFIXES) and os.path.isfile(path)
+                and "gzip" in self.headers.get("Accept-Encoding", "")):
+            body = gzipped(path)
+            self.send_response(200)
+            self.send_header("Content-Type", self.guess_type(path))
+            self.send_header("Content-Encoding", "gzip")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Vary", "Accept-Encoding")
+            self.end_headers()
+            return io.BytesIO(body)
+        return super().send_head()
 
     # The black box: POST /bb?s=<session id>, body = one line (or several,
     # newline-separated). Appended as "<Mac time>  <session>  <line>".
@@ -127,6 +165,9 @@ def main() -> None:
     global LOG_PATH
     LOG_PATH = os.path.abspath(os.path.join(BUILD, "..", "blackbox.log"))
     os.chdir(BUILD)
+    # Gzip the big two now, so the phone's first load does not wait for it.
+    threading.Thread(target=lambda: [gzipped(f) for f in ("index.wasm", "index.pck") if os.path.isfile(f)],
+                     daemon=True).start()
 
     port = 8443 if tls else 8099
     host = "0.0.0.0" if tls else "127.0.0.1"
