@@ -149,6 +149,7 @@ var z_origin_t := 0.0
 var _player: AudioStreamPlayer
 var _time_begin := 0
 var _time_delay := 0.0
+var _time_delay_raw := 0.0   # before the clamp (the black box writes both)
 var _base_t := 0.0
 var _running := false
 var _paused := false
@@ -324,12 +325,12 @@ func heard_time() -> float:
 # _time_delay, which is built from these):
 #   mix -a/+b   seconds since the last mix / to the next one
 #   lat c       the output latency
-#   delay d     _time_delay as the last start / seek computed it
+#   delay d     _time_delay as the last start / seek computed it (raw: before the clamp)
 #   pos e       the player's raw playback position
 func clock_vs_song() -> String:
-	return "clock %.2f (local %.2f) heard %.2f drift %+d ms (base %+d)  mix -%.2f/%+.2f lat %.3f delay %+.2f pos %.2f" % [
+	return "clock %.2f (local %.2f) heard %.2f drift %+d ms (base %+d)  mix -%.2f/%+.2f lat %.3f delay %+.2f (raw %+.2f) pos %.2f" % [
 		song_time(), local_t(song_time()), heard_time(), int(audio_drift_ms()), int(_drift_base * 1000.0),
-		AudioServer.get_time_since_last_mix(), AudioServer.get_time_to_next_mix(), AudioServer.get_output_latency(), _time_delay,
+		AudioServer.get_time_since_last_mix(), AudioServer.get_time_to_next_mix(), AudioServer.get_output_latency(), _time_delay, _time_delay_raw,
 		_player.get_playback_position() if _player != null else -1.0]
 
 
@@ -348,13 +349,26 @@ func audio_drift_ms() -> float:
 # ------------------------------------------------------------
 # Transport
 # ------------------------------------------------------------
+# How long until what is played now is heard: the time to the next mix plus
+# the output latency. Never negative (2026-09-29). On the phone, a run that
+# opens with no tap (?autoplay=1, ?probe=1) starts before iOS lets the audio
+# mix run, so the time to the next mix is minus the whole page time; added
+# here it put the clock that far AHEAD of every start and seek -- the death
+# storm of 2026-09-24 (a rewind to 8.0 landing at 17.8, the bot dying where
+# it landed, 198 times). A run started from the menu's tap reads +0.05..0.09
+# and is unchanged by the clamp.
+func _output_delay() -> float:
+	_time_delay_raw = AudioServer.get_time_to_next_mix() + AudioServer.get_output_latency()
+	return maxf(0.0, _time_delay_raw)
+
+
 func start(stream_player: AudioStreamPlayer) -> void:
 	_player = stream_player
 	_base_t = start_offset
 	_smooth_t = start_offset
 	_paused = false
 	_time_begin = Time.get_ticks_usec()
-	_time_delay = AudioServer.get_time_to_next_mix() + AudioServer.get_output_latency()
+	_time_delay = _output_delay()
 	_drift_age = 0.0
 	drift_corrected_ms = 0.0
 	_player.play(local_t(start_offset))
@@ -410,7 +424,7 @@ func seek(t: float) -> void:
 	_smooth_t = t
 	_paused = false
 	_time_begin = Time.get_ticks_usec()
-	_time_delay = AudioServer.get_time_to_next_mix() + AudioServer.get_output_latency()
+	_time_delay = _output_delay()
 	_drift_age = 0.0
 	# Across the seam too: the audio goes to the place INSIDE the loop, the
 	# clock (and with it the lap) to the run time asked for.
