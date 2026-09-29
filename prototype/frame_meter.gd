@@ -501,7 +501,14 @@ func _update_text() -> void:
 		text = "frame %.1f avg · %.1f worst     cpu %.1f avg · %.1f worst ms" % [sum / n, worst, cpu_sum / n, cpu_worst]
 		if BeatClock.endless and BeatClock.running():
 			# Audio vs clock (ms, - = audio behind) and how much has been slewed to follow it.
-			text += "     audio %+.0f (%+.0f)" % [BeatClock.audio_drift_ms(), BeatClock.drift_corrected_ms]
+			# With no tap yet (?autoplay=1, ?probe=1) iOS never runs the audio
+			# mix, the "heard" position is the time since the last mix -- page
+			# time -- and the number was nonsense ("audio -68241", 2026-09-29).
+			# Normal runs read 0.0-0.2 s since the last mix.
+			if AudioServer.get_time_since_last_mix() > 1.0:
+				text += "     audio: no mix (no tap yet)"
+			else:
+				text += "     audio %+.0f (%+.0f)" % [BeatClock.audio_drift_ms(), BeatClock.drift_corrected_ms]
 		if mono_note != "":
 			text += "     " + mono_note
 		# Memory (2026-09-24, the iOS tab kill): the engine's own allocations
