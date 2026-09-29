@@ -73,7 +73,8 @@ The goal is a **premium, modern 2026 look. No AI slop.** Everything in frame sho
 Godot 4.7.1 lives at `/Users/benim/Downloads/Godot.app/Contents/MacOS/Godot` — not on PATH, call the full path.
 
 ```
-tools/package_web.sh                     # export + zip ("Web (Phase R)" is the default and the only preset), refuses a stale zip
+tools/package_web.sh                     # export + zip (preset "Web (Phase R)"), refuses a stale zip
+godot --headless --path . --export-debug "iOS" ../the-last-game-build/ios/TheLastGame.ipa   # the iPhone app: an Xcode project (roadmap step 2)
 tools/serve.py tls                       # HTTPS on the LAN, port 8443, self-signed
 ```
 
