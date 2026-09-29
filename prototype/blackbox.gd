@@ -24,14 +24,28 @@ extends RefCounted
 # page was opened), the same clock as the readout's "page" span and the
 # JS-side events, so the boot, the load and the run read as one timeline.
 #
-# Web only; a few hundred bytes per write, at most a few writes a second;
-# never inside a frame callback.
+# NATIVE (2026-09-29, roadmap step 2: the iPhone app). No browser, so the
+# lines go to a FILE, user://blackbox.log (the preset makes user:// visible
+# in the iPhone's Files app: On My iPhone > The Last Game), and to the
+# console (Xcode shows it while the phone is on the cable). One header
+# line per session. "Page time" is app time there: seconds since the
+# engine started. The session marker is user://blackbox_open: set at
+# start and on resume, cleared when iOS pauses the app (going to the
+# background is the app's clean exit, as pagehide is the page's). Found
+# set at the next start = the app died in the foreground; the last lines
+# come back on the readout as on the web.
+#
+# A few hundred bytes per write, at most a few writes a second; never
+# inside a frame callback.
 # ============================================================
 
 const KEY := "pr_blackbox"
 const LINES := 30
 const JS_LINES := 8              # JS-side events kept in localStorage (they go to the Mac too)
 const HEARTBEAT_S := 2.0
+const LOG_PATH := "user://blackbox.log"
+const OPEN_PATH := "user://blackbox_open"
+const LOG_MAX_BYTES := 1_000_000   # then the log starts over (the old one is kept as blackbox.old.log)
 
 static var _lines: PackedStringArray = PackedStringArray()
 static var _page_offset_ms := 0.0   # performance.now() - Time.get_ticks_msec(), read once
@@ -41,6 +55,8 @@ static var last_session := ""      # what the previous, unclosed session left; "
 static var seeks := 0
 static var deaths := 0
 static var _armed := false
+static var _native := false
+static var _file: FileAccess = null
 
 # THE BOOT LINE (2026-09-24, "why does the phone load in 12-15 s"): the
 # browser's own Resource Timing for index.js / index.wasm / index.pck
@@ -81,7 +97,10 @@ window.addEventListener('pagehide',function(){try{localStorage.setItem(K+'_open'
 
 
 static func start() -> void:
-	if not OS.has_feature("web") or _armed:
+	if _armed:
+		return
+	if not OS.has_feature("web"):
+		_start_native()
 		return
 	_armed = true
 	var now = JavaScriptBridge.eval("performance.now()")
@@ -103,6 +122,41 @@ static func start() -> void:
 	record("boot " + str(JavaScriptBridge.eval(BOOT_JS, true)))
 
 
+static func _start_native() -> void:
+	_armed = true
+	_native = true
+	# The previous session: still marked open = it died in the foreground.
+	# Phones only: a desktop run (the Mac's screenshot tools) quits without
+	# a pause, so on a Mac every session would look like a crash.
+	if OS.has_feature("mobile") and FileAccess.get_file_as_string(OPEN_PATH) == "1":
+		var prev := FileAccess.get_file_as_string(LOG_PATH).strip_edges().split("\n")
+		last_session = "\n".join(prev.slice(maxi(0, prev.size() - LINES)))
+	if FileAccess.file_exists(LOG_PATH) and FileAccess.open(LOG_PATH, FileAccess.READ).get_length() > LOG_MAX_BYTES:
+		DirAccess.rename_absolute(LOG_PATH, "user://blackbox.old.log")
+	_file = FileAccess.open(LOG_PATH, FileAccess.READ_WRITE if FileAccess.file_exists(LOG_PATH) else FileAccess.WRITE)
+	if _file != null:
+		_file.seek_end()
+		_file.store_line("--- session %s" % Time.get_datetime_string_from_system(false, true))
+	_set_open(true)
+	_last_win = DisplayServer.window_get_size()
+	record("session start %s %s %s %dx%d" % [OS.get_name(), OS.get_version(), OS.get_model_name(), _last_win.x, _last_win.y])
+
+
+static func _set_open(open: bool) -> void:
+	var f := FileAccess.open(OPEN_PATH, FileAccess.WRITE)
+	if f != null:
+		f.store_string("1" if open else "0")
+
+
+# Native only: the app going to the background and coming back (the frame
+# meter forwards the notifications). Paused is the clean exit.
+static func app_event(paused: bool) -> void:
+	if not _native:
+		return
+	record("app paused (clean exit)" if paused else "app resumed")
+	_set_open(not paused)
+
+
 # Seconds since the page was opened (the same clock as performance.now()).
 static func page_s() -> float:
 	return (float(Time.get_ticks_msec()) + _page_offset_ms) / 1000.0
@@ -115,6 +169,12 @@ static func record(what: String) -> void:
 	_lines.append(line)
 	while _lines.size() > LINES:
 		_lines.remove_at(0)
+	if _native:
+		print("BB " + line)
+		if _file != null:
+			_file.store_line(line)
+			_file.flush()
+		return
 	var text := "\\n".join(_lines)
 	# One eval: the localStorage write and the beacon to the Mac.
 	JavaScriptBridge.eval("try{localStorage.setItem('%s','%s')}catch(e){};try{window.pr_bb&&window.pr_bb.send('%s')}catch(e){}" % [KEY, text, line], true)

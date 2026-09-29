@@ -386,6 +386,15 @@ func _exit_tree() -> void:
 	active = false
 
 
+# The native black box's clean exit: iOS pausing the app (to the
+# background) closes the session, coming back opens it again.
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_APPLICATION_PAUSED:
+		BlackBox.app_event(true)
+	elif what == NOTIFICATION_APPLICATION_RESUMED:
+		BlackBox.app_event(false)
+
+
 func _process(delta: float) -> void:
 	var now := Time.get_ticks_usec()
 	if _last_usec != 0:
