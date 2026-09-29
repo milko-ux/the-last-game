@@ -95,9 +95,10 @@ func _input(event: InputEvent) -> void:
 
 
 # Tapping N starts the endless run at lap N-1, which is the lap that
-# uses band N. Nothing here plays an old stand-alone level any more:
-# ?level=N (track_test.gd's dev URL switches) is the one path left to
-# those, and it is the fixed spot for frame-time readings.
+# uses band N. Nothing in the game plays an old stand-alone level any
+# more: only the headless tools (tools/autoplay.gd level=N, plan_stats.gd)
+# do, from the files on disk -- the tempo MP3s are not in the pack
+# (2026-09-29).
 func _tap(level: int) -> void:
 	if _loading_level != 0:
 		return

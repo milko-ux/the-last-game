@@ -308,8 +308,6 @@ func _apply_render_scale() -> void:
 
 # DEV ONLY (same switch as the frame meter), web build only: URL switches
 # for measuring the web build on a phone, where there is no console.
-#   ?level=N      play level N of the old curriculum instead of the run
-#                 (the fixed spot for frame-time readings: level 1, bar 11)
 #   ?scale=0.6    3D render scale (see RENDER SCALE)
 #   ?live=1       ignore shipped / cached verdicts: every lap is generated
 #                 and validated live, inside the frame budget
@@ -381,10 +379,6 @@ func _dev_url_switches() -> void:
 	for k in ["glow", "vignette", "grain", "msaa"]:
 		if FrameMeter.url_param(k) == "0":
 			finish[k] = false
-	if FrameMeter.url_param("level") != "":
-		Rules.ENDLESS = false
-		Rules.LEVEL = clampi(int(FrameMeter.url_param("level")), 1, 6)
-		return
 	if not Rules.ENDLESS:
 		return
 	if FrameMeter.url_param("live") == "1":

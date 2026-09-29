@@ -1,11 +1,10 @@
-[gd_scene load_steps=10 format=3]
+[gd_scene load_steps=9 format=3]
 
 [ext_resource type="Script" path="res://prototype/track_test.gd" id="1_test"]
 [ext_resource type="Script" path="res://prototype/field.gd" id="2_field"]
 [ext_resource type="PackedScene" path="res://prototype/player3d.tscn" id="3_player"]
 [ext_resource type="Script" path="res://prototype/camera_rig.gd" id="4_rig"]
 [ext_resource type="Script" path="res://ui/ui.gd" id="5_ui"]
-[ext_resource type="AudioStream" path="res://assets/audio/fuffens_instrumental_vers.mp3" id="6_music"]
 [ext_resource type="Script" path="res://prototype/hud.gd" id="7_hud"]
 [ext_resource type="Script" path="res://ui/account_panel.gd" id="8_account"]
 
@@ -36,7 +35,6 @@ light_energy = 1.1
 shadow_enabled = false
 
 [node name="Music" type="AudioStreamPlayer" parent="."]
-stream = ExtResource("6_music")
 
 [node name="Field" type="Node3D" parent="."]
 script = ExtResource("2_field")

@@ -41,7 +41,7 @@ The isometric maze itself (`main.gd`, `main.tscn`, `entities/`, `levels.json`, `
 
 **Do not "clean up" the 2D code.** Phase E Stage 2 (the menu and the leaderboard) is built on it: `autoload/talo.gd` is the only file in the project that talks to the internet, `autoload/consent.gd` owns GDPR consent and the self-declared country, and `ui/leaderboard_screen.gd` + `ui/account_panel.gd` are the screens. `autoload/palette.gd` and `autoload/progress.gd` are already read by the prototype's HUD and unlock logic. All of these must stay in the export.
 
-`autoload/profile.gd` stays too: the menu's nickname (RANDOM / EDIT) is `Profile`. Every file in the repo is now reachable from `prototype/menu.tscn`, the autoloads, `tools/` or the export preset (the scan of 2026-09-23); the model sources in `assets/models/` and the two tempo MP3s are reached by paths built at runtime.
+`autoload/profile.gd` stays too: the menu's nickname (RANDOM / EDIT) is `Profile`. Every file in the repo is now reachable from `prototype/menu.tscn`, the autoloads, `tools/` or the export preset (the scan of 2026-09-23); the model sources in `assets/models/` and the three song MP3s are reached by paths built at runtime — by the headless tools only: the MP3s are kept out of the pack (`*.mp3` in the preset's `exclude_filter`, 2026-09-29), the game plays `fuffens_endless.wav`, and `tools/make_endless_audio.py` cuts that WAV from `fuffens_instrumental_vers.mp3`.
 
 Briefs, in order: `docs/briefs/done/PHASE_R_BRIEF.md` + `PHASE_R_ADDENDUM_1..4.md` (done), then `PHASE_E_BRIEF_1_ENDLESS.md` (the endless run, which supersedes the level-based game; live), then `docs/briefs/done/PHASE_A_BRIEF_1..5` (art: creature, world, materials, motion, props, walk; done) and `PHASE_A_BRIEF_6_LIGHT.md` (light; live, sections 1–4 built).
 
@@ -83,14 +83,14 @@ A Godot web build needs a **secure context**: plain `http://<LAN-IP>` fails with
 
 **Always serve with `Cache-Control: no-store`.** Browsers cache `index.pck` hard, and a stale `.pck` silently runs an OLD build while every file on disk looks correct.
 
-**Dev URL switches** (all behind `FrameMeter.enabled()`, read in `frame_meter.gd`): `?level=N` · `?scale=X` · `?autoplay=1&live=1` · `?grad=1`. **Any of them skips the main menu and opens the run directly.**
+**Dev URL switches** (all behind `FrameMeter.enabled()`, read in `frame_meter.gd`): `?scale=X` · `?autoplay=1&live=1` · `?grad=1`. **Any of them skips the main menu and opens the run directly.**
 
 ### Before any release export — checklist
 
 - [ ] Set `Progress.UNLOCK_ALL = false` (this also turns off the frame readout and the dev URL switches).
 - [ ] Confirm the Phase R preset's `exclude_filter` still keeps `docs/` and `addons/` out of the pack.
 - [x] The Godot MCP plugin is OFF (2026-09-22) — see below.
-- [ ] `tools/` and the two tempo-shifted MP3s ship deliberately — `?autoplay=1` loads `res://tools/autoplay.gd`, and `?level=N` needs those songs.
+- [ ] `tools/` ships deliberately — `?autoplay=1` loads `res://tools/autoplay.gd`. The MP3s do NOT ship (`*.mp3` in `exclude_filter`); the old levels (`level=N`) exist for the headless tools only.
 - [x] `talo.cfg` is in BOTH presets' `include_filter` (2026-09-22). Keep it there: `.cfg` is not a resource and the exporter drops it silently, and the build then ships with no leaderboard and no error. The key is safe to ship as scoped — `docs/TALO_SETUP.md`, "The access key".
 - [ ] Bump `application/config/version` in `project.godot` — every leaderboard entry carries it as `build`.
 
