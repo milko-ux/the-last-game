@@ -6,9 +6,10 @@ const BlackBox := preload("res://prototype/blackbox.gd")
 # seeks back and plays the same bars again with the next setup, and at
 # the end a table of avg / worst frame time per setup is drawn on
 # screen, so one screenshot says which part of the look the phone can
-# afford. Setups, each one change against "all on":
+# afford. Setups, each one change against the shipped look
+# (track_test.FINISH_DEFAULT; glow is off there since 2026-09-29):
 #
-#   all on · grain off · glow off · MSAA off · all post off (tonemap
+#   shipped · grain off · glow ON · MSAA off · all post off (tonemap
 #   linear too) · half the pillars · thin slab (the old 2-unit one)
 #
 # Frame times are the wall clock between two _process calls of this
@@ -22,10 +23,10 @@ const FROM_BAR := 9
 const TO_BAR := 12
 const SETTLE_S := 0.7
 const SETUPS := [
-	["warm-up", {}],           # thrown away: shader compiles and first draws land here, not in "all on"
-	["all on", {}],
+	["warm-up", {}],           # thrown away: shader compiles and first draws land here, not in "shipped"
+	["shipped", {}],
 	["grain off", {"grain": false}],
-	["glow off", {"glow": false}],
+	["glow ON", {"glow": true}],
 	["MSAA off", {"msaa": false}],
 	["all post off", {"grain": false, "glow": false, "vignette": false, "msaa": false, "tonemap": "linear"}],
 	["half the pillars", {"pillars": 0.5}],
@@ -115,9 +116,9 @@ func _start(i: int) -> void:
 	BlackBox.record("probe %s" % SETUPS[i][0])
 
 
-# Everything back to "all on", then the setup's own change.
+# Everything back to the shipped look, then the setup's own change.
 func _apply(change: Dictionary) -> void:
-	scene.finish = {"tonemap": scene.TONEMAP_DEFAULT, "glow": true, "vignette": true, "grain": true, "msaa": true}
+	scene.finish = scene.FINISH_DEFAULT.duplicate()
 	for k in ["tonemap", "glow", "vignette", "grain", "msaa"]:
 		if change.has(k):
 			scene.finish[k] = change[k]

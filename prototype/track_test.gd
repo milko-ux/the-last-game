@@ -316,8 +316,9 @@ func _apply_render_scale() -> void:
 #                 wants a tap)
 #   ?grad=1       play as a graduated player (nothing is saved)
 #   ?light=0      brief 6's light off: the flat pre-brief-6 look, for an A/B
-#   ?tonemap=0|aces|agx · ?glow=0 · ?vignette=0 · ?grain=0 · ?msaa=0
-#                 the finishing layer's switches (look pass v2 section 6)
+#   ?tonemap=0|aces|agx · ?glow=1 · ?vignette=0 · ?grain=0 · ?msaa=0
+#                 the finishing layer's switches (look pass v2 section 6);
+#                 =1 turns one ON, =0 OFF (glow is off by default)
 var _dev_autoplay := false
 var light_on := true
 # The finishing layer (brief 6 sections 7-8): what is on, and the
@@ -326,7 +327,12 @@ const TONEMAP_DEFAULT := "aces"   # picked with web shots: AgX greys the magenta
 const GLOW_HDR_THRESHOLD := 0.9      # only the emissives bloom: the cyan rim, a live seam, amber (0.82 bloomed the plates)
 const GLOW_INTENSITY := 0.35
 const GLOW_STRENGTH := 0.9
-var finish := {"tonemap": TONEMAP_DEFAULT, "glow": true, "vignette": true, "grain": true, "msaa": true}
+# Glow is OFF (2026-09-29, Milko's call from the phone's ?probe=1 table:
+# all on 19.5 ms avg, glow off 16.9; MSAA off 16.9 and half the pillars
+# 17.4 showed a similar saving, so the next probe -- whose base row is now
+# this -- says whether glow off alone holds 16.7). ?glow=1 turns it back on.
+const FINISH_DEFAULT := {"tonemap": TONEMAP_DEFAULT, "glow": false, "vignette": true, "grain": true, "msaa": true}
+var finish := FINISH_DEFAULT.duplicate()
 var _finish: CanvasLayer
 
 
@@ -379,6 +385,8 @@ func _dev_url_switches() -> void:
 	for k in ["glow", "vignette", "grain", "msaa"]:
 		if FrameMeter.url_param(k) == "0":
 			finish[k] = false
+		elif FrameMeter.url_param(k) == "1":
+			finish[k] = true
 	if not Rules.ENDLESS:
 		return
 	if FrameMeter.url_param("live") == "1":
