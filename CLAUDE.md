@@ -31,6 +31,8 @@ A mobile game built in Godot 4 (GDScript). **One endless run, driven by music.**
 
 **Read `prototype/README.md`'s "Where we are" section first, every session.** It's the live status. This file carries only what outlives any one phase. The phase-by-phase history is in `docs/PHASE_LOG.md`.
 
+**The plan to launch is `docs/ROADMAP.md`: read it at the start of every session.** Finish a step's 'done when' before starting the next step. Small fixes can happen anywhere; new features wait for their step. If a request doesn't fit the current step, tell me before building it.
+
 ## The pivot — what's live and what's history
 
 The project began as an isometric neon-synthwave maze game with 30 hand-authored levels (Phases 0–3: touch controls, difficulty tiers, a Talo backend for accounts and leaderboards). **That game is no longer what's being built, and since 2026-09-23 it is no longer in the repo (tag `archive/2d-game`).** The synthwave art direction is dropped.

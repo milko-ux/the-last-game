@@ -2,6 +2,8 @@
 
 ## Where we are (2026-09-24, late) — start here
 
+Roadmap: `docs/ROADMAP.md`. We are on step 1 (stable and fast); step 2 is the native iPhone build (TestFlight).
+
 **The game is ONE ENDLESS RUN** (`PHASE_E_BRIEF_1_ENDLESS.md`): how far can you get. **Stage 1 (the run) is built and accepted. Stage 2 is DONE: the menu passed on the phone, the leaderboard is live-checked against the real Talo API end to end.** 2026-09-23, morning: the foot bug found and fixed, brief 6 sections 1 + 2 built — **phone verdict: feet, shadows and 16.7 ms ACCEPTED.** Afternoon (the second brief, below): the cold-start tap offset, the monolith gap (measured, not reproduced), the pit loophole, brief 6 §3 (fog, Milko's corrected version) and §4 (the stone floor and the thick slab). Exported and served. Everything below is newest first; this section is the whole state, the rest is the detail behind it.
 
 ### 2026-09-24 (late) — THE BLACK BOX PHONES HOME, and the boot line: two commits, exported, served, WAITING FOR THE PHONE
