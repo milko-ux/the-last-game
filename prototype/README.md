@@ -2,7 +2,9 @@
 
 ## Where we are (2026-09-29) — start here
 
-Roadmap: `docs/ROADMAP.md`. **Step 1 (stable and fast) is DONE; we are on step 2, the native iPhone build (TestFlight).** Step 2 starts when Milko's Apple Developer Program membership is approved.
+Roadmap: `docs/ROADMAP.md`. **Step 1 (stable and fast) is DONE; we are on step 2, the native iPhone build (TestFlight).** Milko enrolled in the Apple Developer Program on 2026-09-29; approval takes a couple of days. Ready on this Mac without the account: Xcode 26.6 and Godot 4.7.1's iOS export template (`ios.zip`); there is no iOS export preset yet.
+
+**Glow off, on the phone (2026-09-29, after round 2): Milko's eye says the run looks good and the leaderboard is readable. That run is NOT in `blackbox.log`** — the last phone session is 13:35 (round 1, glow still on); nothing reached the server after the Mac's own 13:46 test. So the frame time with glow off is still unmeasured; the next phone session in the log settles it (a normal run from the menu, `https://172.20.10.2:8443/`, opened fresh).
 
 ### 2026-09-29 — ROADMAP STEP 1 CLOSED: the storm fixed, the load cut, the defaults set: six commits, exported, served
 
