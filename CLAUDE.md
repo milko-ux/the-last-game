@@ -20,6 +20,7 @@ Milko — musician/creative director (ODZ collective), self-taught builder with 
 5. **Always run Godot from scripts with a kill switch.** A script error makes a `-s` tool spin forever and there is no `timeout` on this Mac.
 6. **Bots and tools set `Progress.save_enabled = false`** — never let one write the save file.
 7. **Never make things more complicated than they need to be — one file per real thing.** A new song = one audio file + one beatmap. A tempo variant = audio only, scaled in code. If a change needs a second copy of something that already exists, that is the signal to stop and ask whether it needs to exist at all.
+8. **Before the FIRST upload to App Store Connect / TestFlight, STOP and ask Milko to confirm the final bundle ID (default se.badingo.thelastgame; cable builds use se.badingo.thelastgame.dev). The first upload locks the bundle ID forever.**
 
 ## What this project is
 
