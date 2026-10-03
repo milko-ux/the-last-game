@@ -1,10 +1,23 @@
 # Phase R prototype — "an album you survive"
 
-## Where we are (2026-09-29, afternoon) — start here
+## Where we are (2026-10-04) — start here
 
-Roadmap: `docs/ROADMAP.md`. **Step 1 (stable and fast) is DONE; we are on step 2, the native iPhone app.** Milko enrolled in the Apple Developer Program on 2026-09-29 (approval pending, a couple of days). Until then the app goes onto HIS iPhone over a USB cable, signed by Xcode's free personal team (7-day signing); TestFlight comes with the paid team.
+Roadmap: `docs/ROADMAP.md`. **Step 1 (stable and fast) is DONE; we are on step 2, the native iPhone app.** Milko enrolled in the Apple Developer Program on 2026-09-29 (approval pending, a couple of days). Until then the app goes onto HIS iPhone over a USB cable, signed by Xcode's free personal team (7-day signing); TestFlight comes with the paid team. **2026-10-04: the app runs on Milko's iPhone over the cable.** Studio name KARROT: the bundle IDs are `se.karrot.thelastgame.dev` (cable) and `se.karrot.thelastgame` (planned final).
 
 **Glow off, measured (13:58 session):** the run from the menu held 16.7 ms with short bumps to 17.1–18.1, no spikes (8 heartbeats, ~22 s of play: a short sample). Load: download done 1.4 s, first frame 2.3 s, menu 3.2 s, tap → run 3.3 s.
+
+### 2026-10-04 — THE APP RUNS ON THE iPHONE: KARROT bundle IDs, the Team ID in the preset: one commit
+
+1. **Milko did the Xcode clicks A–F; the app runs on his iPhone** (signed by the free Personal Team, profile valid to 2026-10-10 — after that, ▶ Run again). The on-phone checks below are not reported yet.
+2. **KARROT (`0e365cc`):** Milko changed the bundle ID in Xcode to **`se.karrot.thelastgame.dev`** (cable builds); the planned final ID is **`se.karrot.thelastgame`** (the studio KARROT replaces `se.badingo`). The iOS preset, hard rule 8 in `CLAUDE.md`, the roadmap rule and the release checklist all say so now.
+3. **Team ID `36S75NUDV8` is in the preset** (read from the exported project's `DEVELOPMENT_TEAM`). It is the **free Personal Team**: its signing certificate's OU and all its profiles carry it, and the profiles expire after 7 days (a paid team's last a year). **Proved: a fresh export to a scratch folder comes out with this team and `se.karrot.thelastgame.dev` — a re-export needs no clicks.** (It replaces the Xcode project, so nothing done by hand in Xcode survives one.) The paid team may get a different ID: check it on approval.
+4. **Fact to weigh before the first upload (hard rule 8):** the Mac holds a Personal Team profile for **`se.karrot.thelastgame` — the final ID, not `.dev`** — created 2026-10-04 at about 00:30, so the ID was briefly set without `.dev` in Xcode. That is the registration the `.dev` ID was meant to avoid (a free team holding the final ID). Whether it gets in the paid team's way is not known; if App Store Connect refuses the ID at the TestFlight step, that is why.
+
+**FIX AT THE TESTFLIGHT STEP — the Release config's signing conflict (not fixed, on purpose):** Xcode shows "conflicting provisioning settings" on the Release config. Cause: Release has `CODE_SIGN_STYLE = Automatic` but `CODE_SIGN_IDENTITY = "Apple Distribution"` set manually (`project.pbxproj`, the target's and the project's Release blocks). **It comes from Godot's iOS export template, not from Milko's clicks** — the scratch export has it too, and the 4.7 preset has no option for it — so every re-export brings it back. Debug (the cable builds) is unaffected. A Personal Team cannot hold a distribution certificate anyway, so it only matters with the paid team. The likely fix: Release's identity → `Apple Development` (automatic signing picks the distribution certificate itself when archiving), applied after every export (a line in the export step), then Product → Archive with the paid team.
+
+**NEXT:**
+- **Milko, on the phone (the app):** a normal run (the frame readout vs 16.7), the leaderboard (native Talo — the first real test of `HTTPRequest` since the 2D game), sound and haptics, both landscape sides, whether the Dynamic Island covers any UI (nothing in the code reads the safe area), and `blackbox.log` in the Files app (On My iPhone → The Last Game). Xcode's console shows the `BB` lines on the cable (⇧⌘C).
+- **On approval:** the paid team's ID into the preset, the Release signing fix above, confirm the final bundle ID with Milko (hard rule 8, and item 4 above), then TestFlight.
 
 ### 2026-09-29 (afternoon) — ROADMAP STEP 2 BEGINS: the iOS preset, the native audit, the Xcode project: three commits, exported, WAITING FOR MILKO'S CLICKS
 
@@ -13,7 +26,7 @@ Roadmap: `docs/ROADMAP.md`. **Step 1 (stable and fast) is DONE; we are on step 2
 3. **The native audit (`38e7753`):** every `JavaScriptBridge` call is behind `OS.has_feature("web")` — the dev URL switches (none on native: the app opens into the menu), the page clock, `window.pr_*`, the heap readout, the probe's table, Talo's fetch (native uses `HTTPRequest`, `_transport_native`: **the leaderboard on the app is the first real test of that path since the 2D game**). The `head_include` tricks and `package_web.sh`'s index.js patch are web-shell only: absent from the app, nothing to replace (iOS hides the status bar and the home indicator by default; native audio has no per-seek buffer copy). **The one thing that did nothing on iOS was the black box: it now writes `user://blackbox.log`** (Files app → On My iPhone → The Last Game) and prints every line as `BB …` to the console (Xcode shows it on the cable); a session marker cleared when iOS pauses the app reports a foreground death on the next start, as on the web. Checked natively on the Mac: the file is written. Render scale on the app: 0.75 (the `mobile` feature), as on the web. **The renderer differs:** the web ran Compatibility (WebGL2); the app runs the project's own `mobile` renderer on Metal — the same one the Mac's screenshot tools use, so expect the Mac-screenshot look (e.g. carved monoliths) rather than Safari's.
 4. **The Xcode project:** `../the-last-game-build/ios/TheLastGame.xcodeproj` (`godot --headless --path . --export-debug "iOS" ../the-last-game-build/ios/TheLastGame.ipa`; pck 17.4 MB). **Checked: `xcodebuild … -sdk iphoneos CODE_SIGNING_ALLOWED=NO build` → BUILD SUCCEEDED**, the app 115 MB (debug). Info.plist: landscape left/right, display name The Last Game, 0.8.0, iOS 15.0+.
 
-**NEXT:**
+**NEXT (done 2026-10-04 — the app runs; see above):**
 - **Milko:** the click-by-click steps below: sign into Xcode, personal team, cable, Developer Mode, Run.
   - **A. Sign in:** Xcode → menu bar **Xcode → Settings… → Accounts** → **+** (bottom left) → **Apple Account** → Continue → sign in. A team "Milko Vasquez (Personal Team)" appears.
   - **B. Open the project:** `! open ../the-last-game-build/ios/TheLastGame.xcodeproj`
