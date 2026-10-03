@@ -1,12 +1,12 @@
 # Phase R prototype — "an album you survive"
 
-## Where we are (2026-10-04) — start here
+## Where we are (2026-10-04, night) — start here
 
-Roadmap: `docs/ROADMAP.md`. **Step 1 (stable and fast) is DONE; we are on step 2, the native iPhone app.** Milko enrolled in the Apple Developer Program on 2026-09-29 (approval pending, a couple of days). Until then the app goes onto HIS iPhone over a USB cable, signed by Xcode's free personal team (7-day signing); TestFlight comes with the paid team. **2026-10-04: the app runs on Milko's iPhone over the cable; the first native run was slow on the untuned Mobile renderer, and the app now runs Compatibility like the web (re-exported, waiting for the phone).** Studio name KARROT: the bundle IDs are `se.karrot.thelastgame.dev` (cable) and `se.karrot.thelastgame` (planned final).
+Roadmap: `docs/ROADMAP.md`. **Step 1 (stable and fast) is DONE; we are on step 2, the native iPhone app.** Milko enrolled in the Apple Developer Program on 2026-09-29 (approval pending, a couple of days). Until then the app goes onto HIS iPhone over a USB cable, signed by Xcode's free personal team (7-day signing); TestFlight comes with the paid team. **2026-10-04: the app runs on Milko's iPhone over the cable, on the Compatibility renderer like the web — PHONE ACCEPTED: 16.5 ms, load 1.2 s, no grain, "all the numbers back to normal, the game starts right away". Step 2 now waits only for Apple's approval (TestFlight).** Studio name KARROT: the bundle IDs are `se.karrot.thelastgame.dev` (cable) and `se.karrot.thelastgame` (planned final).
 
 **Glow off, measured (13:58 session):** the run from the menu held 16.7 ms with short bumps to 17.1–18.1, no spikes (8 heartbeats, ~22 s of play: a short sample). Load: download done 1.4 s, first frame 2.3 s, menu 3.2 s, tap → run 3.3 s.
 
-### 2026-10-04 (night) — THE FIRST NATIVE RUN, AND THE APP MOVED TO COMPATIBILITY: four commits, re-exported, WAITING FOR THE PHONE
+### 2026-10-04 (night) — THE FIRST NATIVE RUN, AND THE APP MOVED TO COMPATIBILITY: four commits, re-exported, PHONE ACCEPTED
 
 **What the phone showed (Mobile renderer on Metal, the project's default, never tuned):** first launch: load 85.1 s, of which prewarm 76.9 s (51 items, 93 frames), the phone hot; in the run frame 46.8 ms avg / 63.4 worst but cpu 7.6 / 11.1, so GPU-bound at ~21 fps; sound lagging with the frames; mem 137 MB; 3D 0.75 of 2556 × 1179; the grain heavy static over everything, the loading screen too. Second launch from the home screen (no cable): prewarm 1.2 s (51 items, 76 frames), 16.7 ms at TAP TO START, 25.1 avg / 150 worst in the run, the grain still there. Milko: otherwise the game seems fine.
 
@@ -19,9 +19,13 @@ Roadmap: `docs/ROADMAP.md`. **Step 1 (stable and fast) is DONE; we are on step 2
 
 **Milko's verdict on the look (2026-10-04):** "still not happy with the graphics overall, it needs a lot of update; you get tired of the graphics pretty quick." That is roadmap **step 3 (Look, round 3)**, which waits for step 2's "done when" (TestFlight + a full run at 60 fps). The screenshots were the Mobile renderer — greyer and blockier than the tuned build — so the look is judged again on the Compatibility app first.
 
+**The phone, on Compatibility (Milko, 01:24; `docs/` has no copy of the screenshot, the numbers are from it):** the load line ends **`compat opengl3`**. At TAP TO START: **frame 16.5 avg / 23.8 worst, cpu 0.8 / 4.9**, mem 103 MB (137 on Mobile), tex etc2 astc; page 0.5 s, tap 0.03 s, **load 1.2 s** [validate 0.0 (lap 0 shipped), **prewarm 1.0 (51 items, 69 frames)**]; 3D 0.75 of 2556 × 1179. **The grain is gone.** Milko: "everything looks great, all the numbers are back to normal and the game starts right away." Against the Mobile run: load 85.1 → 1.2 s, frame 46.8 → 16.5 ms. Whether that 1.2 s was a first launch after the reinstall is not reported; Compatibility keeps no shader cache of its own, so a cold launch should be close.
+
 **NEXT:**
-- **Milko, on the phone:** Xcode → ▶ Run the re-exported project; the load line must end `compat opengl3`. Then: the load time (first and second launch), the frame time in a normal run vs 16.7, the grain (should match Safari), sound in sync, and the checks still open from the morning — leaderboard (native Talo), haptics, both landscape sides, the Dynamic Island, `blackbox.log`.
-- **If Compatibility holds 16.7:** step 2 waits only for Apple's approval (TestFlight). Meanwhile Milko can write down what tires him about the look, for step 3.
+- **When Apple approves the paid team (Milko):** the TestFlight step — the paid team's Team ID into the preset (check whether Apple kept `36S75NUDV8`), the Release signing fix (2026-10-04 entry below), **confirm the final bundle ID with Milko before the first upload (hard rule 8; weigh the Personal Team profile for `se.karrot.thelastgame`, same entry)**, then Product → Archive → upload → install from TestFlight → a full run at 60 fps = step 2 done.
+- **Not individually reported yet** (Milko's "everything looks great" covers the run): the leaderboard on the app (native Talo, the first real test of `HTTPRequest`), haptics, both landscape sides, the Dynamic Island, `blackbox.log` in the Files app — check them on the TestFlight build at the latest.
+- **Free signing expires 2026-10-10:** ▶ Run again from Xcode to renew it, if TestFlight is not there by then.
+- **Step 3 (look):** waits for step 2. Milko writes down what tires him about the look on the Compatibility app, for the brief.
 
 ### 2026-10-04 — THE APP RUNS ON THE iPHONE: KARROT bundle IDs, the Team ID in the preset: one commit
 
