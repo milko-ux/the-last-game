@@ -31,7 +31,7 @@ The game ships as an app, so we test what players will actually run instead of S
 - Once the app runs, the Safari build is only a quick-preview tool. Don't hunt Safari-only bugs any more.
 - Android (Google Play closed testing) comes later, before step 6.
 
-**Rule:** Before the FIRST upload to App Store Connect / TestFlight, STOP and ask Milko to confirm the final bundle ID (default se.badingo.thelastgame; cable builds use se.badingo.thelastgame.dev). The first upload locks the bundle ID forever.
+**Rule:** Before the FIRST upload to App Store Connect / TestFlight, STOP and ask Milko to confirm the final bundle ID (default se.karrot.thelastgame; cable builds use se.karrot.thelastgame.dev). The first upload locks the bundle ID forever.
 
 **Done when:** the game installs from TestFlight on Milko's iPhone and plays a full run at 60 fps.
 

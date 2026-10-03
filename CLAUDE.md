@@ -20,7 +20,7 @@ Milko — musician/creative director (ODZ collective), self-taught builder with 
 5. **Always run Godot from scripts with a kill switch.** A script error makes a `-s` tool spin forever and there is no `timeout` on this Mac.
 6. **Bots and tools set `Progress.save_enabled = false`** — never let one write the save file.
 7. **Never make things more complicated than they need to be — one file per real thing.** A new song = one audio file + one beatmap. A tempo variant = audio only, scaled in code. If a change needs a second copy of something that already exists, that is the signal to stop and ask whether it needs to exist at all.
-8. **Before the FIRST upload to App Store Connect / TestFlight, STOP and ask Milko to confirm the final bundle ID (default se.badingo.thelastgame; cable builds use se.badingo.thelastgame.dev). The first upload locks the bundle ID forever.**
+8. **Before the FIRST upload to App Store Connect / TestFlight, STOP and ask Milko to confirm the final bundle ID (default se.karrot.thelastgame; cable builds use se.karrot.thelastgame.dev). The first upload locks the bundle ID forever.**
 
 ## What this project is
 
@@ -95,7 +95,7 @@ A Godot web build needs a **secure context**: plain `http://<LAN-IP>` fails with
 - [ ] `tools/` ships deliberately — `?autoplay=1` loads `res://tools/autoplay.gd`. The MP3s do NOT ship (`*.mp3` in `exclude_filter`); the old levels (`level=N`) exist for the headless tools only.
 - [x] `talo.cfg` is in BOTH presets' `include_filter` (2026-09-22). Keep it there: `.cfg` is not a resource and the exporter drops it silently, and the build then ships with no leaderboard and no error. The key is safe to ship as scoped — `docs/TALO_SETUP.md`, "The access key".
 - [ ] Bump `application/config/version` in `project.godot` — every leaderboard entry carries it as `build`.
-- [ ] iOS preset: bundle ID `se.badingo.thelastgame` (not `.dev`), the paid team's Team ID (not `PICKINXCODE`), a real icon, and decide `user_data/accessible_from_files_app` (on for the black box's log).
+- [ ] iOS preset: bundle ID `se.karrot.thelastgame` (not `.dev`), the paid team's Team ID (not the free Personal Team's `36S75NUDV8`, unless Apple gives the paid team the same ID), Release signing fixed (see "Where we are"), a real icon, and decide `user_data/accessible_from_files_app` (on for the black box's log).
 
 ### The Godot MCP plugin is disabled on purpose
 
