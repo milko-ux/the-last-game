@@ -15,6 +15,14 @@ extends CanvasLayer
 const VIGNETTE := 0.25          # at the corners
 const VIGNETTE_START := 0.55    # of the half diagonal, where it begins
 const GRAIN := 0.02             # alpha of the speckle (0.035 read as noise, not film)
+# The grain's alpha was tuned on the web, where Compatibility blends 2D in
+# screen brightness (it ignores hdr_2d). Mobile / Forward+ with hdr_2d blend
+# 2D in LINEAR light, and there the same 2 % speck reads as heavy static:
+# measured on black, the brightest speck 5 of 255 on Compatibility, ~38 on
+# Mobile (the first native iPhone run, 2026-10-04). So the grain is drawn
+# only where 2D is blended the way it was tuned.
+static func grain_fits_renderer(vp: Viewport) -> bool:
+	return RenderingServer.get_current_rendering_method() == "gl_compatibility" or not vp.use_hdr_2d
 
 const SHADER := """
 shader_type canvas_item;
@@ -59,7 +67,7 @@ func _ready() -> void:
 	_mat.shader = sh
 	_mat.set_shader_parameter("vignette", VIGNETTE)
 	_mat.set_shader_parameter("vignette_start", VIGNETTE_START)
-	_mat.set_shader_parameter("grain", GRAIN)
+	_mat.set_shader_parameter("grain", GRAIN if grain_fits_renderer(get_viewport()) else 0.0)
 	_rect.material = _mat
 	add_child(_rect)
 	_resize()
@@ -76,4 +84,4 @@ func set_vignette(on: bool) -> void:
 
 
 func set_grain(on: bool) -> void:
-	_mat.set_shader_parameter("grain", GRAIN if on else 0.0)
+	_mat.set_shader_parameter("grain", GRAIN if on and grain_fits_renderer(get_viewport()) else 0.0)
