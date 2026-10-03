@@ -288,6 +288,7 @@ static func load_line() -> String:
 		line += "   ·   label TIMED OUT"
 	if load_info != "":
 		line += "   ·   " + load_info
+	line += "   ·   " + BlackBox.renderer_name()
 	return line
 
 

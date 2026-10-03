@@ -118,7 +118,7 @@ static func start() -> void:
 	# This session is open until the page says it is leaving.
 	JavaScriptBridge.eval(INSTALL_JS % [KEY, JS_LINES], true)
 	_last_win = DisplayServer.window_get_size()
-	record("session start %s %dx%d  engine main at %.1fs" % [OS.get_name(), _last_win.x, _last_win.y, _page_offset_ms / 1000.0])
+	record("session start %s %dx%d  %s  engine main at %.1fs" % [OS.get_name(), _last_win.x, _last_win.y, renderer_name(), _page_offset_ms / 1000.0])
 	record("boot " + str(JavaScriptBridge.eval(BOOT_JS, true)))
 
 
@@ -139,7 +139,18 @@ static func _start_native() -> void:
 		_file.store_line("--- session %s" % Time.get_datetime_string_from_system(false, true))
 	_set_open(true)
 	_last_win = DisplayServer.window_get_size()
-	record("session start %s %s %s %dx%d" % [OS.get_name(), OS.get_version(), OS.get_model_name(), _last_win.x, _last_win.y])
+	record("session start %s %s %s %dx%d  %s" % [OS.get_name(), OS.get_version(), OS.get_model_name(), _last_win.x, _last_win.y, renderer_name()])
+
+
+# Which renderer and driver are drawing: "compat opengl3" (the web, and the
+# app since 2026-10-04) or "mobile metal" (the Mac's tools; the first native
+# iPhone run). The two blend 2D differently and cost very differently on
+# the phone, so every reading says which one it came from (the frame
+# meter's load line, and each session's first line here).
+static func renderer_name() -> String:
+	var m := RenderingServer.get_current_rendering_method()
+	var short := {"gl_compatibility": "compat", "forward_plus": "forward+"}
+	return "%s %s" % [short.get(m, m), RenderingServer.get_current_rendering_driver_name()]
 
 
 static func _set_open(open: bool) -> void:
