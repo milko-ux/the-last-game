@@ -2,9 +2,20 @@
 
 ## Where we are (2026-10-04, night) — start here
 
-Roadmap: `docs/ROADMAP.md`. **Step 1 (stable and fast) is DONE; we are on step 2, the native iPhone app.** Milko enrolled in the Apple Developer Program on 2026-09-29 (approval pending, a couple of days). Until then the app goes onto HIS iPhone over a USB cable, signed by Xcode's free personal team (7-day signing); TestFlight comes with the paid team. **2026-10-04: the app runs on Milko's iPhone over the cable, on the Compatibility renderer like the web — PHONE ACCEPTED: 16.5 ms, load 1.2 s, no grain, "all the numbers back to normal, the game starts right away". Step 2 now waits only for Apple's approval (TestFlight).** Studio name KARROT: the bundle IDs are `se.karrot.thelastgame.dev` (cable) and `se.karrot.thelastgame` (planned final).
+Roadmap: `docs/ROADMAP.md`. **Step 1 (stable and fast) is DONE; we are on step 2, the native iPhone app.** Milko enrolled in the Apple Developer Program on 2026-09-29 (approval pending, a couple of days). Until then the app goes onto HIS iPhone over a USB cable, signed by Xcode's free personal team (7-day signing); TestFlight comes with the paid team. **2026-10-04: the app runs on Milko's iPhone over the cable, on the Compatibility renderer like the web — PHONE ACCEPTED: 16.5 ms, load 1.2 s, no grain, "all the numbers back to normal, the game starts right away". Step 2 now waits only for Apple's approval (TestFlight).** **Same day, the cable app's on-phone checks (Milko): a run at 16.7 ms, the leaderboard works (native Talo), vibration works, both landscape sides fine, `blackbox.log` visible in the Files app; the Dynamic Island not reported.** Studio name KARROT: the bundle IDs are `se.karrot.thelastgame.dev` (cable) and `se.karrot.thelastgame` (planned final).
 
 **Glow off, measured (13:58 session):** the run from the menu held 16.7 ms with short bumps to 17.1–18.1, no spikes (8 heartbeats, ~22 s of play: a short sample). Load: download done 1.4 s, first frame 2.3 s, menu 3.2 s, tap → run 3.3 s.
+
+### 2026-10-04 (later) — THE CABLE APP'S ON-PHONE CHECKS: Milko's test, no code changed: one commit (this README)
+
+Milko's test of the native app (cable build `se.karrot.thelastgame.dev`, Compatibility renderer):
+
+1. **Frame time during an actual run: 16.7 ms** — 60 fps in play, not just at TAP TO START (16.5 there). This is the "60 fps" half of step 2's "done when", on the cable build; it still has to be seen on the TestFlight install.
+2. **Leaderboard (Talo, native): works.** The first real test of `HTTPRequest` (`_transport_native` in `autoload/talo.gd`) since the 2D game — passed.
+3. **Vibration: works.**
+4. **Both landscape sides: fine.**
+5. **Dynamic Island: not reported** (Milko left it blank). Still open — nothing in the code reads the safe area, so check whether it covers any UI on either landscape side.
+6. **`blackbox.log`: visible in the Files app** (On My iPhone → The Last Game). The preset's `user_data/accessible_from_files_app` does its job; nothing to fix.
 
 ### 2026-10-04 (night) — THE FIRST NATIVE RUN, AND THE APP MOVED TO COMPATIBILITY: four commits, re-exported, PHONE ACCEPTED
 
@@ -23,7 +34,7 @@ Roadmap: `docs/ROADMAP.md`. **Step 1 (stable and fast) is DONE; we are on step 2
 
 **NEXT:**
 - **When Apple approves the paid team (Milko):** the TestFlight step — the paid team's Team ID into the preset (check whether Apple kept `36S75NUDV8`), the Release signing fix (2026-10-04 entry below), **confirm the final bundle ID with Milko before the first upload (hard rule 8; weigh the Personal Team profile for `se.karrot.thelastgame`, same entry)**, then Product → Archive → upload → install from TestFlight → a full run at 60 fps = step 2 done.
-- **Not individually reported yet** (Milko's "everything looks great" covers the run): the leaderboard on the app (native Talo, the first real test of `HTTPRequest`), haptics, both landscape sides, the Dynamic Island, `blackbox.log` in the Files app — check them on the TestFlight build at the latest.
+- ✓ **The on-phone checks, reported 2026-10-04** (the entry just below): a run at 16.7 ms ✓, the leaderboard (native Talo) ✓, vibration ✓, both landscape sides ✓, `blackbox.log` in the Files app ✓. **Still open: the Dynamic Island** (whether it covers any UI) — check it on the TestFlight build at the latest.
 - **Free signing expires 2026-10-10:** ▶ Run again from Xcode to renew it, if TestFlight is not there by then.
 - **Step 3 (look):** waits for step 2. Milko writes down what tires him about the look on the Compatibility app, for the brief.
 
