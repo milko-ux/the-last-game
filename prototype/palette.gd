@@ -16,15 +16,21 @@ extends RefCounted
 
 # The fog (brief 6 section 3, with Milko's correction 2026-09-23: the
 # brief had it backwards). The concept is LIGHT at the top and in the
-# distance, dark below: four stops measured from field_monolith.png, top
-# of frame, a third down, the middle, the bottom. The backdrop is this
-# gradient; every distant thing fades toward it at its own screen height,
-# so far things get lighter, never black; below the slab everything
-# sinks toward BG_BOTTOM.
-const BG_TOP := Color("#556173")
-const BG_THIRD := Color("#38404e")
-const BG_MIDDLE := Color("#1b2029")
-const BG_BOTTOM := Color("#0c1016")
+# distance, dark below: four stops, top of frame, a third down, the
+# middle, the bottom. The backdrop is this gradient; every distant thing
+# fades toward it at its own screen height, so far things get lighter,
+# never black; below the slab everything sinks toward BG_BOTTOM.
+# LIGHT FOG (step 3 brief 1 section 2, 2026-10-05): the old stops were the
+# concept's colours as measured, but ACES (track_test TONEMAP_DEFAULT)
+# crushes everything under ~30/255 (12 -> 2, 18 -> 5, 24 -> 10), so the
+# lower fog came out near black. These are solved so that what reaches
+# the SCREEN (Compatibility, ACES, measured on the web shot) is
+# (85,97,115) / (70,79,94) / (54,61,74) / (36,41,51): the old top, and a
+# dark blue-grey bottom instead of black.
+const BG_TOP := Color("#4e5662")
+const BG_THIRD := Color("#454b55")
+const BG_MIDDLE := Color("#3b4049")
+const BG_BOTTOM := Color("#2e323a")
 const TILE := Color("#243141")          # the concept's blue slate, the tile face (brief 6 section 4: was #1c2830 teal)
 const SLAB_SIDE := Color("#0c151c")     # the slab's body: its front face, outer sides and pit walls, dark stone (the concept's)
 const TILE_SEAM := Color("#0f5f5a")     # the thin dim line between tiles
@@ -48,9 +54,17 @@ const MONOLITH_FAR := Color("#3a404a")
 # fading into the light fog. The brightness order of the concept: fog
 # lightest, floor the brightest thing in the play area, near pillars
 # darkest.
-const NEAR_PILLAR := Color("#1b232c")   # a little lighter (polish 2026-09-24), so the carvings show up close
-const MID_PILLAR := Color("#222a34")
-const FAR_PILLAR := Color("#384150")   # a little lighter (stage B tuning): the far band fades more into the light fog
+# Light fog (2026-10-05): lighter, and every band now takes some of the
+# fog (props.PILLAR_SIDE_FOG / PILLAR_FLATTEN), so a baked shadow face is
+# stone at ~25/255 on screen instead of 0. Tuned on the web shot.
+const NEAR_PILLAR := Color("#2a333e")
+const MID_PILLAR := Color("#38424f")
+const FAR_PILLAR := Color("#4a5464")
+# THE LOOK BEFORE "light fog" (step 3 brief 1 section 2, 2026-10-05):
+# the fog stops and band tints as they were, reachable on the phone as
+# the look variant "today" (looks.gd) until Milko has compared the two.
+const TODAY_FOG := [Color("#556173"), Color("#38404e"), Color("#1b2029"), Color("#0c1016")]
+const TODAY_PILLAR := [Color("#1b232c"), Color("#222a34"), Color("#384150")]
 const BUILDING_STONE := Color("#5c6272")
 const BUILDING_STONE_FAR := Color("#4f5664")
 # Brief 6 section 1: the one light. Every unshaded block (tiles, slab

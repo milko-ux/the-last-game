@@ -88,3 +88,23 @@ pr_light_on={
 "type": "float",
 "value": 1.0
 }
+pr_fog_top={
+"type": "vec3",
+"value": Vector3(0, 0, 0)
+}
+pr_fog_third={
+"type": "vec3",
+"value": Vector3(0, 0, 0)
+}
+pr_fog_middle={
+"type": "vec3",
+"value": Vector3(0, 0, 0)
+}
+pr_fog_bottom={
+"type": "vec3",
+"value": Vector3(0, 0, 0)
+}
+pr_low_fog_max={
+"type": "float",
+"value": 0.0
+}

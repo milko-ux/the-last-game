@@ -83,15 +83,24 @@ const LOW_FOG_MAX := 0.92
 # own so the backdrop quad and the far silhouettes (camera_rig.gd) can
 # share them without the whole head. Included into FADE_HEAD.
 const FOG_FUNCTIONS := """
+// The fog's stops and the height fog's most are global uniforms (step 3
+// brief 1 section 2: the look switch changes them live), published by
+// publish_fog() below.
+global uniform vec3 pr_fog_top;
+global uniform vec3 pr_fog_third;
+global uniform vec3 pr_fog_middle;
+global uniform vec3 pr_fog_bottom;
+global uniform float pr_low_fog_max;
+
 // Brief 6 section 3: the backdrop's colour at a screen height (0 top ..
 // 1 bottom), four stops. The same function paints the backdrop quad
 // (camera_rig.gd), so a faded thing goes toward exactly what is behind it.
 vec3 fog_colour(float sy) {
 	sy = clamp(sy, 0.0, 1.0);   // a vertex above the frame must not extrapolate past the top stop (it went white)
-	const vec3 top = FOG_TOP;
-	const vec3 third = FOG_THIRD;
-	const vec3 middle = FOG_MIDDLE;
-	const vec3 bottom = FOG_BOTTOM;
+	vec3 top = pr_fog_top;
+	vec3 third = pr_fog_third;
+	vec3 middle = pr_fog_middle;
+	vec3 bottom = pr_fog_bottom;
 	if (sy < 0.3333) { return mix(top, third, sy * 3.0); }
 	if (sy < 0.5) { return mix(third, middle, (sy - 0.3333) * 6.0); }
 	return mix(middle, bottom, (sy - 0.5) * 2.0);
@@ -133,8 +142,8 @@ FOG_FUNCTIONS
 // Height fog: below the slab's underside, toward the dark bottom of the
 // fog with depth (start, end, the most it may take).
 vec3 low_fog(vec3 c, float world_y) {
-	const vec3 lf = LOW_FOG;
-	return mix(c, FOG_BOTTOM, smoothstep(lf.x, lf.y, -world_y) * lf.z);
+	const vec2 lf = LOW_FOG_RANGE;
+	return mix(c, pr_fog_bottom, smoothstep(lf.x, lf.y, -world_y) * pr_low_fog_max);
 }
 
 // Brief 6 section 1: a base colour shaded by the face's normal against
@@ -496,8 +505,9 @@ static func _shader(kind: String) -> Shader:
 # the numbers live in palette.gd, the shader text here, and this is the
 # one place they meet. props.gd builds its shaders through it too.
 static func fog_functions() -> String:
-	return FOG_FUNCTIONS.replace("FOG_TOP", _vec3(WorldPalette.BG_TOP)).replace("FOG_THIRD", _vec3(WorldPalette.BG_THIRD)) \
-		.replace("FOG_MIDDLE", _vec3(WorldPalette.BG_MIDDLE)).replace("FOG_BOTTOM", _vec3(WorldPalette.BG_BOTTOM))
+	if not _fog_published:
+		publish_fog(shipped_fog(), LOW_FOG_MAX)
+	return FOG_FUNCTIONS
 
 
 static func fade_head() -> String:
@@ -505,9 +515,28 @@ static func fade_head() -> String:
 	return FADE_HEAD.replace("FOG_FUNCTIONS", fog_functions()).replace("LIGHT_TONES", "vec4(%.3f, %.3f, %.3f, %.3f)" % [
 			WorldPalette.LIGHT_TOP, WorldPalette.LIGHT_SIDE, WorldPalette.LIGHT_SHADE, WorldPalette.SHADE_TINT_AMOUNT]) \
 		.replace("SHADE_TINT", "vec3(%.4f, %.4f, %.4f)" % [t.r, t.g, t.b]) \
-		.replace("FOG_TOP", _vec3(WorldPalette.BG_TOP)).replace("FOG_THIRD", _vec3(WorldPalette.BG_THIRD)) \
-		.replace("FOG_MIDDLE", _vec3(WorldPalette.BG_MIDDLE)).replace("FOG_BOTTOM", _vec3(WorldPalette.BG_BOTTOM)) \
-		.replace("LOW_FOG", "vec3(%.1f, %.1f, %.2f)" % [LOW_FOG_START, LOW_FOG_END, LOW_FOG_MAX])
+		.replace("LOW_FOG_RANGE", "vec2(%.1f, %.1f)" % [LOW_FOG_START, LOW_FOG_END])
+
+
+# THE FOG AS GLOBAL UNIFORMS (step 3 brief 1 section 2, 2026-10-05). The
+# four stops (WorldPalette.BG_*) and the height fog's most (LOW_FOG_MAX)
+# used to be written into the shader text; now they are published to
+# every world shader at once, so a look variant (looks.gd) changes them
+# without a recompile. The shipped values go out the first time a world
+# shader is built; Looks.apply_world() overrides them.
+static var _fog_published := false
+
+static func shipped_fog() -> Array:
+	return [WorldPalette.BG_TOP, WorldPalette.BG_THIRD, WorldPalette.BG_MIDDLE, WorldPalette.BG_BOTTOM]
+
+
+static func publish_fog(stops: Array, low_max: float) -> void:
+	var names := ["pr_fog_top", "pr_fog_third", "pr_fog_middle", "pr_fog_bottom"]
+	for i in names.size():
+		var c: Color = stops[i]
+		RenderingServer.global_shader_parameter_set(names[i], Vector3(c.r, c.g, c.b))
+	RenderingServer.global_shader_parameter_set("pr_low_fog_max", low_max)
+	_fog_published = true
 
 
 static func _vec3(c: Color) -> String:

@@ -319,7 +319,14 @@ static func building(far: bool = false) -> Material:
 # a band's colour, and a band's own fade -- the far band is a skyline
 # and keeps going long after the course itself has faded.
 const PILLAR_FADE := [Vector4(14.0, 27.0, 2.0, 10.0), Vector4(22.0, 52.0, 6.0, 20.0), Vector4(30.0, 88.0, 10.0, 30.0)]
-const PILLAR_FLATTEN := [0.3, 0.6, 0.92]
+const PILLAR_FLATTEN := [1.0, 1.0, 0.92]   # light fog (2026-10-05); was 0.3, 0.6, 0.92
+# Per band: from this far out (|x|) to this far, at most this much toward
+# the fog colour -- the kit shader's side_fog, the haze between the
+# camera and a pillar. Until step 3 brief 1 section 2 every band had the
+# shader's default (16, 60, 0.85), which left the near band (|x| 13-21)
+# with none and its baked shadow faces black. Now the near band takes up
+# to 40 %, the mid band 60 %, the far band as before.
+const PILLAR_SIDE_FOG := [Vector3(0.0, 20.0, 0.4), Vector3(0.0, 40.0, 0.6), Vector3(16.0, 60.0, 0.85)]
 
 # The baked stone reads ~0.35-0.9 in the atlas; a band's tint is what the
 # stone is multiplied by, so NEAR_PILLAR etc. are relative to a mid-grey
@@ -332,13 +339,37 @@ static func pillar(band: int) -> Material:
 		var m := ShaderMaterial.new()
 		m.shader = _shader("kit")
 		m.set_shader_parameter("atlas", kit_atlas())
-		m.set_shader_parameter("tint", [WorldPalette.NEAR_PILLAR, WorldPalette.MID_PILLAR, WorldPalette.FAR_PILLAR][band])
+		m.set_shader_parameter("tint", _pillar_tint[band])
 		m.set_shader_parameter("gain", PILLAR_GAIN)
 		var f: Vector4 = PILLAR_FADE[band]
 		m.set_shader_parameter("fade", Quaternion(f.x, f.y, f.z, f.w))
-		m.set_shader_parameter("far_flatten", PILLAR_FLATTEN[band])
+		m.set_shader_parameter("far_flatten", _pillar_flatten[band])
+		m.set_shader_parameter("side_fog", _pillar_side_fog[band])
 		_mats[key] = m
 	return _mats[key]
+
+
+# The bands' tints and flattening as the current look has them (looks.gd,
+# step 3 brief 1 section 2): the three materials are shared by every
+# pillar, so a look switch is three parameter writes.
+static var _pillar_tint: Array = shipped_pillar_tint()
+static var _pillar_flatten: Array = PILLAR_FLATTEN
+static var _pillar_side_fog: Array = PILLAR_SIDE_FOG
+
+static func shipped_pillar_tint() -> Array:
+	return [WorldPalette.NEAR_PILLAR, WorldPalette.MID_PILLAR, WorldPalette.FAR_PILLAR]
+
+
+static func set_pillar_look(tints: Array, flatten: Array, side_fog: Array) -> void:
+	_pillar_tint = tints
+	_pillar_flatten = flatten
+	_pillar_side_fog = side_fog
+	for band in 3:
+		var key := "pillar_%d" % band
+		if _mats.has(key):
+			_mats[key].set_shader_parameter("tint", tints[band])
+			_mats[key].set_shader_parameter("far_flatten", flatten[band])
+			_mats[key].set_shader_parameter("side_fog", side_fog[band])
 
 
 static func size_of(name: String) -> Vector3:

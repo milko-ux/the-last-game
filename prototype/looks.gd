@@ -1,4 +1,6 @@
 extends RefCounted
+const Mats := preload("res://prototype/flat_mats.gd")
+const Props := preload("res://prototype/props/props.gd")
 # ============================================================
 # LOOKS (step 3 brief 1 section 1, 2026-10-05) — named look variants for
 # comparing before / after on the phone. DEBUG BUILDS ONLY: the switch is
@@ -14,6 +16,14 @@ extends RefCounted
 #   scale     the 3D render scale (track_test.RENDER_SCALE_MOBILE)
 #   pillars   fraction of the pillars kept (monoliths.gd), 1.0 = all
 #   slab      the slab's thickness (field.THICK)
+#   fog             the four fog stops (WorldPalette.BG_*), live globals
+#   low_fog_max     the height fog's most (flat_mats.LOW_FOG_MAX)
+#   pillar_tint     the three band tints (WorldPalette.*_PILLAR)
+#   pillar_flatten  the bands' far flattening (props.PILLAR_FLATTEN)
+#   pillar_side_fog the bands' haze by distance out (props.PILLAR_SIDE_FOG)
+#
+# "light fog" (section 2) is the shipped look: the palette's own values.
+# "today" is the look before it, kept in the palette as TODAY_*.
 #
 # Sections 2, 3 and 5 of the brief add entries (light fog, tops in frame,
 # the camera tests) and the keys they need. A value lives where it lives
@@ -25,7 +35,9 @@ extends RefCounted
 # ============================================================
 
 const LOOKS := [
-	["today", {}],
+	["light fog", {}],
+	["today", {"fog": WorldPalette.TODAY_FOG, "pillar_tint": WorldPalette.TODAY_PILLAR, "pillar_flatten": [0.3, 0.6, 0.92],
+		"pillar_side_fog": [Vector3(16.0, 60.0, 0.85), Vector3(16.0, 60.0, 0.85), Vector3(16.0, 60.0, 0.85)]}],
 ]
 
 static var current := 0
@@ -39,11 +51,26 @@ static func next() -> void:
 	current = (current + 1) % LOOKS.size()
 
 
+static func _change(extra: Dictionary) -> Dictionary:
+	var change: Dictionary = LOOKS[current][1].duplicate()
+	change.merge(extra, true)
+	return change
+
+
+# The part of a look that needs no scene: the fog and the pillar bands.
+# The menu calls this (its world uses the same shaders); apply() too.
+static func apply_world(extra: Dictionary = {}) -> void:
+	var change := _change(extra)
+	Mats.publish_fog(change.get("fog", Mats.shipped_fog()), float(change.get("low_fog_max", Mats.LOW_FOG_MAX)))
+	Props.set_pillar_look(change.get("pillar_tint", Props.shipped_pillar_tint()), change.get("pillar_flatten", Props.PILLAR_FLATTEN),
+		change.get("pillar_side_fog", Props.PILLAR_SIDE_FOG))
+
+
 # The shipped look, then the current variant, then `extra` (a probe setup,
 # or the run's dev URL switches) on top.
 static func apply(scene: Node, extra: Dictionary = {}) -> void:
-	var change: Dictionary = LOOKS[current][1].duplicate()
-	change.merge(extra, true)
+	var change := _change(extra)
+	apply_world(extra)
 	scene.finish = scene.FINISH_DEFAULT.duplicate()
 	for k in ["tonemap", "glow", "vignette", "grain", "msaa"]:
 		if change.has(k):
