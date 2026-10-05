@@ -79,6 +79,11 @@ func _build_strip(z0: float, z1: float) -> void:
 	var pillars: Array = names.filter(func(n): return n != "lintel")
 	var rng := RandomNumberGenerator.new()
 	var bar := int(round((z0 - _origin_z) / BeatClock.BAR_UNITS))
+	# set_density's thinning, per band and side: a pillar is kept each time
+	# this passes 1. Decided AFTER the pillar's random draws, so the kept
+	# ones stand exactly where they stand at 1.0.
+	var keep := PackedFloat32Array()
+	keep.resize(BANDS.size() * 2)
 	var z := z0
 	while z < z1 - 0.01:
 		rng.seed = hash("pillars-%d-%d" % [seed_level, bar])
@@ -95,6 +100,11 @@ func _build_strip(z0: float, z1: float) -> void:
 					var h: float = rng.randf_range(band["h"].x, band["h"].y)
 					var slim: float = rng.randf_range(band["slim"].x, band["slim"].y)
 					var zz := z + rng.randf_range(0.0, BeatClock.BAR_UNITS)
+					var ki := b * 2 + (0 if side < 0.0 else 1)
+					keep[ki] += _density
+					if keep[ki] < 1.0:
+						continue
+					keep[ki] -= 1.0
 					if pair and i == 0:
 						var lsize := Props.kit_size("lintel")
 						var span := lsize.z * 0.9
@@ -169,19 +179,29 @@ func _append(b: int, name: String, xf: Transform3D, verts: Array, norms: Array, 
 func set_window(z_back: float) -> void:
 	for strip in _strips:
 		for b in BANDS.size():
-			var on: bool = float(strip["z1"]) >= z_back - SHOW_BEHIND and float(strip["z0"]) <= z_back + float(SHOW_AHEAD[b]) \
-				and not (b == 2 and _density < 0.999)
+			var on: bool = float(strip["z1"]) >= z_back - SHOW_BEHIND and float(strip["z0"]) <= z_back + float(SHOW_AHEAD[b])
 			var mmi: MeshInstance3D = strip["nodes"][b]
 			if mmi.visible != on:
 				mmi.visible = on
 
 
-# The probe's "half the pillars": with the bands merged into one mesh
-# each there is no instance count to halve, so below 1.0 the far band is
-# dropped (about half the pillars by count), and at 1.0 it is back.
+# The fraction of the pillars kept (the probe's "no pillars" / "pillars
+# x0.5", looks.gd's "pillars"): every band and side keeps that share, the
+# rest are left out of the merged meshes. The bands are merged into one
+# mesh each, so a change rebuilds every strip already built, from the
+# same seeds (a few hundred microseconds a strip on the Mac).
 var _density := 1.0
 func set_density(f: float) -> void:
+	f = clampf(f, 0.0, 1.0)
+	if is_equal_approx(f, _density):
+		return
 	_density = f
+	var built: Array = _strips
+	_strips = []
+	for strip in built:
+		for mi: MeshInstance3D in strip["nodes"]:
+			mi.queue_free()
+		_build_strip(float(strip["z0"]), float(strip["z1"]))
 
 
 # For tools/autoplay.gd's gap measurement and the dev readout: how many

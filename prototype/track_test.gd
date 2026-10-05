@@ -19,6 +19,7 @@ const Mats := preload("res://prototype/flat_mats.gd")
 const HazardMath := preload("res://prototype/hazard_math.gd")
 const LapGen := preload("res://prototype/lap_gen.gd")
 const Hud := preload("res://prototype/hud.gd")
+const Looks := preload("res://prototype/looks.gd")
 
 # Lives come from the level's knobs (Rules.lives(): 0 on level 1, 3 from
 # level 2). Out of lives = the death screen, then back to level 1.
@@ -189,8 +190,7 @@ func _ready() -> void:
 	RenderingServer.frame_post_draw.connect(_on_frame_drawn)
 	rig.publish_light($CreatureLight)
 	_dev_url_switches()
-	_apply_render_scale()
-	apply_finish()
+	Looks.apply(self, _url_look)
 	endless = Rules.ENDLESS
 	if endless:
 		_ready_endless()
@@ -296,12 +296,13 @@ func _ready_endless() -> void:
 # renderer supports this (checked); it has no pixel-ratio cap to offer
 # instead, and one would blur the controls. Desktop stays at 1.0.
 const RENDER_SCALE_MOBILE := 0.75
-var _render_scale_override := -1.0
 
-func _apply_render_scale() -> void:
+# `over` > 0: that scale instead (the look's "scale": ?scale=X, the probe's
+# stress row). Called through Looks.apply.
+func apply_render_scale(over: float = -1.0) -> void:
 	var sc := RENDER_SCALE_MOBILE if (OS.has_feature("web") or OS.has_feature("mobile")) else 1.0
-	if _render_scale_override > 0.0:
-		sc = _render_scale_override
+	if over > 0.0:
+		sc = over
 	get_viewport().scaling_3d_scale = clampf(sc, 0.25, 1.0)
 	FrameMeter.load_info = "3D %.2f of %d x %d" % [get_viewport().scaling_3d_scale, DisplayServer.window_get_size().x, DisplayServer.window_get_size().y]
 
@@ -320,6 +321,7 @@ func _apply_render_scale() -> void:
 #                 the finishing layer's switches (look pass v2 section 6);
 #                 =1 turns one ON, =0 OFF (glow is off by default)
 var _dev_autoplay := false
+var _url_look := {}                 # the look keys of the switches below (finish, scale), applied on top of the look (looks.gd)
 var light_on := true
 # The finishing layer (brief 6 sections 7-8): what is on, and the
 # tonemapper. Defaults are the shipped look; the switches above flip them.
@@ -338,7 +340,8 @@ var _finish: CanvasLayer
 
 # Applies the finishing layer as `finish` says: the WorldEnvironment's
 # tonemapper and glow, the viewport's MSAA, and the vignette / grain quad
-# (finish.gd). Called once at _ready, after the URL switches were read.
+# (finish.gd). Called through Looks.apply: at _ready (after the URL
+# switches were read), by the look switch and by the probe.
 func apply_finish() -> void:
 	var env: Environment = $WorldEnvironment.environment
 	match String(finish["tonemap"]):
@@ -377,16 +380,16 @@ func _dev_url_switches() -> void:
 	if not OS.has_feature("web") or not FrameMeter.enabled():
 		return
 	if FrameMeter.url_param("scale") != "":
-		_render_scale_override = float(FrameMeter.url_param("scale"))
+		_url_look["scale"] = float(FrameMeter.url_param("scale"))
 	set_light(FrameMeter.url_param("light") != "0")
 	var tm := FrameMeter.url_param("tonemap")
 	if tm != "":
-		finish["tonemap"] = "linear" if tm == "0" else tm
+		_url_look["tonemap"] = "linear" if tm == "0" else tm
 	for k in ["glow", "vignette", "grain", "msaa"]:
 		if FrameMeter.url_param(k) == "0":
-			finish[k] = false
+			_url_look[k] = false
 		elif FrameMeter.url_param(k) == "1":
-			finish[k] = true
+			_url_look[k] = true
 	if not Rules.ENDLESS:
 		return
 	if FrameMeter.url_param("live") == "1":
@@ -399,25 +402,109 @@ func _dev_url_switches() -> void:
 	# bar N until one death (the death-spike measurement).
 	var probe := FrameMeter.url_param("probe") == "1"
 	if FrameMeter.url_param("autoplay") == "1" or probe:
-		Progress.save_enabled = false
 		_dev_autoplay = true
-		var ap: Object = load("res://tools/autoplay.gd").new()
-		ap.mode = "validator"
-		ap.Rules = Rules
-		ap.HazardMath = HazardMath
-		ap.attach_endless(self, BeatClock)
-		bot = ap
-		Rules.LIVES_OVERRIDE = 0
+		var ap := _attach_bot()
 		if FrameMeter.url_param("kill_bar") != "":
 			ap.kill_bar = int(FrameMeter.url_param("kill_bar"))
 		if FrameMeter.url_param("kill_count") != "":
 			ap.kill_count = int(FrameMeter.url_param("kill_count"))
 		print("DEV autoplay=1 live=%s" % LapGen.ignore_verdicts)
 		if probe:
-			var pr: Node = load("res://prototype/probe.gd").new()
-			pr.name = "Probe"
-			pr.scene = self
-			add_child(pr)
+			_add_probe()
+
+
+# The validator bot (tools/autoplay.gd) takes the controls: no saving, no
+# lives (a bot measures the course, not the lives system).
+func _attach_bot() -> Object:
+	Progress.save_enabled = false
+	var ap: Object = load("res://tools/autoplay.gd").new()
+	ap.mode = "validator"
+	ap.Rules = Rules
+	ap.HazardMath = HazardMath
+	ap.attach_endless(self, BeatClock)
+	bot = ap
+	Rules.LIVES_OVERRIDE = 0
+	return ap
+
+
+func _add_probe() -> void:
+	_probe = load("res://prototype/probe.gd").new()
+	_probe.name = "Probe"
+	_probe.scene = self
+	add_child(_probe)
+
+
+# ------------------------------------------------------------
+# THE PROBE AND THE LOOK SWITCH INSIDE THE APP (step 3 brief 1 section 1).
+# Debug builds only: they hang off the frame readout, which only exists
+# when FrameMeter.enabled(). On TAP TO START, a press on the readout (top
+# right) does not start the run: let go within PROBE_HOLD_MS = the next
+# look variant (looks.gd); hold it = the probe. The probe plays bars 9-12
+# of lap 0 once per setup (about 2 minutes), draws its table on screen
+# and writes it to blackbox.log; then a tap goes back to the menu.
+# ------------------------------------------------------------
+const PROBE_HOLD_MS := 700
+var _probe: Node = null
+var _probe_in_app := false
+var _probe_saved_before := true
+var _hold_from := -1                # msec the readout press began; -1 = no press
+
+
+# A press / release on the readout while on TAP TO START. True = the
+# event was the readout's and must not start the run.
+func _readout_touch(event: InputEvent) -> bool:
+	# OS.is_debug_build(): the readout also shows in a release while
+	# Progress.UNLOCK_ALL is on; these two never do.
+	if meter == null or not OS.is_debug_build() or state != State.WAIT or bot != null:
+		return false
+	var touch: bool = event is InputEventScreenTouch or (event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT)
+	if not touch:
+		return false
+	if event.pressed:
+		if not meter.hot_rect().has_point(event.position):
+			return false
+		# A touch also arrives as an emulated mouse press: the first one starts the hold.
+		if _hold_from < 0:
+			_hold_from = Time.get_ticks_msec()
+		return true
+	if _hold_from < 0:
+		return false
+	# Let go before the long press fired: the next look.
+	_hold_from = -1
+	Looks.next()
+	Looks.apply(self, _url_look)
+	BlackBox.record("look %s" % Looks.name_of())
+	return true
+
+
+# Called every frame on TAP TO START: a hold that reached PROBE_HOLD_MS.
+func _tick_readout_hold() -> void:
+	if _hold_from >= 0 and Time.get_ticks_msec() - _hold_from >= PROBE_HOLD_MS:
+		_hold_from = -1
+		start_probe()
+
+
+func start_probe() -> void:
+	if bot != null or state != State.WAIT:
+		return
+	_probe_in_app = true
+	_probe_saved_before = Progress.save_enabled
+	_attach_bot()
+	# The lives were set up at load from the override the bot just changed.
+	_lives_on = false
+	lives = 0
+	_add_probe()
+	_probe.in_app = true
+	start_now()
+
+
+# After the in-app probe's table: back to the menu with everything the bot
+# changed put back. The bot's distance is never recorded.
+func _leave_probe() -> void:
+	Rules.LIVES_OVERRIDE = -1
+	Progress.save_enabled = _probe_saved_before
+	BeatClock.stop()
+	get_tree().change_scene_to_file(MENU_SCENE)
 
 
 # Every material is drawn once before the run so no shader compiles in
@@ -734,6 +821,9 @@ func lives_enabled() -> bool:
 func _input(event: InputEvent) -> void:
 	if account_panel.visible:
 		return   # the panel owns the screen; nothing leaks through to the run
+	if _readout_touch(event):
+		get_viewport().set_input_as_handled()
+		return
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_SPACE:
 		if state == State.RUN:
 			_on_jump()
@@ -753,7 +843,9 @@ func _input(event: InputEvent) -> void:
 	var at: Variant = event.position if (event is InputEventScreenTouch or event is InputEventMouseButton) else null
 	match state:
 		State.RUN:
-			if at != null and endless and hud.pause_rect.has_point(at):
+			if _probe_in_app and _probe.done:
+				_leave_probe()
+			elif at != null and endless and bot == null and hud.pause_rect.has_point(at):   # (no pause button while a bot plays)
 				pause_run()
 		State.PAUSED:
 			if at == null:
@@ -819,6 +911,8 @@ func _process(delta: float) -> void:
 	match state:
 		State.LOADING:
 			_tick_loading()
+		State.WAIT:
+			_tick_readout_hold()
 		State.STARTING:
 			_start_delay -= delta
 			if _start_delay <= 0.0:
@@ -1140,7 +1234,8 @@ func _die() -> void:
 	if not (lives_enabled() and lives <= 0):   # (lives are already down one here)
 		BeatClock.preroll(_rewind_target(), _freeze)
 	if endless:
-		Progress.record_distance(LapGen.SEASON_SEED, distance_m)
+		if bot == null:   # a bot's distance is never a best (the in-app probe puts saving back on after)
+			Progress.record_distance(LapGen.SEASON_SEED, distance_m)
 	else:
 		Progress.record_best(Rules.LEVEL, BeatClock.song_time())
 	if lives_enabled() and lives <= 0:

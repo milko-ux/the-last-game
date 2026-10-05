@@ -1,6 +1,7 @@
 extends Label
 class_name FrameMeter
 const BlackBox := preload("res://prototype/blackbox.gd")
+const Looks := preload("res://prototype/looks.gd")
 # ============================================================
 # FRAME METER — dev only. A small line in the top-right corner:
 # the average and the worst frame time (ms) over the last 2 seconds,
@@ -521,6 +522,7 @@ func _update_text() -> void:
 				text += "     audio %+.0f (%+.0f)" % [BeatClock.audio_drift_ms(), BeatClock.drift_corrected_ms]
 		if mono_note != "":
 			text += "     " + mono_note
+		text += "     look: " + Looks.name_of()
 		# Memory (2026-09-24, the iOS tab kill): the engine's own allocations
 		# now and at their peak, and which compressed texture formats the GPU
 		# took -- a phone that shows no etc2 is unpacking the atlases to RGBA.
@@ -536,6 +538,19 @@ func _update_text() -> void:
 	if _load_label.visible and (load_log.size() != _load_shown or _t_ready < 0):
 		_load_shown = load_log.size()
 		_load_label.text = load_line()
+
+
+# Where a finger on the readout counts (track_test.gd: on TAP TO START a
+# tap = the next look, a long press = the probe): the label's box, made
+# tall enough for a thumb -- from the screen's top edge to 40 px under it.
+func hot_rect() -> Rect2:
+	var r := get_global_rect()
+	return Rect2(r.position.x, 0.0, r.size.x, r.end.y + 40.0)
+
+
+# The newest frame's cpu number (probe.gd's cpu column).
+func last_cpu_ms() -> float:
+	return _cpu[(_head - 1 + RING) % RING] if _count > 0 else 0.0
 
 
 # Average / worst over everything still in the ring (tools/frame_probe.gd).

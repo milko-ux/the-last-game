@@ -1,21 +1,36 @@
 extends Node
 const BlackBox := preload("res://prototype/blackbox.gd")
+const Looks := preload("res://prototype/looks.gd")
 # ============================================================
-# ?probe=1 — THE ON-PHONE BENCHMARK (look pass v2, 2026-09-24). The
+# THE ON-PHONE BENCHMARK (look pass v2, 2026-09-24). Started by ?probe=1
+# on the web, or in the app (debug builds) by a long press on the frame
+# readout on TAP TO START (step 3 brief 1 section 1, track_test.gd). The
 # validator bot plays bars 9-12 of lap 0 of the real run, then the clock
 # seeks back and plays the same bars again with the next setup, and at
 # the end a table of avg / worst frame time per setup is drawn on
 # screen, so one screenshot says which part of the look the phone can
-# afford. Setups, each one change against the shipped look
-# (track_test.FINISH_DEFAULT; glow is off there since 2026-09-29):
+# afford. Setups, each one change against the CURRENT LOOK (looks.gd: a
+# setup is applied on top of it, the same mechanism; "today" is the
+# shipped look, track_test.FINISH_DEFAULT, glow off since 2026-09-29):
 #
-#   shipped · grain off · glow ON · MSAA off · all post off (tonemap
-#   linear too) · half the pillars · thin slab (the old 2-unit one)
+#   as is · grain off · glow ON · MSAA off · all post off (tonemap
+#   linear too) · no pillars · pillars x0.5 · thin slab (the old 2-unit one)
+#   · 3D x1.0 (stress)
+#
+# "no pillars" against "as is" is what the background costs. But a phone
+# that has time to spare reads ~16.7 on every row (60 fps is its cap), so
+# two numbers look past the cap: the cpu column (the frame meter's cpu:
+# every script's update + the engine's frame setup -- uncapped), and the
+# stress row, the 3D at full resolution, 1.78x the pixels of the app's
+# 0.75. If the stress row still holds ~16.7, the GPU has at least ~44 %
+# to spare; if it does not, its excess over 16.7 says roughly how much
+# the pixels cost.
 #
 # Frame times are the wall clock between two _process calls of this
 # node (it runs first), the first SETTLE_S after each seek left out (the
-# seek's own hitch). The table is also printed (PROBE lines) and put on
-# the page as window.pr_probe for tools/web_shot.py.
+# seek's own hitch). The table is also printed (PROBE lines), written to
+# the black box (blackbox.log on the app) and put on the page as
+# window.pr_probe for tools/web_shot.py.
 # ============================================================
 
 const Rules := preload("res://prototype/rules.gd")
@@ -23,26 +38,30 @@ const FROM_BAR := 9
 const TO_BAR := 12
 const SETTLE_S := 0.7
 const SETUPS := [
-	["warm-up", {}],           # thrown away: shader compiles and first draws land here, not in "shipped"
-	["shipped", {}],
+	["warm-up", {}],           # thrown away: shader compiles and first draws land here, not in "as is"
+	["as is", {}],
 	["grain off", {"grain": false}],
 	["glow ON", {"glow": true}],
 	["MSAA off", {"msaa": false}],
 	["all post off", {"grain": false, "glow": false, "vignette": false, "msaa": false, "tonemap": "linear"}],
-	["half the pillars", {"pillars": 0.5}],
+	["no pillars", {"pillars": 0.0}],
+	["pillars x0.5", {"pillars": 0.5}],
 	["thin slab (2)", {"slab": 2.0}],
+	["3D x1.0 (stress)", {"scale": 1.0}],
 ]
 
 var scene: Node = null
+var in_app := false              # started from the readout: a tap after the table goes to the menu
+var done := false
 var _i := -1
 var _last_usec := 0
 var _settle := 0.0
 var _sum := 0.0
 var _worst := 0.0
+var _cpu := 0.0
 var _n := 0
 var _rows: Array = []
 var _label: Label
-var _done := false
 var _deaths0 := 0
 var _retried := false
 var _run_up := 0.0
@@ -65,7 +84,7 @@ func _process(delta: float) -> void:
 	var now := Time.get_ticks_usec()
 	var ms := float(now - _last_usec) / 1000.0 if _last_usec != 0 else 0.0
 	_last_usec = now
-	if _done or scene == null or scene.state != scene.State.RUN:
+	if done or scene == null or scene.state != scene.State.RUN:
 		return
 	if _i < 0:
 		# The run is up: a second for it to settle, then the first setup.
@@ -79,6 +98,7 @@ func _process(delta: float) -> void:
 	if ms > 0.0:
 		_sum += ms
 		_worst = maxf(_worst, ms)
+		_cpu += scene.meter.last_cpu_ms() if scene.meter != null else 0.0
 		_n += 1
 	if BeatClock.current_bar() >= TO_BAR:
 		# A death inside the window (a rewind frame, a freeze) is not the
@@ -89,7 +109,7 @@ func _process(delta: float) -> void:
 			return
 		_retried = false
 		if _i > 0:
-			_rows.append([SETUPS[_i][0], _sum / maxf(_n, 1.0), _worst, _n, scene.deaths - _deaths0])
+			_rows.append([SETUPS[_i][0], _sum / maxf(_n, 1.0), _worst, _cpu / maxf(_n, 1.0), _n, scene.deaths - _deaths0])
 		if _i + 1 < SETUPS.size():
 			_start(_i + 1)
 		else:
@@ -98,7 +118,7 @@ func _process(delta: float) -> void:
 
 func _start(i: int) -> void:
 	_i = i
-	_apply(SETUPS[i][1])
+	Looks.apply(scene, SETUPS[i][1])
 	# The way a checkpoint rewind and autoplay's start_bar put the bot in:
 	# the player a unit into the bar, the window a lead behind it, so the
 	# bot has time to get onto its plan before the window arrives.
@@ -110,34 +130,26 @@ func _start(i: int) -> void:
 	_settle = SETTLE_S
 	_sum = 0.0
 	_worst = 0.0
+	_cpu = 0.0
 	_n = 0
 	_label.text = "PROBE %d / %d: %s" % [i, SETUPS.size() - 1, SETUPS[i][0]] if i > 0 else "PROBE warm-up"
 	print("PROBE start %s" % SETUPS[i][0])
 	BlackBox.record("probe %s" % SETUPS[i][0])
 
 
-# Everything back to the shipped look, then the setup's own change.
-func _apply(change: Dictionary) -> void:
-	scene.finish = scene.FINISH_DEFAULT.duplicate()
-	for k in ["tonemap", "glow", "vignette", "grain", "msaa"]:
-		if change.has(k):
-			scene.finish[k] = change[k]
-	scene.apply_finish()
-	scene.field.set_pillar_density(float(change.get("pillars", 1.0)))
-	scene.field.set_slab_thickness(float(change.get("slab", scene.field.THICK)))
-
-
 func _finish() -> void:
-	_done = true
+	done = true
 	BeatClock.pause()
+	Looks.apply(scene, scene._url_look)   # the look as it was, without the last setup
 	var heap: String = str(JavaScriptBridge.eval("performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1048576) + ' MB' : 'n/a'", true)) if OS.has_feature("web") else "-"
-	var lines := ["PROBE  bars %d-%d of lap 0, %s  heap %s" % [FROM_BAR, TO_BAR, FrameMeter.load_info, heap]]
-	lines.append("%-18s %7s %7s %6s %s" % ["setup", "avg ms", "worst", "frames", "deaths"])
+	var lines := ["PROBE  look: %s  bars %d-%d of lap 0, %s  heap %s  %s" % [Looks.name_of(), FROM_BAR, TO_BAR, FrameMeter.load_info, heap, BlackBox.renderer_name()]]
+	lines.append("%-18s %7s %7s %6s %6s %s" % ["setup", "avg ms", "worst", "cpu", "frames", "deaths"])
 	for r in _rows:
-		lines.append("%-18s %7.1f %7.1f %6d %d" % [r[0], r[1], r[2], r[3], r[4]])
+		lines.append("%-18s %7.1f %7.1f %6.1f %6d %d" % [r[0], r[1], r[2], r[3], r[4], r[5]])
 	var text := "\n".join(lines)
-	_label.text = text
+	_label.text = text + ("\n\ntap anywhere: back to the menu" if in_app else "")
 	for l in lines:
 		print(l)
+		BlackBox.record(l)
 	if OS.has_feature("web"):
 		JavaScriptBridge.eval("window.pr_probe=%s" % JSON.stringify(text), true)

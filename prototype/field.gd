@@ -332,10 +332,13 @@ func last_bar() -> int:
 	return _first_bar + _bar_z0.size() - 1
 
 
-# The probe (probe.gd): a fraction of every pillar band, and the slab's
+# The probe (probe.gd) and the look switch (looks.gd): a fraction of
+# every pillar band -- kept for the laps built later too -- and the slab's
 # thickness changed in place -- every tile box re-sized and re-materialed
 # (the material carries the box's half size for its seams and rim).
+var pillar_density := 1.0
 func set_pillar_density(f: float) -> void:
+	pillar_density = f
 	for li in laps:
 		laps[li].monoliths.set_density(f)
 
@@ -396,6 +399,7 @@ func _install(lap_index: int, lap_knobs: Dictionary, c, lap_plan: Dictionary, la
 	lap.root.name = "Lap%d" % lap_index
 	add_child(lap.root)
 	lap.monoliths = Monoliths.new()
+	lap.monoliths.set_density(pillar_density)
 	lap.root.add_child(lap.monoliths)
 	laps[lap_index] = lap
 	if _bar_z0.is_empty():
