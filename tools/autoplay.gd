@@ -358,6 +358,16 @@ func _finish_lap_paths() -> void:
 			_lap_jobs.erase(lap)
 
 
+# Endless: has every lap the field holds a path? (probe.gd waits for it.)
+func paths_ready() -> bool:
+	if not _lap_jobs.is_empty():
+		return false
+	for lap in test.field.laps:
+		if not _lap_paths.has(lap):
+			return false
+	return true
+
+
 # Endless: every lap the field holds gets a path, a slice per frame.
 func _tick_lap_paths() -> void:
 	for lap in test.field.laps:
