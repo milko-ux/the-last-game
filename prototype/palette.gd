@@ -65,6 +65,10 @@ const FAR_PILLAR := Color("#4a5464")
 # the look variant "today" (looks.gd) until Milko has compared the two.
 const TODAY_FOG := [Color("#556173"), Color("#38404e"), Color("#1b2029"), Color("#0c1016")]
 const TODAY_PILLAR := [Color("#1b232c"), Color("#222a34"), Color("#384150")]
+# THE LOOK VARIANT "deep fog" (2026-10-06): light fog's fog, the band
+# tints darker so lit faces step down while the haze (looks.gd) keeps the
+# baked shadow faces off black. Near, mid, far.
+const DEEP_PILLAR := [Color("#1e252e"), Color("#262e38"), Color("#3e4756")]
 const BUILDING_STONE := Color("#5c6272")
 const BUILDING_STONE_FAR := Color("#4f5664")
 # Brief 6 section 1: the one light. Every unshaded block (tiles, slab

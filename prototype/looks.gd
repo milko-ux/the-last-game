@@ -12,7 +12,9 @@ const Props := preload("res://prototype/props/props.gd")
 # measures whichever variant is on.
 #
 #   tonemap · glow · vignette · grain · msaa    the finishing layer
-#                                               (track_test.FINISH_DEFAULT)
+#                                               (track_test.FINISH_DEFAULT);
+#                                               vignette may be an amount
+#                                               at the corners (finish.gd)
 #   scale     the 3D render scale (track_test.RENDER_SCALE_MOBILE)
 #   pillars   fraction of the pillars kept (monoliths.gd), 1.0 = all
 #   slab      the slab's thickness (field.THICK)
@@ -23,7 +25,12 @@ const Props := preload("res://prototype/props/props.gd")
 #   pillar_side_fog the bands' haze by distance out (props.PILLAR_SIDE_FOG)
 #
 # "light fog" (section 2) is the shipped look: the palette's own values.
-# "today" is the look before it, kept in the palette as TODAY_*.
+# "deep fog" (2026-10-06, after Milko's phone verdict: light fog is
+# flatter than today) keeps light fog's fog and steps the pillars back
+# into it: near and mid darker, far closer to the fog, the frame's edges
+# darker (the vignette 0.25 -> 0.5). Tuned zone by zone against the
+# concept on the web shot (prototype/README.md, 2026-10-06).
+# "today" is the look before light fog, kept in the palette as TODAY_*.
 #
 # Sections 2, 3 and 5 of the brief add entries (light fog, tops in frame,
 # the camera tests) and the keys they need. A value lives where it lives
@@ -36,6 +43,8 @@ const Props := preload("res://prototype/props/props.gd")
 
 const LOOKS := [
 	["light fog", {}],
+	["deep fog", {"pillar_tint": WorldPalette.DEEP_PILLAR, "pillar_flatten": [1.0, 0.8, 1.0],
+		"pillar_side_fog": [Vector3(0.0, 20.0, 0.4), Vector3(0.0, 40.0, 0.55), Vector3(0.0, 50.0, 0.85)], "vignette": 0.5}],
 	["today", {"fog": WorldPalette.TODAY_FOG, "pillar_tint": WorldPalette.TODAY_PILLAR, "pillar_flatten": [0.3, 0.6, 0.92],
 		"pillar_side_fog": [Vector3(16.0, 60.0, 0.85), Vector3(16.0, 60.0, 0.85), Vector3(16.0, 60.0, 0.85)]}],
 ]
@@ -49,6 +58,14 @@ static func name_of() -> String:
 
 static func next() -> void:
 	current = (current + 1) % LOOKS.size()
+
+
+# The web's ?look=<name> (dashes for spaces, e.g. ?look=deep-fog): the
+# headless web shot's way to pick a variant. An unknown name changes nothing.
+static func select(look: String) -> void:
+	for i in LOOKS.size():
+		if String(LOOKS[i][0]).replace(" ", "-") == look:
+			current = i
 
 
 static func _change(extra: Dictionary) -> Dictionary:

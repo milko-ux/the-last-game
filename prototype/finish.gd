@@ -79,8 +79,10 @@ func _resize() -> void:
 	_mat.set_shader_parameter("screen", s)
 
 
-func set_vignette(on: bool) -> void:
-	_mat.set_shader_parameter("vignette", VIGNETTE if on else 0.0)
+# true = VIGNETTE, false = off, a number = that much at the corners (a
+# look variant's "vignette", looks.gd).
+func set_vignette(v: Variant) -> void:
+	_mat.set_shader_parameter("vignette", float(v) if v is float else (VIGNETTE if v else 0.0))
 
 
 func set_grain(on: bool) -> void:

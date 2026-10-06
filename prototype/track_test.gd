@@ -320,6 +320,7 @@ func apply_render_scale(over: float = -1.0) -> void:
 #   ?tonemap=0|aces|agx · ?glow=1 · ?vignette=0 · ?grain=0 · ?msaa=0
 #                 the finishing layer's switches (look pass v2 section 6);
 #                 =1 turns one ON, =0 OFF (glow is off by default)
+#   ?look=deep-fog  start in that look variant (looks.gd; dashes for spaces)
 var _dev_autoplay := false
 var _url_look := {}                 # the look keys of the switches below (finish, scale), applied on top of the look (looks.gd)
 var light_on := true
@@ -363,7 +364,7 @@ func apply_finish() -> void:
 		_finish = load("res://prototype/finish.gd").new()
 		_finish.name = "Finish"
 		add_child(_finish)
-	_finish.set_vignette(bool(finish["vignette"]))
+	_finish.set_vignette(finish["vignette"])
 	_finish.set_grain(bool(finish["grain"]))
 	print("FINISH tonemap=%s glow=%s vignette=%s grain=%s msaa=%s" % [finish["tonemap"], finish["glow"], finish["vignette"], finish["grain"], finish["msaa"]])
 
@@ -379,6 +380,8 @@ func set_light(on: bool) -> void:
 func _dev_url_switches() -> void:
 	if not OS.has_feature("web") or not FrameMeter.enabled():
 		return
+	if FrameMeter.url_param("look") != "":
+		Looks.select(FrameMeter.url_param("look"))
 	if FrameMeter.url_param("scale") != "":
 		_url_look["scale"] = float(FrameMeter.url_param("scale"))
 	set_light(FrameMeter.url_param("light") != "0")
