@@ -212,11 +212,21 @@ func _draw_pause_panel(screen: Vector2, font: Font) -> void:
 
 # 3 · 2 · 1, big, with the world visible behind it so what is coming can
 # be seen coming.
+#
+# The digit is drawn at ONE font size (COUNTIN_SIZE, its largest) and
+# scaled down to the size of the moment: every font size is its own glyph
+# cache, and the old int(96 + 40 * frac) made 41 of them -- +160 MB on
+# the phone after the first PAUSE -> RESUME (2026-10-06). Same sizes, same
+# place: the scale is the old size over COUNTIN_SIZE, around the same point.
+const COUNTIN_SIZE := 136
+
 func _draw_countin(screen: Vector2, font: Font) -> void:
 	var n := int(ceil(countin))
 	var frac: float = countin - floorf(countin)   # 1 -> 0 within the second
-	var size := int(96 + 40 * frac)
-	_text(font, str(n), screen * 0.5 + Vector2(0, -20), size, Color(1, 1, 1, 0.5 + 0.5 * frac))
+	var k := float(int(96 + 40 * frac)) / COUNTIN_SIZE
+	draw_set_transform(screen * 0.5 + Vector2(0, -20), 0.0, Vector2(k, k))
+	_text(font, str(n), Vector2.ZERO, COUNTIN_SIZE, Color(1, 1, 1, 0.5 + 0.5 * frac))
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
 func show_end(distance: String, best: String, new_best: bool) -> void:
