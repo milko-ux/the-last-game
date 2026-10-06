@@ -73,6 +73,10 @@ static var spike_ms := SPIKE_MS
 const REFRESH_S := 0.25
 const RING := 512                  # frames kept: 2 s at up to 240 fps
 const LOAD_SHOW_S := 10.0          # the load line stays this long after the run starts
+# Frames longer than this since the run started (the readout's "slow"):
+# at 60 fps a frame is 16.7 ms, so one over 17.5 is a frame the screen
+# showed late (on a 120 Hz screen: for 25 ms, three refreshes).
+const SLOW_MS := 17.5
 const LOAD_MIN_S := 0.2            # steps shorter than this are left out of the line
 
 # True only while a meter node is alive: the guard every caller checks
@@ -130,6 +134,7 @@ var _refresh := 0.0
 # Read by tools/frame_probe.gd.
 var worst_ever_ms := 0.0
 var spikes := 0
+var slow_frames := -1               # frames over SLOW_MS since the run started; -1 = not started
 
 
 # ------------------------------------------------------------
@@ -298,6 +303,7 @@ static func load_line() -> String:
 func run_started() -> void:
 	_load_hide_in = LOAD_SHOW_S
 	_count = 0
+	slow_frames = 0
 
 
 func _ready() -> void:
@@ -407,6 +413,8 @@ func _process(delta: float) -> void:
 		_count = mini(_count + 1, RING)
 		if ms > spike_ms:
 			_report(ms)
+		if slow_frames >= 0 and ms > SLOW_MS:
+			slow_frames += 1
 		if _trace_left > 0:
 			_trace_left -= 1
 			_trace.append(ms)
@@ -509,7 +517,10 @@ func _update_text() -> void:
 		n += 1
 	if n > 0:
 		_avg_ms = sum / n
-		text = "frame %.1f avg · %.1f worst     cpu %.1f avg · %.1f worst ms" % [sum / n, worst, cpu_sum / n, cpu_worst]
+		text = "frame %.1f avg · %.1f worst" % [sum / n, worst]
+		if slow_frames >= 0:
+			text += " · %d slow" % slow_frames
+		text += "     cpu %.1f avg · %.1f worst ms" % [cpu_sum / n, cpu_worst]
 		if BeatClock.endless and BeatClock.running():
 			# Audio vs clock (ms, - = audio behind) and how much has been slewed to follow it.
 			# With no tap yet (?autoplay=1, ?probe=1) iOS never runs the audio

@@ -57,6 +57,10 @@ const Looks := preload("res://prototype/looks.gd")
 #   - The header says the screen's refresh rate: the app may run at 120 Hz
 #     (ProMotion), where frame times come in steps of 8.3 ms (8.3, 16.7,
 #     25) and a small cost near a step moves a row's average a lot.
+#   - The app is capped at 60 fps (project.godot, application/run/max_fps
+#     .ios / .android, 2026-10-06). The probe LIFTS the cap from its first
+#     setup to its table and puts it back after, so a row can show time to
+#     spare (8.3 ms frames) instead of sitting on 16.7; the header says so.
 # ============================================================
 
 const Rules := preload("res://prototype/rules.gd")
@@ -98,6 +102,7 @@ var _label: Label
 var _deaths0 := 0
 var _retried := false
 var _run_up := 0.0
+var _cap_was := -1                  # Engine.max_fps before the probe lifted it; -1 = not lifted
 
 
 func _ready() -> void:
@@ -158,6 +163,9 @@ func _process(delta: float) -> void:
 
 func _start(i: int) -> void:
 	_i = i
+	if _cap_was < 0:
+		_cap_was = Engine.max_fps
+		Engine.max_fps = 0
 	var t_switch := Time.get_ticks_usec()
 	Looks.apply(scene, SETUPS[i][1])
 	_switch_ms = float(Time.get_ticks_usec() - t_switch) / 1000.0
@@ -192,13 +200,26 @@ func _background_work() -> String:
 	return ""
 
 
+func _restore_cap() -> void:
+	if _cap_was >= 0:
+		Engine.max_fps = _cap_was
+		_cap_was = -1
+
+
+# Left before the table (back to the menu, the app closed): the cap goes back too.
+func _exit_tree() -> void:
+	_restore_cap()
+
+
 func _finish() -> void:
 	done = true
+	var cap := "fps cap OFF while measuring (back to %d after)" % _cap_was if _cap_was > 0 else "fps cap: none on this build"
+	_restore_cap()
 	BeatClock.pause()
 	Looks.apply(scene, scene._url_look)   # the look as it was, without the last setup
 	var heap: String = str(JavaScriptBridge.eval("performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1048576) + ' MB' : 'n/a'", true)) if OS.has_feature("web") else "-"
-	var lines := ["PROBE  look: %s  bars %d-%d of lap 0, %s  heap %s  %s  screen %.0f Hz" % [Looks.name_of(), FROM_BAR, TO_BAR,
-		FrameMeter.load_info, heap, BlackBox.renderer_name(), DisplayServer.screen_get_refresh_rate()]]
+	var lines := ["PROBE  look: %s  bars %d-%d of lap 0, %s  heap %s  %s  screen %.0f Hz  %s" % [Looks.name_of(), FROM_BAR, TO_BAR,
+		FrameMeter.load_info, heap, BlackBox.renderer_name(), DisplayServer.screen_get_refresh_rate(), cap]]
 	lines.append("%-18s %7s %7s %6s %7s %6s %4s %s" % ["setup", "avg ms", "worst", "cpu", "switch", "frames", "bg", "deaths"])
 	for r in _rows:
 		lines.append("%-18s %7.1f %7.1f %6.1f %7.0f %6d %4d %d" % [r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7]])
