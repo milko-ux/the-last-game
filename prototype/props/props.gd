@@ -319,14 +319,15 @@ static func building(far: bool = false) -> Material:
 # a band's colour, and a band's own fade -- the far band is a skyline
 # and keeps going long after the course itself has faded.
 const PILLAR_FADE := [Vector4(14.0, 27.0, 2.0, 10.0), Vector4(22.0, 52.0, 6.0, 20.0), Vector4(30.0, 88.0, 10.0, 30.0)]
-const PILLAR_FLATTEN := [1.0, 1.0, 0.92]   # light fog (2026-10-05); was 0.3, 0.6, 0.92
+const PILLAR_FLATTEN := [1.0, 0.8, 1.0]   # deep fog (2026-10-06); light fog 1.0, 1.0, 0.92; before it 0.3, 0.6, 0.92
 # Per band: from this far out (|x|) to this far, at most this much toward
 # the fog colour -- the kit shader's side_fog, the haze between the
 # camera and a pillar. Until step 3 brief 1 section 2 every band had the
 # shader's default (16, 60, 0.85), which left the near band (|x| 13-21)
-# with none and its baked shadow faces black. Now the near band takes up
-# to 40 %, the mid band 60 %, the far band as before.
-const PILLAR_SIDE_FOG := [Vector3(0.0, 20.0, 0.4), Vector3(0.0, 40.0, 0.6), Vector3(16.0, 60.0, 0.85)]
+# with none and its baked shadow faces black. Deep fog (2026-10-06): the
+# near band takes up to 40 %, the mid 55 %, the far 85 % from |x| 0 (so
+# far pillars sit close to the fog). Light fog had mid 0.6, far from 16.
+const PILLAR_SIDE_FOG := [Vector3(0.0, 20.0, 0.4), Vector3(0.0, 40.0, 0.55), Vector3(0.0, 50.0, 0.85)]
 
 # The baked stone reads ~0.35-0.9 in the atlas; a band's tint is what the
 # stone is multiplied by, so NEAR_PILLAR etc. are relative to a mid-grey

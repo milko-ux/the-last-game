@@ -54,21 +54,22 @@ const MONOLITH_FAR := Color("#3a404a")
 # fading into the light fog. The brightness order of the concept: fog
 # lightest, floor the brightest thing in the play area, near pillars
 # darkest.
-# Light fog (2026-10-05): lighter, and every band now takes some of the
-# fog (props.PILLAR_SIDE_FOG / PILLAR_FLATTEN), so a baked shadow face is
-# stone at ~25/255 on screen instead of 0. Tuned on the web shot.
-const NEAR_PILLAR := Color("#2a333e")
-const MID_PILLAR := Color("#38424f")
-const FAR_PILLAR := Color("#4a5464")
-# THE LOOK BEFORE "light fog" (step 3 brief 1 section 2, 2026-10-05):
+# Light fog (2026-10-05): every band takes some of the fog
+# (props.PILLAR_SIDE_FOG / PILLAR_FLATTEN), so a baked shadow face is
+# stone on screen instead of 0. DEEP FOG (2026-10-06, Milko's phone
+# verdict: it wins over light fog): the tints darker, so the lit faces
+# step down while the haze keeps the shadow faces off black -- the
+# pillars step back into the fog. Tuned zone by zone against the concept
+# on the web shot (prototype/README.md, 2026-10-06). Light fog's tints
+# were #2a333e / #38424f / #4a5464.
+const NEAR_PILLAR := Color("#1e252e")
+const MID_PILLAR := Color("#262e38")
+const FAR_PILLAR := Color("#3e4756")
+# THE LOOK BEFORE "light fog" and "deep fog" (step 3 brief 1 section 2):
 # the fog stops and band tints as they were, reachable on the phone as
 # the look variant "today" (looks.gd) until Milko has compared the two.
 const TODAY_FOG := [Color("#556173"), Color("#38404e"), Color("#1b2029"), Color("#0c1016")]
 const TODAY_PILLAR := [Color("#1b232c"), Color("#222a34"), Color("#384150")]
-# THE LOOK VARIANT "deep fog" (2026-10-06): light fog's fog, the band
-# tints darker so lit faces step down while the haze (looks.gd) keeps the
-# baked shadow faces off black. Near, mid, far.
-const DEEP_PILLAR := [Color("#1e252e"), Color("#262e38"), Color("#3e4756")]
 const BUILDING_STONE := Color("#5c6272")
 const BUILDING_STONE_FAR := Color("#4f5664")
 # Brief 6 section 1: the one light. Every unshaded block (tiles, slab

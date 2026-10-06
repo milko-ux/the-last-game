@@ -24,15 +24,13 @@ const Props := preload("res://prototype/props/props.gd")
 #   pillar_flatten  the bands' far flattening (props.PILLAR_FLATTEN)
 #   pillar_side_fog the bands' haze by distance out (props.PILLAR_SIDE_FOG)
 #
-# "light fog" (section 2) is the shipped look: the palette's own values.
-# "deep fog" (2026-10-06, after Milko's phone verdict: light fog is
-# flatter than today) keeps light fog's fog and steps the pillars back
-# into it: near and mid darker, far closer to the fog, the frame's edges
-# darker (the vignette 0.25 -> 0.5). Tuned zone by zone against the
-# concept on the web shot (prototype/README.md, 2026-10-06).
-# "today" is the look before light fog, kept in the palette as TODAY_*.
+# "deep fog" (section 2) is the shipped look: the palette's own values
+# (Milko's phone verdict, 2026-10-06; "light fog", the first try, was
+# flatter than today and is gone).
+# "today" is the look before section 2, kept in the palette as TODAY_*
+# until section 3 is judged.
 #
-# Sections 2, 3 and 5 of the brief add entries (light fog, tops in frame,
+# Sections 3 and 5 of the brief add entries (tops in frame,
 # the camera tests) and the keys they need. A value lives where it lives
 # today; a variant only names the change.
 #
@@ -42,11 +40,9 @@ const Props := preload("res://prototype/props/props.gd")
 # ============================================================
 
 const LOOKS := [
-	["light fog", {}],
-	["deep fog", {"pillar_tint": WorldPalette.DEEP_PILLAR, "pillar_flatten": [1.0, 0.8, 1.0],
-		"pillar_side_fog": [Vector3(0.0, 20.0, 0.4), Vector3(0.0, 40.0, 0.55), Vector3(0.0, 50.0, 0.85)], "vignette": 0.5}],
+	["deep fog", {}],
 	["today", {"fog": WorldPalette.TODAY_FOG, "pillar_tint": WorldPalette.TODAY_PILLAR, "pillar_flatten": [0.3, 0.6, 0.92],
-		"pillar_side_fog": [Vector3(16.0, 60.0, 0.85), Vector3(16.0, 60.0, 0.85), Vector3(16.0, 60.0, 0.85)]}],
+		"pillar_side_fog": [Vector3(16.0, 60.0, 0.85), Vector3(16.0, 60.0, 0.85), Vector3(16.0, 60.0, 0.85)], "vignette": 0.25}],
 ]
 
 static var current := 0

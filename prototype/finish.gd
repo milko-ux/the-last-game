@@ -2,7 +2,7 @@ extends CanvasLayer
 # ============================================================
 # THE FINISHING LAYER (brief 6 sections 7-8, look pass v2 section 6):
 # one unshaded full-screen quad UNDER the HUD -- a vignette of about
-# 25 % at the corners, nothing at the centre, and a very subtle film
+# 50 % at the corners, nothing at the centre, and a very subtle film
 # grain. No colour-grading LUT, no screen read-back: the quad is
 # alpha-blended over the 3D picture, so it costs one full-screen fill
 # and nothing else. Glow, tonemapping and MSAA are the WorldEnvironment's
@@ -12,7 +12,7 @@ extends CanvasLayer
 # ?vignette=0 and ?grain=0 (dev URL switches) turn each off for an A/B.
 # ============================================================
 
-const VIGNETTE := 0.25          # at the corners
+const VIGNETTE := 0.5           # at the corners (deep fog, 2026-10-06: the frame's edges darker; was 0.25)
 const VIGNETTE_START := 0.55    # of the half diagonal, where it begins
 const GRAIN := 0.02             # alpha of the speckle (0.035 read as noise, not film)
 # The grain's alpha was tuned on the web, where Compatibility blends 2D in
