@@ -2,9 +2,20 @@
 
 ## Where we are (2026-10-15) — start here
 
-### START HERE (2026-10-15): step 2b — the Release signing conflict fixed; STOPPED at hard rule 8, waiting for Milko to confirm the Team ID and the final bundle ID
+### START HERE (2026-10-15, afternoon): BUILD 0.8.0 (0.8.0) UPLOADED TO TESTFLIGHT — waiting for Apple's processing, then the encryption question, then the install
 
-**Apple approved the paid team on 2026-10-07.** Two commits today: `1e7b9e4` (Milko's CLAUDE.md fix, `.ogg` → `.wav`) and `2fe0642` (the signing fix). Not pushed.
+**Done today, in order (Milko's clicks, Code's checks):**
+- **Hard rule 8 confirmed by Milko:** final bundle ID **`se.karrot.thelastgame`**, Team ID **`36S75NUDV8`** (unchanged from the Personal Team). One iOS preset; cable builds use the final ID too (`9761055`). Fallback `se.karrot.lastgame` only after telling Milko — not needed: Xcode registered the ID without complaint.
+- **The privacy texts (`1c0592d`):** Godot's template always writes `NSCameraUsageDescription`, `NSMicrophoneUsageDescription` and `NSPhotoLibraryUsageDescription`, blank (Xcode's yellow warnings); the game uses none. Now in the preset as "The Last Game does not use the camera / the microphone / your photos." — blank ones risk ITMS-90683 at upload.
+- **App Store Connect app record:** name **"The Last Game by KARROT"** ("The Last Game" is taken by another app; the store name can change before release; the home-screen name stays "The Last Game" from `config/name`). SKU `thelastgame`, English (U.S.), bundle ID `XC se karrot thelastgame – se.karrot.thelastgame`. **The bundle ID is now locked to this app.**
+- **Archive** (Any iOS Device, Release config, the debug engine — readout and look switch on) and **Distribute → TestFlight Internal Only** (the build can never be submitted to the App Store) → **"TheLastGame 0.8.0 (0.8.0) uploaded"**, 15:36. Xcode created the distribution certificate itself.
+- Pushed by Milko up to `9761055`.
+
+**NEXT (Milko, with Code):** (1) App Store Connect → TestFlight: wait for Processing; watch the email for ITMS codes. (2) "Missing Compliance": the encryption question — read it together (the game's only encryption is HTTPS to Talo, through Godot's own TLS library). (3) An internal testing group with Milko in it → the TestFlight app on the iPhone → install → **a full run at 60 fps = step 2 done.** **Every later upload needs a higher build number** (`0.8.0` is used): bump `application/config/version` or set the preset's `application/version`.
+
+### (earlier 2026-10-15) step 2b — the Release signing conflict fixed; stopped at hard rule 8
+
+**Apple approved the paid team on 2026-10-07.** Commits: `1e7b9e4` (Milko's CLAUDE.md fix, `.ogg` → `.wav`) and `2fe0642` (the signing fix).
 
 1. **The Team ID: very likely unchanged, `36S75NUDV8` — Milko to confirm** (developer.apple.com → Account → Membership details → Team ID). The evidence: the Mac's profiles under `36S75NUDV8` were created 2026-10-07 and **expire 2027-10** (a free team's last 7 days), and one is the wildcard `iOS Team Provisioning Profile: *`, which a free team cannot get. The preset already holds it; if Apple shows another ID it is one line (`application/app_store_team_id`). The Personal Team profile for `se.karrot.thelastgame` (the 2026-10-04 entry, item 4) is no longer on the Mac.
 2. **The Release signing conflict, fixed in the preset (`2fe0642`):** `application/code_sign_identity_release="Apple Development"`. **The 2026-10-04 entry was wrong that the 4.7 preset has no option for it:** the option exists (`code_sign_identity_debug/_release`, `export_method_*`, `provisioning_profile_*` are in the 4.7.1 binary; the template's `$code_sign_identity_release` is what wrote "Apple Distribution"). No post-export patch needed. **Measured:** `xcodebuild -configuration Release` with signing on, no `-allowProvisioningUpdates` (nothing sent to Apple): the old project fails with *"conflicting provisioning settings… Apple Distribution has been manually specified"*; the new one **BUILD SUCCEEDED**, signed `Apple Development: … (B9MGZX9W59)` with the paid team's `*` profile. Re-exported to `../the-last-game-build/ios/`: only the two Release lines changed (the pck byte-identical).
