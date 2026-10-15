@@ -1,8 +1,18 @@
 # Phase R prototype — "an album you survive"
 
-## Where we are (2026-10-15) — start here
+## Where we are (2026-10-15, evening) — start here
 
-### START HERE (2026-10-15, afternoon): BUILD 0.8.0 (0.8.0) UPLOADED TO TESTFLIGHT — waiting for Apple's processing, then the encryption question, then the install
+### START HERE (2026-10-15, evening): ROADMAP STEP 2 DONE — the game installs from TestFlight and runs at 60 fps; next: back to step 3, brief 1 section 3
+
+**Milko's test of the TestFlight install (build 0.8.0 (0.8.0), internal):** the readout held **16.7 ms throughout the run** (reached stage 2), no lag; "looks the same, works the same, runs the same" as the cable app. **Not read this time:** `N slow`, the load line (`load … compat opengl3`), and the look switch (a tap on the readout on TAP TO START); worth one glance on the next run, not needed for step 2.
+
+**How the install went:** processing took under 6 minutes; the build came out "Ready to Test" with no "Missing Compliance", because **Godot's template writes `ITSAppUsesNonExemptEncryption = false`** (on the release checklist in `CLAUDE.md` for Milko to confirm before the App Store). Internal group **KARROT** (automatic distribution on, Milko in it). **The invitation email took ~20+ minutes** and only arrived after a resend; an internal-only build cannot use a public link or a redeem code (those are external testing only).
+
+**Still waiting for Milko, from 2026-10-06** (START HERE further down): the 60 fps cap's slow count, the music's `audio ±X`, the count-in's `mem`, the probe. The TestFlight build is the same code (`9b7ab55`), so they can be read on it.
+
+**NEXT:** step 3, brief 1, section 3 (placement), as before. **A new TestFlight build:** re-export with `--export-debug`, **raise the build number first** (`0.8.0` is used: `application/config/version` in `project.godot`), Archive → Distribute → TestFlight Internal Only; the group gets it automatically.
+
+### (2026-10-15, afternoon) BUILD 0.8.0 (0.8.0) UPLOADED TO TESTFLIGHT
 
 **Done today, in order (Milko's clicks, Code's checks):**
 - **Hard rule 8 confirmed by Milko:** final bundle ID **`se.karrot.thelastgame`**, Team ID **`36S75NUDV8`** (unchanged from the Personal Team). One iOS preset; cable builds use the final ID too (`9761055`). Fallback `se.karrot.lastgame` only after telling Milko — not needed: Xcode registered the ID without complaint.

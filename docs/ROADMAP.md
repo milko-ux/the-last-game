@@ -24,7 +24,7 @@ The web test build must be reliable, so the testing isn't fighting the tools.
 - Load: the download is 22.7 MB instead of 64 MB (gzip + the song MP3s out of the pack). Downloads finished at 0.6–1.8 s instead of 8.5–12.6 s; first frame 2.3–4.2 s instead of 7.3–13.5 s; the menu is up at 4.1 s instead of 14.2 s.
 - Graphics defaults from the probe table (all on 19.5 ms, glow off 16.9): glow off, everything else on. The run from the menu before that change read 16.7–18.4 ms; the next normal run is the first reading with glow off.
 
-## 2. Native iPhone build (TestFlight) — NEXT (moved up on 2026-09-24)
+## 2. Native iPhone build (TestFlight) — DONE 2026-10-15
 The game ships as an app, so we test what players will actually run instead of Safari.
 - **Milko:** sign up for the Apple Developer Program now (approval can take days).
 - Code: Godot iOS export → Xcode → TestFlight. The same tests as step 1, but on the app.
@@ -34,6 +34,8 @@ The game ships as an app, so we test what players will actually run instead of S
 **Rule:** Before the FIRST upload to App Store Connect / TestFlight, STOP and ask Milko to confirm the final bundle ID — confirmed 2026-10-15: `se.karrot.thelastgame`, one iOS preset, cable builds use it too. If App Store Connect refuses it, STOP and tell Milko before switching to the fallback `se.karrot.lastgame`. The first upload locks the bundle ID forever.
 
 **Done when:** the game installs from TestFlight on Milko's iPhone and plays a full run at 60 fps.
+
+**Result (2026-10-15):** build 0.8.0 (0.8.0), bundle ID `se.karrot.thelastgame`, App Store Connect name "The Last Game by KARROT" ("The Last Game" was taken), uploaded as **TestFlight Internal Only** (it carries the debug engine: the dev readout and look switch). Installed from TestFlight on Milko's iPhone: **16.7 ms throughout a run**, nothing different from the cable app. The app runs the Compatibility renderer (OpenGL ES 3.0, 2026-10-04) and is capped at 60 fps (2026-10-06). Android is still to come, before step 6.
 
 ## 3. Look, round 3
 - Monoliths like the concept: tall, lighter, sparse, fading into fog, with carvings you can actually see.
