@@ -113,7 +113,7 @@ To get it back for a session: Project → Project Settings → Plugins → enabl
 
 **`levels/`** — `curriculum.json` (knobs per level) · `verdicts.json` (shipped fairness verdicts).
 
-**`assets/`** — `audio/fuffens_endless.ogg` + `fuffens_beatmap.json` (the live pair) · `models/` (source GLBs) · `models/lod/` (the decimated copies the game actually loads).
+**`assets/`** — `audio/fuffens_endless.wav` + `fuffens_beatmap.json` (the live pair) · `models/` (source GLBs) · `models/lod/` (the decimated copies the game actually loads).
 
 **From the 2D game, still live:** `ui/` (the touch controls, the account panel, the leaderboard screen) and `autoload/{profile,consent,talo,palette,progress}.gd`. The maze itself is gone (tag `archive/2d-game`).
 
