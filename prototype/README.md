@@ -1,8 +1,17 @@
 # Phase R prototype — "an album you survive"
 
-## Where we are (2026-10-06) — start here
+## Where we are (2026-10-15) — start here
 
-### START HERE (end of 2026-10-06): the app capped at 60 (probe uncapped), a slow-frame count, the count-in's memory fixed — re-exported, NOT checked on the phone; then section 3
+### START HERE (2026-10-15): step 2b — the Release signing conflict fixed; STOPPED at hard rule 8, waiting for Milko to confirm the Team ID and the final bundle ID
+
+**Apple approved the paid team on 2026-10-07.** Two commits today: `1e7b9e4` (Milko's CLAUDE.md fix, `.ogg` → `.wav`) and `2fe0642` (the signing fix). Not pushed.
+
+1. **The Team ID: very likely unchanged, `36S75NUDV8` — Milko to confirm** (developer.apple.com → Account → Membership details → Team ID). The evidence: the Mac's profiles under `36S75NUDV8` were created 2026-10-07 and **expire 2027-10** (a free team's last 7 days), and one is the wildcard `iOS Team Provisioning Profile: *`, which a free team cannot get. The preset already holds it; if Apple shows another ID it is one line (`application/app_store_team_id`). The Personal Team profile for `se.karrot.thelastgame` (the 2026-10-04 entry, item 4) is no longer on the Mac.
+2. **The Release signing conflict, fixed in the preset (`2fe0642`):** `application/code_sign_identity_release="Apple Development"`. **The 2026-10-04 entry was wrong that the 4.7 preset has no option for it:** the option exists (`code_sign_identity_debug/_release`, `export_method_*`, `provisioning_profile_*` are in the 4.7.1 binary; the template's `$code_sign_identity_release` is what wrote "Apple Distribution"). No post-export patch needed. **Measured:** `xcodebuild -configuration Release` with signing on, no `-allowProvisioningUpdates` (nothing sent to Apple): the old project fails with *"conflicting provisioning settings… Apple Distribution has been manually specified"*; the new one **BUILD SUCCEEDED**, signed `Apple Development: … (B9MGZX9W59)` with the paid team's `*` profile. Re-exported to `../the-last-game-build/ios/`: only the two Release lines changed (the pck byte-identical).
+3. **The dev readout and the look switch survive an Archive:** export with **`--export-debug`** (never `--export-release` for this internal build). The project's engine library is byte-identical to Godot's **debug** template (`shasum` against `ios.zip`), and Debug and Release both link that one library, so the Archive runs `OS.is_debug_build()` = true: the look switch (`track_test.gd:461`, debug only) and the readout (`FrameMeter.enabled()`: debug or `UNLOCK_ALL`) both on. A no-Distribution-certificate Mac is fine: Archive → Distribute makes one.
+4. **STOPPED (hard rule 8):** the bundle ID is still `se.karrot.thelastgame.dev`. Before any upload Milko confirms the final ID; then it is one line in the preset, re-export, and the Archive / upload steps.
+
+### (before 2026-10-15) START HERE (end of 2026-10-06): the app capped at 60 (probe uncapped), a slow-frame count, the count-in's memory fixed — re-exported, NOT checked on the phone; then section 3
 
 **Built today:** section 2 done — **"deep fog" is the shipped look** (`b335823`; "today" reachable until section 3 is judged). Then **the 60 fps cap on the app, the probe lifting it, and a slow-frame count in the readout** (`eb40a7d`). Then, on Milko's yes, **the count-in's memory fix** (`9b7ab55`: +160 MB → +4 MB, entry below). **The cable app is re-exported from `9b7ab55`** (`project.pbxproj` byte-identical, BUILD SUCCEEDED). Milko pushed up to `7fcd1f0`; `9b7ab55` and this README are not pushed yet (`! git push origin phase-r-prototype`).
 
