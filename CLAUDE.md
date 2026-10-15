@@ -97,6 +97,7 @@ A Godot web build needs a **secure context**: plain `http://<LAN-IP>` fails with
 - [ ] Bump `application/config/version` in `project.godot` — every leaderboard entry carries it as `build`.
 - [x] iOS preset: bundle ID `se.karrot.thelastgame`, Team ID `36S75NUDV8` (the paid team kept the Personal Team's ID, confirmed 2026-10-15), Release signing fixed (`code_sign_identity_release`, 2026-10-15).
 - [ ] iOS: a real icon, and decide `user_data/accessible_from_files_app` (on for the black box's log).
+- [ ] iOS: confirm the encryption declaration. Godot's template writes `ITSAppUsesNonExemptEncryption = false` into Info.plist, so App Store Connect never asked (2026-10-15). The game's only encryption is HTTPS to Talo (Godot's own TLS library), which Apple exempts — Milko to confirm against Apple's export-compliance questions before the App Store release.
 
 ### The Godot MCP plugin is disabled on purpose
 
