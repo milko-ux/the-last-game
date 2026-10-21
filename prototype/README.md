@@ -14,7 +14,10 @@
 **Probe after the fix (phone, `scarf` look):** every row 16.7, worst 17.0–17.2, control +0.0 — **the frame cost is back.**
 - **Then built:** character v2 part 2 — the tail wags and the flippers swing with the step cycle and flap in the air (the body shader's vertex stage, parts picked out by position; brief 5 §6, skipped in September for the two-prong model); the scarf's band lowered to 0.7 (square-on it covered the eye's lower edge).
 
-**NEXT (Milko, phone — ⌘R):** watch the hero run, stand and jump: the tail, the flippers, the scarf. Is the motion right, too much, too little — and is anything else about the walk still bothering him (the README has had that question open since September)? **Then:** step 4's sound effects. Nothing pushed.
+**Milko after part 2:** the walk and motion are fine ("Nothing really bothers me about the walk") — **step 3's character item is done.** But play read **23 avg / 47.7 worst** again (the probe's 16.7 was a cool phone on bars 9–12; the run sits at the edge and a warm GPU tips it over).
+- `a12e084` **frame budget**: `prototype/frame_governor.gd` (slow frames > 15 % in a second → 3D scale −0.05, min 0.5, hold 2 s; none for 12 s → +0.05 up to 0.75; readout shows `3D 0.75`); floor grain one octave; cloud fbm two octaves + one noise for the light side; stars only in the night sky; mesa strips unindexed and appended a whole array at a time (4.4 → 0.98 ms on the Mac: the every-20-s spike).
+
+**NEXT (Milko, phone — ⌘R):** play a normal long run and read the readout: frame avg/worst, and the `3D` number (0.75 = full; if it drops to 0.65–0.6 the governor is working for a warm phone — say if the picture looks soft). **Then:** step 4, sound effects first. Nothing pushed.
 
 ### (2026-10-21, late) THE TIME OF DAY + the shield fix; canyon approved; cable app re-exported, STOP for Milko's phone
 
