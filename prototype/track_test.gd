@@ -766,6 +766,11 @@ func _setup_run_hud() -> void:
 	_bubble.material_override = Mats.shield()
 	_bubble.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_bubble.visible = false
+	# A child of the player, whose own y is the jump (player3d.gd sets
+	# position.y = y): so a fixed local height. It used to add player.y
+	# again every frame, and rose twice as high as the creature on a jump
+	# (Milko, 2026-10-21: "doesnt really go along with the character").
+	_bubble.position.y = 1.35
 	player.add_child(_bubble)
 	_shield_burst = player.creature.burst().duplicate()
 	var ball: Mesh = _shield_burst.mesh.duplicate()
@@ -786,7 +791,6 @@ func _tick_distance_and_shield(delta: float) -> void:
 		_best_crossed = true
 		motion.on_best_crossed()
 		FrameMeter.note("best line crossed")
-	_bubble.position.y = player.y + 1.35
 	# Armed: the bubble. In the grace second after it broke: it flickers out.
 	_bubble.visible = shield_armed or (_grace > 0.0 and fmod(_grace, 0.16) > 0.08)
 
@@ -815,7 +819,7 @@ func _shield_takes(cause: Dictionary) -> bool:
 	shields_used += 1
 	_grace = SHIELD_GRACE_S
 	hud.shield_pop = 1.0
-	_shield_burst.global_position = player.position + Vector3(0.0, player.y + 1.2, 0.0)
+	_shield_burst.global_position = player.position + Vector3(0.0, 1.2, 0.0)   # position already carries the jump (player.y)
 	_shield_burst.restart()
 	Input.vibrate_handheld(HAPTIC_COIN_MS)
 	FrameMeter.note("shield pop")
