@@ -2,7 +2,19 @@
 
 ## Where we are (2026-10-21) — start here
 
-### START HERE (2026-10-21): STEP 3 BRIEF 1 SECTION 3 BUILT — the look "tops in frame"; cable app re-exported, STOP for Milko's phone
+### START HERE (2026-10-21, later): SECTION 4a BUILT — the look "new kit" (pillars from Higgsfield image-to-3D); cable app re-exported, STOP for Milko's phone
+
+**Milko's verdict on section 3 (phone, 2026-10-21):** none of the looks good; "today" best only because darker hid the pillars — **"the pillars look unfinished and hollow"**. Probe with `tops in frame`: every row 16.7 ms, control −0.0, "no pillars" = "as is" (the background is ~free). `mem` 130 MB (the count-in fix holds), `audio +13/+16`. **Decisions (Milko):** new pillars from **Higgsfield image-to-3D** (section 4's fallback, Code's pick); **no darker fog** once the pillars are fixed; **world zones per lap: ask him again when the background is solved** (not roadmapped).
+
+**Commits today, after section 3:** `a770e30` — **the old kit is INSIDE OUT** (every face of `pillars.py`'s meshes wound and normalled inward, measured against a BoxMesh): the game drew only each pillar's far inner walls — the "hollow" look since 2026-09-24. `70bba3d` — `tops in frame` removed (monoliths.gd back to its one table; keeps each piece's box for `tools/pillar_frame.gd` and the camera's height limits as a comment). `b89ce60` — **section 4a**.
+
+**4a, how it was made:** concept crops → a clean reference of each pillar (`gpt_image_2_5`, 0.25 credits) → **Hunyuan3D geometry only** (7 credits; ~500k faces, kept in `assets/models/kit_src/`, hidden from Godot by `.gdignore`; their textures never used) → **`tools/blender/kit.py`** (headless, ~25 s): stood up, scaled to 8, the niche turned to the lens, decimated to 1500 tris, every face outward, our stone + light baked from the source into one 2048 atlas → `assets/models/kit_new/`. ~15 credits spent of 588. The stone/light/scene now live in **`tools/blender/stone.py`**, shared with `pillars.py`. **Bake gotchas, learned:** pieces must stand apart while baking (one piece's source shaded the other's faces: half the shaft came out black); the measurement must sample several points per face.
+
+**4a, measured:** side away from the key **59–60 %** of the lit side (brief ≥ ~45 %), darkest 1 % of faces 0.23–0.43, 1–2 of 1500 faces unbaked. **Triangles drawn per frame (pillars) 23 k → 217 k** (budget ~1500 per piece; the phone's probe decides — the pieces can be decimated further in one line, `LOW_TRIS`). Zip 24.0 → 26.1 MB (< 4 MB). One shader still (the old kit's meshes are turned the right way round as they load); 3 new band materials, in `prewarm.gd`. Side-by-sides: `docs/screenshots/c4a-pieces.png`, `c4a-bar1-vs-concept.png`, `c4a-bar11-vs-concept.png`. **Honest read:** the stone now reads like the concept's (joints, broken tops, the niche, no stacked caps), lighter and softer; but the camera looks steeply down, so pillars read as long diagonal shafts, not the concept's side view — that is section 5 (the camera), not the models. The `new kit` variant uses only the two new pieces for every pillar (no bridge piece yet), so they repeat.
+
+**NEXT (Milko, phone, cable app — ⌘R in Xcode on `../the-last-game-build/ios/TheLastGame.xcodeproj`):** on TAP TO START, tap the readout: `deep fog` → `new kit` → `today`. Verdict: **stone like the concept, or better Lego?** Run the probe with `new kit` on (long press). **If yes:** 4b (pieces 3–6 the same way, ~30 credits, then the old kit and `pillars.py`'s variants are deleted). **Code's recommendation either way: run section 5 (the camera test) next or alongside**, since the camera decides how the pillars read.
+
+### (2026-10-21) STEP 3 BRIEF 1 SECTION 3 BUILT — the look "tops in frame" (lost on the phone, removed in `70bba3d`)
 
 **Commits:** `e643cf6` (the rewritten section 4 brief, `STEP_3_BRIEF_1_SECTION_4_KIT.md`, committed as Cowork wrote it) and `4a350b9` (section 3). Not pushed.
 
