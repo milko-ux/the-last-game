@@ -110,7 +110,7 @@ static func shadow_material() -> ShaderMaterial:
 		_material = ShaderMaterial.new()
 		_material.shader = sh
 		_material.render_priority = 9
-		_material.set_shader_parameter("fill", Color(0.0, 0.0, 0.0, 1.0))
+		_material.set_shader_parameter("fill", WorldPalette.SHADOW)
 		_material.set_shader_parameter("soft", SOFT)
 		_material.set_shader_parameter("fade", Quaternion(Mats.FADE_AHEAD_START, Mats.FADE_AHEAD_END, Mats.FADE_BEHIND_START, Mats.FADE_BEHIND_END))
 	return _material

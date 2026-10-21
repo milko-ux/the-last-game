@@ -80,10 +80,16 @@ const BUILDING_STONE_FAR := Color("#4f5664")
 # sides, pit walls, monoliths, markers) is shaded by its face's normal
 # against the light as THREE tones of its base colour -- top / lit side /
 # shadow side -- and the shadow side is pulled SHADE_TINT_AMOUNT toward a
-# cool blue so shadow reads as shadow, not as a darker grey. The light's
+# cool colour so shadow reads as shadow, not as a darker grey. The light's
 # direction is the scene's CreatureLight, published as `pr_light_dir`.
+# The canyon (step 3 brief 2 section 4, 2026-10-21): a low warm morning
+# sun (33 degrees up, from the screen-left behind the camera; was 53),
+# so the shadows run long; the sides step down gently and the shadow side
+# goes LILAC, never toward black (the grey look had 0.74 / 0.46 and a
+# 15 % pull toward near-black blue).
 const LIGHT_TOP := 1.0
-const LIGHT_SIDE := 0.74
-const LIGHT_SHADE := 0.46
-const SHADE_TINT := Color("#0f1a26")
-const SHADE_TINT_AMOUNT := 0.15
+const LIGHT_SIDE := 0.88
+const LIGHT_SHADE := 0.64
+const SHADE_TINT := Color("#8a82c2")
+const SHADE_TINT_AMOUNT := 0.35
+const SHADOW := Color("#4a4278")        # the drop shadows on the floor (shadows.gd), cool lilac at their alpha; was black

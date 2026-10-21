@@ -239,7 +239,7 @@ const FOOT_SHADOW_R := LEG_W * 0.5
 # through its body.
 # `skin` and `base_tint` are the swap points for later outfits.
 const ON_TOP := 0.92
-const AMBIENT := 0.38                  # the scene has no ambient light; this keeps the shadow side clay, not black
+const AMBIENT := 0.55                  # the scene has no ambient light; this keeps the shadow side clay, not black (0.38 until the canyon: the hero read grey on the cream floor)
 const SHADER := """
 shader_type spatial;
 render_mode cull_back, fog_disabled;
