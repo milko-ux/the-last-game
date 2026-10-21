@@ -29,7 +29,7 @@ const UNLOCK_M := 1000
 # feet, 0.945 in radius at 1.03 up and widening 0.25 per unit of height.
 # (A fitted ellipsoid put the band low and wide: a hoop round the feet.)
 const BODY_Z := -0.095
-const BAND_Y := 0.9              # the eye's lower edge is near 1.1; the flippers are below
+const BAND_Y := 0.7              # under the eye (seen square-on its lower edge is near 0.92); over the flippers' roots, as in the concept
 const BAND_HALF_H := 0.19            # chunky: at 0.13 it read as a cord
 const BAND_HALF_T := 0.11
 const BAND_OUT := 0.02            # sits this far out from the body

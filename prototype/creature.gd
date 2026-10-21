@@ -270,6 +270,20 @@ uniform float rim_power = 4.0;
 // The arms and the tail hang below the equator too and are kept out of
 // it by their own ranges (see MELT_* in the script for the measurements).
 uniform float melt = 1.0;            // 0 = off, for an A/B
+// Character v2 part 2 (2026-10-21): the tail wags and the flippers swing.
+// The model is one mesh without a skeleton, so the parts are picked out
+// by where they are in the model (measured in Blender: the flippers hang
+// at |x| 0.72-0.88 in the front half, the one tail runs from about
+// (-0.45, -0.1, -0.6) back to (-0.89, -0.17, -0.95)) and turned about
+// their roots, more toward the tip. creature.gd drives the phases from
+// the step cycle and the speed. Body only (`animate` 0 on the legs).
+uniform float animate = 0.0;
+uniform float wag_phase = 0.0;
+uniform float wag_amp = 0.0;         // radians at the tip
+uniform float swing_phase = 0.0;     // the step cycle: the flippers swing opposite, like arms
+uniform float swing_amp = 0.0;
+uniform float flap_phase = 0.0;      // in the air: both flap out together
+uniform float flap_amp = 0.0;
 uniform vec2 melt_xz = vec2(0.0, 0.065);
 uniform float melt_edge = 0.62;
 uniform float melt_cap_y = -0.340;
@@ -290,6 +304,11 @@ float cnoise(vec3 p) {
 		mix(mix(chash(i + vec3(0, 0, 1)), chash(i + vec3(1, 0, 1)), f.x), mix(chash(i + vec3(0, 1, 1)), chash(i + vec3(1, 1, 1)), f.x), f.y), f.z);
 }
 
+vec3 turned(vec3 q, vec3 axis, float a) {
+	float c = cos(a);
+	return q * c + cross(axis, q) * sin(a) + axis * dot(axis, q) * (1.0 - c);
+}
+
 void vertex() {
 	vec3 v = VERTEX;
 	if (melt > 0.5) {
@@ -306,6 +325,26 @@ void vertex() {
 					o.y / (melt_cap_rxz * melt_cap_rxz)));
 			}
 		}
+	}
+	if (animate > 0.5) {
+		// The tail: about the vertical through its root.
+		const vec3 root = vec3(-0.45, -0.1, -0.6);
+		const vec3 dir = vec3(-0.44, -0.07, -0.35);
+		float t = clamp(dot(v - root, dir) / dot(dir, dir), 0.0, 1.0) * step(v.x, -0.3) * step(v.z, -0.5);
+		float wa = sin(wag_phase) * wag_amp * t;
+		v = root + turned(v - root, vec3(0.0, 1.0, 0.0), wa);
+		NORMAL = turned(NORMAL, vec3(0.0, 1.0, 0.0), wa);
+		// The flippers: swing about the side-to-side axis through the
+		// shoulder, and flap outward about the forward axis.
+		float side = sign(v.x);
+		float w = smoothstep(0.7, 0.8, abs(v.x)) * smoothstep(0.25, -0.35, v.y) * step(-0.2, v.z);
+		vec3 shoulder = vec3(side * 0.72, 0.22, 0.32);
+		float sa = sin(swing_phase + (side > 0.0 ? 0.0 : PI)) * swing_amp * w;
+		float fa = -side * (0.5 + 0.5 * sin(flap_phase)) * flap_amp * w;
+		vec3 q = turned(v - shoulder, vec3(1.0, 0.0, 0.0), sa);
+		q = turned(q, vec3(0.0, 0.0, 1.0), fa);
+		v = shoulder + q;
+		NORMAL = turned(turned(NORMAL, vec3(1.0, 0.0, 0.0), sa), vec3(0.0, 0.0, 1.0), fa);
 	}
 	model_pos = v;
 	POSITION = PROJECTION_MATRIX * MODELVIEW_MATRIX * vec4(v, 1.0);
@@ -412,6 +451,8 @@ func _apply_material(n: Node) -> void:
 		m.render_priority = 10
 		m.set_shader_parameter("skin", src.albedo_texture if src != null else null)
 		m.set_shader_parameter("clay_boost", Vector3(CLAY_BOOST.r, CLAY_BOOST.g, CLAY_BOOST.b))
+		m.set_shader_parameter("animate", 1.0)
+		_body_mat = m
 		m.set_shader_parameter("on_top", ON_TOP)
 		m.set_shader_parameter("ambient", AMBIENT)
 		m.set_shader_parameter("rim_colour", WorldPalette.HERO_RIM)
@@ -1222,6 +1263,7 @@ func _process(delta: float) -> void:
 	_step_cycle(delta)
 	# The legs last: the hips are read off the pose that was just set.
 	_place_legs(maxf(uniform, 0.0))
+	_animate_parts(delta)
 	if _scarf != null and _scarf.visible:
 		# The scarf's ends stream back with speed and in the air.
 		var want := 1.0 if not _on_ground() else clampf(_gspeed / SCARF_FULL_SPEED, 0.0, 1.0)
@@ -1288,3 +1330,41 @@ func wear_scarf(on: bool) -> void:
 		add_child(_scarf)
 	if _scarf != null:
 		_scarf.visible = on
+
+
+# CHARACTER V2 PART 2 (2026-10-21): the tail and the flippers, moved in
+# the body shader's vertex stage (see its `animate`). The tail wags,
+# slow standing and quicker running; the flippers swing with the step
+# cycle like arms, harder the faster it goes, and in the air both flap
+# out together as if it could fly. Amplitudes ease, so nothing snaps.
+const WAG_HZ := Vector2(1.3, 3.2)       # standing, full speed
+const WAG_AMP := Vector2(0.28, 0.5)     # radians at the tail's tip
+const SWING_AMP := Vector2(0.1, 0.55)   # radians at the flipper's tip
+const FLAP_HZ := 5.0
+const FLAP_AMP := 0.7
+var _body_mat: ShaderMaterial = null
+var _wag_phase := 0.0
+var _flap_phase := 0.0
+var _wag_amp := 0.0
+var _swing_amp := 0.0
+var _flap_amp := 0.0
+
+
+func _animate_parts(delta: float) -> void:
+	if _body_mat == null:
+		return
+	var speed := clampf(_gspeed / SCARF_FULL_SPEED, 0.0, 1.0)
+	var air := not _on_ground()
+	var ease := clampf(delta * 6.0, 0.0, 1.0)
+	_wag_phase = fposmod(_wag_phase + delta * TAU * lerpf(WAG_HZ.x, WAG_HZ.y, speed), TAU)
+	_flap_phase = fposmod(_flap_phase + delta * TAU * FLAP_HZ, TAU)
+	_wag_amp = lerpf(_wag_amp, lerpf(WAG_AMP.x, WAG_AMP.y, speed), ease)
+	_swing_amp = lerpf(_swing_amp, 0.0 if air else lerpf(SWING_AMP.x, SWING_AMP.y, speed), ease)
+	_flap_amp = lerpf(_flap_amp, FLAP_AMP if air else 0.0, ease)
+	_body_mat.set_shader_parameter("wag_phase", _wag_phase)
+	_body_mat.set_shader_parameter("wag_amp", _wag_amp)
+	_body_mat.set_shader_parameter("swing_phase", _stride * TAU)
+	_body_mat.set_shader_parameter("swing_amp", _swing_amp)
+	_body_mat.set_shader_parameter("flap_phase", _flap_phase)
+	_body_mat.set_shader_parameter("flap_amp", _flap_amp)
+
