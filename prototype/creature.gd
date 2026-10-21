@@ -333,6 +333,7 @@ void fragment() {
 """
 
 const Rules := preload("res://prototype/rules.gd")
+const Scarf := preload("res://prototype/scarf.gd")
 
 enum Mode { ALIVE, DYING, GONE, RESPAWN, GOAL }
 
@@ -1221,6 +1222,11 @@ func _process(delta: float) -> void:
 	_step_cycle(delta)
 	# The legs last: the hips are read off the pose that was just set.
 	_place_legs(maxf(uniform, 0.0))
+	if _scarf != null and _scarf.visible:
+		# The scarf's ends stream back with speed and in the air.
+		var want := 1.0 if not _on_ground() else clampf(_gspeed / SCARF_FULL_SPEED, 0.0, 1.0)
+		_flutter = lerpf(_flutter, want, clampf(delta * 4.0, 0.0, 1.0))
+		_scarf.set_flutter(_flutter)
 
 
 # (yaw, pitch) that turn the eye to the active camera.
@@ -1266,3 +1272,19 @@ static func _ease_in_out(u: float) -> float:
 # A per-frame lerp factor quoted at 60 fps -> the same feel at any fps.
 static func _rate(per_frame: float, k60: float) -> float:
 	return 1.0 - pow(1.0 - per_frame, k60)
+
+
+# THE SCARF (scarf.gd): worn or not -- the run asks once it is earned, the
+# menu always (the teaser). Built the first time it is worn.
+const SCARF_FULL_SPEED := 4.0          # units / s of ground speed at which the ends stream fully
+var _scarf: MeshInstance3D = null
+var _flutter := 0.0
+
+
+func wear_scarf(on: bool) -> void:
+	if on and _scarf == null:
+		_scarf = Scarf.new()
+		_scarf.name = "Scarf"
+		add_child(_scarf)
+	if _scarf != null:
+		_scarf.visible = on

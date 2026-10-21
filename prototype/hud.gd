@@ -144,10 +144,7 @@ func _draw() -> void:
 			var c := Vector2(screen.x * 0.5, (HUD_Y + 72.0) if endless else (BAR_Y + BAR_H + 46.0))
 			var prect := Rect2(c - Vector2(pw * 0.5, ph * 0.5), Vector2(pw, ph))
 			var a := word_alpha
-			draw_rect(Rect2(prect.position - Vector2(3, 3), prect.size + Vector2(6, 6)), Color(Palette.HAZ.r, Palette.HAZ.g, Palette.HAZ.b, 0.06 * a), true)
-			draw_rect(prect, Color(1, 1, 1, 0.06 * a), true)
-			draw_rect(prect, Color(1, 1, 1, 0.28 * a), false, 1.5)
-			draw_line(prect.position + Vector2(6, 1), prect.position + Vector2(pw - 6, 1), Color(1, 1, 1, 0.42 * a), 1.5)
+			glass_pill(self, prect, Palette.HAZ, a)   # dark glass: readable on the canyon's light sky
 			draw_string(font, c + Vector2(-tw * 0.5, size * 0.36), label, HORIZONTAL_ALIGNMENT_LEFT, -1, size,
 				Color(1, 1, 1, 0.92 * a))
 	if word != "":

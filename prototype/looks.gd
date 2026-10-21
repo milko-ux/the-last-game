@@ -18,6 +18,7 @@ const TimeOfDay := preload("res://prototype/time_of_day.gd")
 #   pillars   fraction of the pillars kept (monoliths.gd), 1.0 = all
 #   slab      the slab's thickness (field.THICK)
 #   time      hold one time of day (time_of_day.gd): "sunset", "night"
+#   scarf     true: the creature wears the 1 km scarf (scarf.gd) earned or not
 #
 # "canyon" is the shipped look: the palette's own values (step 3 brief 2,
 # 2026-10-21; it replaced brief 1's grey "deep fog" and "today"). Brief
@@ -34,6 +35,7 @@ const LOOKS := [
 	# The time of day held still, to judge it without running to it.
 	["sunset", {"time": "sunset"}],
 	["night", {"time": "night"}],
+	["scarf", {"scarf": true}],
 ]
 
 static var current := 0
@@ -84,3 +86,4 @@ static func apply(scene: Node, extra: Dictionary = {}) -> void:
 	scene.apply_render_scale(float(change.get("scale", -1.0)))
 	scene.field.set_pillar_density(float(change.get("pillars", 1.0)))
 	scene.field.set_slab_thickness(float(change.get("slab", scene.field.THICK)))
+	scene.player.creature.wear_scarf(bool(change.get("scarf", false)) or Progress.scarf_unlocked)

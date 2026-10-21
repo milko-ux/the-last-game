@@ -57,6 +57,7 @@ const CameraRig := preload("res://prototype/camera_rig.gd")
 const Hud := preload("res://prototype/hud.gd")
 const Field := preload("res://prototype/field.gd")
 const Looks := preload("res://prototype/looks.gd")
+const Scarf := preload("res://prototype/scarf.gd")
 const TimeOfDay := preload("res://prototype/time_of_day.gd")
 
 const RUN_SCENE := "res://prototype/track_test.tscn"
@@ -360,6 +361,9 @@ func _build_creature() -> void:
 	_stage.add_child(_stand)
 	_creature = load("res://prototype/creature.tscn").instantiate()
 	_stand.add_child(_creature)
+	# The scarf, always: before it is earned it is the teaser (the label
+	# over the creature, _draw_scarf_teaser), after it it is simply worn.
+	_creature.wear_scarf(true)
 	_stand.creature = _creature
 	_begin_idle("greet")
 
@@ -692,6 +696,7 @@ func draw_overlay(c: CanvasItem) -> void:
 	_draw_title(c, font, a)
 	_draw_buttons(c, screen, font, a)
 	_draw_name_chip(c, screen, font, a)
+	_draw_scarf_teaser(c, font, a)
 	if Progress.UNLOCK_ALL:
 		var dev := Rect2(Vector2(screen.x - MARGIN - 78.0, screen.y - BOTTOM - 44.0), Vector2(78.0, 44.0))
 		_rects["dev"] = dev
@@ -773,6 +778,21 @@ func _draw_buttons(c: CanvasItem, screen: Vector2, font: Font, a: float) -> void
 	_rects["settings"] = st
 	Hud.glass_pill(c, st, Palette.TEXT, 0.8 * a)
 	Hud.centre_text(c, font, "SETTINGS", st.get_center() + Vector2(0, -1), 13, Color(1, 1, 1, 0.85 * a))
+
+
+# Over the creature's head until the scarf is earned: what it takes.
+func _draw_scarf_teaser(c: CanvasItem, font: Font, a: float) -> void:
+	if Progress.scarf_unlocked or _creature == null:
+		return
+	var cam := get_viewport().get_camera_3d()
+	if cam == null:
+		return
+	var at := cam.unproject_position(_creature.global_position + Vector3(0.0, 3.1, 0.0))
+	var label := "REACH %s TO UNLOCK THE SCARF" % Hud.metres(Scarf.UNLOCK_M).replace(" 000 m", " KM")
+	var w: float = font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x + 36.0
+	var pill := Rect2(at - Vector2(w * 0.5, 18.0), Vector2(w, 36.0))
+	Hud.glass_pill(c, pill, WorldPalette.SCARF, 0.9 * a)
+	Hud.centre_text(c, font, label, pill.get_center() + Vector2(0, -1), 13, Color(1, 1, 1, 0.92 * a))
 
 
 # Top right: who is playing. A tap goes to the same place SETTINGS does,

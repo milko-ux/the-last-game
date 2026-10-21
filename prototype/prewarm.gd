@@ -28,6 +28,7 @@ extends Node3D
 const Mats := preload("res://prototype/flat_mats.gd")
 const Props := preload("res://prototype/props/props.gd")
 const Shadows := preload("res://prototype/shadows.gd")
+const Scarf := preload("res://prototype/scarf.gd")
 
 const TINY := 0.001
 const HAZARD_MODELS := ["gate_pillar", "sweeper_segment", "slammer", "orbiter_pillar", "volley_emitter"]
@@ -61,6 +62,8 @@ func prepare(bursts: Array) -> void:
 	# The drop shadows (brief 6): a MultiMesh is its own pipeline variant,
 	# so the warm-up draws one instance of the real thing.
 	_queue.append(_shadows)
+	# The 1 km scarf (scarf.gd): it can appear mid-run, the moment it is earned.
+	_queue.append(func() -> void: _mesh(Scarf.build_mesh(), Scarf.material()))
 	warm_bursts(bursts)
 
 

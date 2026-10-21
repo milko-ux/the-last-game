@@ -104,6 +104,15 @@ var best_run := {}
 # The bots and tools turn this off: they must never write to the save file
 # of whoever owns the machine.
 var save_enabled := true
+# The scarf (prototype/scarf.gd): earned once, by reaching its distance in
+# one run; worn from then on.
+var scarf_unlocked := false
+
+
+func unlock_scarf() -> void:
+	if not scarf_unlocked:
+		scarf_unlocked = true
+		save_progress()
 
 # ------------------------------------------------------------
 # SETTINGS (Phase E section 7 — the menu's SETTINGS panel)
@@ -224,7 +233,7 @@ func save_progress() -> void:
 		return
 	f.store_string(JSON.stringify({"standard_cleared": standard_cleared, "best_song_time": best_song_time,
 		"best_score": best_score, "levels_cleared": levels_cleared,
-		"graduated": graduated, "best_distance": best_distance, "best_run": best_run, "sound_on": sound_on}))
+		"graduated": graduated, "best_distance": best_distance, "best_run": best_run, "sound_on": sound_on, "scarf_unlocked": scarf_unlocked}))
 	f.close()
 
 
@@ -255,3 +264,4 @@ func load_progress() -> void:
 		if br is Dictionary:
 			best_run = br
 		sound_on = bool(parsed.get("sound_on", true))
+		scarf_unlocked = bool(parsed.get("scarf_unlocked", false))

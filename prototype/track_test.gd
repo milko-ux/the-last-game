@@ -20,6 +20,7 @@ const HazardMath := preload("res://prototype/hazard_math.gd")
 const LapGen := preload("res://prototype/lap_gen.gd")
 const Hud := preload("res://prototype/hud.gd")
 const Looks := preload("res://prototype/looks.gd")
+const Scarf := preload("res://prototype/scarf.gd")
 const TimeOfDay := preload("res://prototype/time_of_day.gd")
 
 # Lives come from the level's knobs (Rules.lives(): 0 on level 1, 3 from
@@ -178,6 +179,7 @@ var shields_used := 0
 var _grace := 0.0
 var _furthest_z := 0.0
 var _bar1_z := 0.0
+var _scarf_word_s := 0.0             # how long "SCARF UNLOCKED" stays up
 var _best_m := 0                     # the best distance when this run began
 var _best_crossed := false
 var _best_line: MeshInstance3D
@@ -798,6 +800,18 @@ func _tick_distance_and_shield(delta: float) -> void:
 		FrameMeter.note("best line crossed")
 	# Armed: the bubble. In the grace second after it broke: it flickers out.
 	_bubble.visible = shield_armed or (_grace > 0.0 and fmod(_grace, 0.16) > 0.08)
+	# The scarf: earned the moment the run passes its distance (scarf.gd).
+	if distance_m >= Scarf.UNLOCK_M and not Progress.scarf_unlocked:
+		Progress.unlock_scarf()
+		player.creature.wear_scarf(true)
+		hud.show_word("SCARF UNLOCKED")
+		_scarf_word_s = 2.5
+		Input.vibrate_handheld(HAPTIC_COIN_MS * 4)
+		FrameMeter.note("scarf unlocked")
+	if _scarf_word_s > 0.0:
+		_scarf_word_s -= delta
+		if _scarf_word_s <= 0.0:
+			hud.hide_word()
 
 
 # A note charges the shield with the current combo (1-4).
