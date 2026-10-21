@@ -239,12 +239,20 @@ const FOOT_SHADOW_R := LEG_W * 0.5
 # through its body.
 # `skin` and `base_tint` are the swap points for later outfits.
 const ON_TOP := 0.92
+# CHARACTER V2 (step 3, 2026-10-21; Milko picked docs/concept/hero/
+# C_bright_lilac.jpg): the clay a brighter, cooler lavender than the
+# model's baked pinkish lilac -- multiplied into the clay only (the eye's
+# white and the pupil keep theirs: see clay_mask in the shader), and into
+# the legs and the death pop so they still match. The model's second tail
+# prong is melted into the body (tools/blender/creature_tail.py).
+const CLAY_BOOST := Color(1.1, 1.06, 1.32)
 const AMBIENT := 0.55                  # the scene has no ambient light; this keeps the shadow side clay, not black (0.38 until the canyon: the hero read grey on the cream floor)
 const SHADER := """
 shader_type spatial;
 render_mode cull_back, fog_disabled;
 uniform sampler2D skin : source_color, filter_linear_mipmap;
 uniform vec4 base_tint : source_color = vec4(1.0);
+uniform vec3 clay_boost = vec3(1.0);     // CLAY_BOOST: on the clay, not the eye
 uniform float on_top = 0.92;
 uniform float ambient = 0.38;
 uniform float clay_grain = 0.04;     // brief 2b section 6: the same fine grain the world got
@@ -306,6 +314,12 @@ void vertex() {
 
 void fragment() {
 	vec3 c = texture(skin, UV).rgb * base_tint.rgb;
+	// The clay is violet (blue over green), the eye's white is warm cream
+	// (green over blue), the pupil is dark: by brightness alone the sunlit
+	// crown counted as eye and stayed pale.
+	float v = max(c.r, max(c.g, c.b));
+	float clay_mask = smoothstep(0.0, 0.05, c.b - c.g) * smoothstep(0.1, 0.22, v);
+	c = mix(c, c * clay_boost, clay_mask);
 	c *= 1.0 + (cnoise(model_pos * 14.0) * 2.0 - 1.0) * clay_grain;
 	ALBEDO = c;
 	ROUGHNESS = 0.8;
@@ -396,6 +410,7 @@ func _apply_material(n: Node) -> void:
 		m.shader = sh
 		m.render_priority = 10
 		m.set_shader_parameter("skin", src.albedo_texture if src != null else null)
+		m.set_shader_parameter("clay_boost", Vector3(CLAY_BOOST.r, CLAY_BOOST.g, CLAY_BOOST.b))
 		m.set_shader_parameter("on_top", ON_TOP)
 		m.set_shader_parameter("ambient", AMBIENT)
 		m.set_shader_parameter("rim_colour", WorldPalette.HERO_RIM)
@@ -881,6 +896,7 @@ func _build_legs() -> void:
 		m.shader = sh
 		m.set_shader_parameter("skin", white)
 		m.set_shader_parameter("base_tint", LEG_TINT)
+		m.set_shader_parameter("clay_boost", Vector3(CLAY_BOOST.r, CLAY_BOOST.g, CLAY_BOOST.b))
 		m.set_shader_parameter("on_top", ON_TOP)
 		m.set_shader_parameter("ambient", AMBIENT)
 		m.set_shader_parameter("melt", 0.0)
@@ -997,7 +1013,7 @@ func _build_burst() -> void:
 	ball.rings = 4
 	var mat := StandardMaterial3D.new()
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.albedo_color = CLAY
+	mat.albedo_color = CLAY * CLAY_BOOST
 	mat.no_depth_test = true
 	mat.render_priority = 11
 	ball.material = mat
