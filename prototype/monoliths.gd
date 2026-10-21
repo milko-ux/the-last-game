@@ -26,17 +26,52 @@ const Rules := preload("res://prototype/rules.gd")
 const Props := preload("res://prototype/props/props.gd")
 
 const STRIP := 64.0              # one merged mesh per band per this much z
-const LINTEL_EVERY := 5          # in the near band, every this many bars: a pair of pillars with the bridge piece
 const BASE_Y := -22.0            # feet well below the slab: the height fog dissolves them
-const TILT_MAX_DEG := 6.0
 # Per band: the gap from the field's edge to the pillar's near face, the
-# height, how many per side per 8-unit bar, and how slim (x / z scale on
-# top of the uniform one, so a pillar is thinner than the model).
-const BANDS := [
-	{"gap": Vector2(3.0, 10.0), "h": Vector2(12.0, 28.0), "n": Vector2i(0, 1), "slim": Vector2(0.6, 1.0)},
-	{"gap": Vector2(12.0, 24.0), "h": Vector2(18.0, 42.0), "n": Vector2i(1, 2), "slim": Vector2(0.7, 1.1)},
-	{"gap": Vector2(26.0, 48.0), "h": Vector2(30.0, 70.0), "n": Vector2i(1, 2), "slim": Vector2(0.8, 1.3)},
-]
+# height from BASE_Y per side ([world -x = screen-right, world +x =
+# screen-left]), how many per side per 8-unit bar, and how wide: `slim`
+# (x / z scale on top of the height's uniform one, "today") or `w` (a
+# width in units, whatever the height).
+# `lintel_every`: in the near band, every this many bars a pair of pillars
+# with the bridge piece (when that bar has a near pillar at all).
+#
+# Two placements while step 3 brief 1 section 3 is judged (looks.gd):
+# "today" is the placement before it, "tops in frame" the new one.
+#
+# "tops in frame", from the camera (camera_rig.gd): it sits at
+# (-6.2, 21.0, -14.0) from the window's centre, 54 degrees down, FOV 55
+# (vertical) at 2556 x 1179, turned 24 degrees. The frame's top edge is a
+# plane 54 - 27.5 = 26.5 degrees below level; with 5 % of the height kept
+# clear, about 29. So a top is in frame while
+#   y < 21.0 - 0.56 * f,  f = 0.41 * (x + 6.2) + 0.91 * (z - z_back + 5.2)
+# (f: how far ahead of the camera along its heading). A pillar is seen
+# (its band's fade under half, props.PILLAR_FADE) up to 20 / 37 / 59
+# units ahead, where f is largest. tools/pillar_frame.gd walks the window
+# along the course and gives the highest top that stays in frame for 80 %
+# of the sightings (window 2.2 bars, the camera at 26):
+#                  screen-right (-x)   screen-left (+x)
+#   near                +11.6               +4.7
+#   mid                  +5.8               -4.3
+#   far                  -3.9              -18.8
+# The tops (h + BASE_Y) are set under those: near +3..+10 / +1..+3.5,
+# mid +2..+6 / -9..-4, far -8..-3 / -20..-14. The camera sits on the -x
+# side and looks across, so the +x side's pillars stand far away, high in
+# the frame: there the mid band's tops end below the floor and the far
+# band sinks into the height fog. Under this camera a far pillar on the
+# screen-left cannot show its top (section 5 tests the camera).
+const PLACEMENTS := {
+	"today": {"lintel_every": 5, "bands": [
+		{"gap": Vector2(3.0, 10.0), "h": [Vector2(12.0, 28.0), Vector2(12.0, 28.0)], "n": Vector2i(0, 1), "slim": Vector2(0.6, 1.0)},
+		{"gap": Vector2(12.0, 24.0), "h": [Vector2(18.0, 42.0), Vector2(18.0, 42.0)], "n": Vector2i(1, 2), "slim": Vector2(0.7, 1.1)},
+		{"gap": Vector2(26.0, 48.0), "h": [Vector2(30.0, 70.0), Vector2(30.0, 70.0)], "n": Vector2i(1, 2), "slim": Vector2(0.8, 1.3)},
+	]},
+	"tops in frame": {"lintel_every": 8, "bands": [
+		{"gap": Vector2(3.0, 10.0), "h": [Vector2(25.0, 32.0), Vector2(23.0, 25.5)], "n": Vector2i(0, 1), "w": Vector2(1.5, 3.0)},
+		{"gap": Vector2(12.0, 24.0), "h": [Vector2(24.0, 28.0), Vector2(13.0, 18.0)], "n": Vector2i(0, 2), "w": Vector2(2.2, 4.0)},
+		{"gap": Vector2(26.0, 48.0), "h": [Vector2(14.0, 19.0), Vector2(2.0, 8.0)], "n": Vector2i(0, 1), "w": Vector2(3.5, 6.5)},
+	]},
+}
+const BANDS := 3
 # How far ahead of the window's back edge a band is drawn at all (its
 # material's fade has taken it by then), and how far behind.
 const SHOW_BEHIND := 24.0
@@ -47,7 +82,9 @@ var seed_level := 1
 # Pillars are placed per 8-unit bar counted from here (the first z ever
 # asked for), so a strip built later continues the same sequence.
 var _origin_z := INF
-var _strips: Array = []          # {z0, z1, nodes: [3], zs: [3 x PackedFloat32Array], sides: [3 x PackedByteArray]}
+var _strips: Array = []          # {z0, z1, nodes: [3], zs: [3 x PackedFloat32Array], sides: [3 x PackedByteArray], boxes: [3 x Array[AABB]]}
+# The placement table in use (PLACEMENTS), set by the look switch.
+var placement := "today"
 
 
 # The level path: everything at once (split into strips inside).
@@ -75,6 +112,9 @@ func _build_strip(z0: float, z1: float) -> void:
 	var idx: Array = [PackedInt32Array(), PackedInt32Array(), PackedInt32Array()]
 	var zs: Array = [PackedFloat32Array(), PackedFloat32Array(), PackedFloat32Array()]
 	var sides: Array = [PackedByteArray(), PackedByteArray(), PackedByteArray()]
+	var boxes: Array = [[], [], []]
+	var bands: Array = PLACEMENTS[placement]["bands"]
+	var lintel_every: int = PLACEMENTS[placement]["lintel_every"]
 	var names: Array = Props.kit_names()
 	var pillars: Array = names.filter(func(n): return n != "lintel")
 	var rng := RandomNumberGenerator.new()
@@ -83,22 +123,27 @@ func _build_strip(z0: float, z1: float) -> void:
 	# this passes 1. Decided AFTER the pillar's random draws, so the kept
 	# ones stand exactly where they stand at 1.0.
 	var keep := PackedFloat32Array()
-	keep.resize(BANDS.size() * 2)
+	keep.resize(BANDS * 2)
 	var z := z0
 	while z < z1 - 0.01:
 		rng.seed = hash("pillars-%d-%d" % [seed_level, bar])
-		for b in BANDS.size():
-			var band: Dictionary = BANDS[b]
+		for b in BANDS:
+			var band: Dictionary = bands[b]
 			for side: float in [-1.0, 1.0]:
 				var n: int = rng.randi_range(band["n"].x, band["n"].y)
-				# The near band: every LINTEL_EVERY bars, a pair of the same
+				# The near band: every `lintel_every` bars, a pair of the same
 				# pillar with the bridge piece across them, instead of one.
-				var pair: bool = b == 0 and bar % LINTEL_EVERY == (2 if side < 0.0 else 4)
+				var pair: bool = b == 0 and bar % lintel_every == (2 if side < 0.0 else 4)
 				for i in n:
 					var name: String = pillars[rng.randi_range(0, pillars.size() - 1)]
 					var gap: float = rng.randf_range(band["gap"].x, band["gap"].y)
-					var h: float = rng.randf_range(band["h"].x, band["h"].y)
-					var slim: float = rng.randf_range(band["slim"].x, band["slim"].y)
+					var hr: Vector2 = band["h"][0 if side < 0.0 else 1]
+					var h: float = rng.randf_range(hr.x, hr.y)
+					# The x / z scale, from `slim` or `w` (above).
+					var wr: Vector2 = band.get("w", band.get("slim"))
+					var wv: float = rng.randf_range(wr.x, wr.y)
+					var size := Props.kit_size(name)
+					var xz: float = wv / maxf(size.x, size.z) if band.has("w") else h / size.y * wv
 					var zz := z + rng.randf_range(0.0, BeatClock.BAR_UNITS)
 					var ki := b * 2 + (0 if side < 0.0 else 1)
 					keep[ki] += _density
@@ -108,17 +153,17 @@ func _build_strip(z0: float, z1: float) -> void:
 					if pair and i == 0:
 						var lsize := Props.kit_size("lintel")
 						var span := lsize.z * 0.9
-						var x0 := _place(b, name, gap, h, slim, side, zz, verts, norms, uvs, idx, zs, sides)
-						_place(b, name, gap, h, slim, side, zz + span, verts, norms, uvs, idx, zs, sides)
-						var k := h / Props.kit_size(name).y * slim * 0.9   # the lintel's scale follows the pair
+						var x0 := _place(b, name, gap, h, xz, side, zz, verts, norms, uvs, idx, zs, sides, boxes)
+						_place(b, name, gap, h, xz, side, zz + span, verts, norms, uvs, idx, zs, sides, boxes)
+						var k := xz * 0.9   # the lintel's scale follows the pair
 						_append(b, "lintel", Transform3D(Basis.IDENTITY.scaled(Vector3(k, k, span / lsize.z)),
-							Vector3(x0, BASE_Y + h, zz + span * 0.5)), verts, norms, uvs, idx, zs, sides, side)
+							Vector3(x0, BASE_Y + h, zz + span * 0.5)), verts, norms, uvs, idx, zs, sides, boxes, side)
 					else:
-						_place(b, name, gap, h, slim, side, zz, verts, norms, uvs, idx, zs, sides)
+						_place(b, name, gap, h, xz, side, zz, verts, norms, uvs, idx, zs, sides, boxes)
 		z += BeatClock.BAR_UNITS
 		bar += 1
-	var strip := {"z0": z0, "z1": z1, "nodes": [], "zs": zs, "sides": sides}
-	for b in BANDS.size():
+	var strip := {"z0": z0, "z1": z1, "nodes": [], "zs": zs, "sides": sides, "boxes": boxes}
+	for b in BANDS:
 		var mi := MeshInstance3D.new()
 		var mesh := ArrayMesh.new()
 		if verts[b].size() > 0:
@@ -138,22 +183,22 @@ func _build_strip(z0: float, z1: float) -> void:
 	_strips.append(strip)
 
 
-# One pillar: the kit variant scaled to `h` (uniform) and thinned, base
+# One pillar: the kit variant scaled to `h` tall and by `xz` across, base
 # at BASE_Y, its near face `gap` from the field's edge, NEVER turned or
 # tilted (the light is baked in). Returns its x.
-func _place(b: int, name: String, gap: float, h: float, slim: float, side: float, zz: float,
-		verts: Array, norms: Array, uvs: Array, idx: Array, zs: Array, sides: Array) -> float:
+func _place(b: int, name: String, gap: float, h: float, xz: float, side: float, zz: float,
+		verts: Array, norms: Array, uvs: Array, idx: Array, zs: Array, sides: Array, boxes: Array) -> float:
 	var size := Props.kit_size(name)
 	var k := h / size.y
-	var reach := maxf(size.x, size.z) * k * slim * 0.5
+	var reach := maxf(size.x, size.z) * xz * 0.5
 	var x := side * (Rules.half_width() + gap + reach)
-	_append(b, name, Transform3D(Basis.IDENTITY.scaled(Vector3(k * slim, k, k * slim)), Vector3(x, BASE_Y, zz)),
-		verts, norms, uvs, idx, zs, sides, side)
+	_append(b, name, Transform3D(Basis.IDENTITY.scaled(Vector3(xz, k, xz)), Vector3(x, BASE_Y, zz)),
+		verts, norms, uvs, idx, zs, sides, boxes, side)
 	return x
 
 
 func _append(b: int, name: String, xf: Transform3D, verts: Array, norms: Array, uvs: Array, idx: Array,
-		zs: Array, sides: Array, side: float) -> void:
+		zs: Array, sides: Array, boxes: Array, side: float) -> void:
 	var src: Mesh = Props.kit_mesh(name)
 	if src == null:
 		return
@@ -172,13 +217,14 @@ func _append(b: int, name: String, xf: Transform3D, verts: Array, norms: Array, 
 		idx[b].append(base + si[i])
 	zs[b].append(xf.origin.z)
 	sides[b].append(0 if side < 0.0 else 1)
+	boxes[b].append(xf * src.get_aabb())
 
 
 # Called with the window's back edge every frame: a band of a strip is
 # drawn while the strip overlaps the band's own range.
 func set_window(z_back: float) -> void:
 	for strip in _strips:
-		for b in BANDS.size():
+		for b in BANDS:
 			var on: bool = float(strip["z1"]) >= z_back - SHOW_BEHIND and float(strip["z0"]) <= z_back + float(SHOW_AHEAD[b])
 			var mmi: MeshInstance3D = strip["nodes"][b]
 			if mmi.visible != on:
@@ -196,6 +242,19 @@ func set_density(f: float) -> void:
 	if is_equal_approx(f, _density):
 		return
 	_density = f
+	_rebuild()
+
+
+# The placement table (PLACEMENTS), the look switch's "placement": the
+# same rebuild from the same seeds.
+func set_placement(name: String) -> void:
+	if name == placement or not PLACEMENTS.has(name):
+		return
+	placement = name
+	_rebuild()
+
+
+func _rebuild() -> void:
 	var built: Array = _strips
 	_strips = []
 	for strip in built:
@@ -214,7 +273,7 @@ func in_view(z_back: float) -> Vector2i:
 	for strip in _strips:
 		if float(strip["z1"]) < lo or float(strip["z0"]) > hi:
 			continue
-		for b in BANDS.size():
+		for b in BANDS:
 			var zs: PackedFloat32Array = strip["zs"][b]
 			var sides: PackedByteArray = strip["sides"][b]
 			for i in zs.size():
@@ -231,7 +290,7 @@ func counts() -> Dictionary:
 	var total := 0
 	var shown := 0
 	for strip in _strips:
-		for b in BANDS.size():
+		for b in BANDS:
 			var k: int = strip["zs"][b].size()
 			total += k
 			if strip["nodes"][b].visible:
