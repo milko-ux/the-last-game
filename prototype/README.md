@@ -11,7 +11,10 @@
 - `14c39d7` + `963e86a` **character v2 part 1**: `tools/blender/creature_tail.py` melts the model's right tail prong onto the body (pushed onto the fitted ellipsoid, ellipsoid normals: no hole, texture untouched; cutting + filling left folds); `CLAY_BOOST` makes the clay a brighter cooler lavender, picked out by colour (blue over green) so the eye keeps its white; legs and death pop match. The re-exported GLB names its image `Image_0`: one texture copy now (the old `creature_0.jpg` was packed twice, +5 MB).
 - `3fd1591` **the scarf** (`prototype/scarf.gd`): built in code, chunky knit band under the eye (body measured slice by slice — a fitted ellipsoid put it round the feet), knot on the camera's side, two ends streaming with speed (`flutter`). `Progress.scarf_unlocked` (saved), unlocked the moment `distance_m` passes 1000 ("SCARF UNLOCKED", haptic); the menu's creature always wears it with "REACH 1 KM TO UNLOCK THE SCARF" until then; look switch `scarf` to wear it in a run. Prewarmed. The HUD's word pill is dark glass.
 
-**NEXT (Milko, phone — ⌘R):** when the phone is cool, the probe (long press) — is the frame back at 16.7? Look at the hero (lavender, one tail) and the scarf (menu, and `scarf` on the readout). **Then:** character v2 part 2 (the better walk and motion), then step 4's sound effects. Nothing pushed.
+**Probe after the fix (phone, `scarf` look):** every row 16.7, worst 17.0–17.2, control +0.0 — **the frame cost is back.**
+- **Then built:** character v2 part 2 — the tail wags and the flippers swing with the step cycle and flap in the air (the body shader's vertex stage, parts picked out by position; brief 5 §6, skipped in September for the two-prong model); the scarf's band lowered to 0.7 (square-on it covered the eye's lower edge).
+
+**NEXT (Milko, phone — ⌘R):** watch the hero run, stand and jump: the tail, the flippers, the scarf. Is the motion right, too much, too little — and is anything else about the walk still bothering him (the README has had that question open since September)? **Then:** step 4's sound effects. Nothing pushed.
 
 ### (2026-10-21, late) THE TIME OF DAY + the shield fix; canyon approved; cable app re-exported, STOP for Milko's phone
 
