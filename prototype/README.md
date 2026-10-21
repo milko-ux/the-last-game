@@ -1,8 +1,29 @@
 # Phase R prototype — "an album you survive"
 
-## Where we are (2026-10-15, evening) — start here
+## Where we are (2026-10-21) — start here
 
-### START HERE (2026-10-15, evening): ROADMAP STEP 2 DONE — the game installs from TestFlight and runs at 60 fps; next: back to step 3, brief 1 section 3
+### START HERE (2026-10-21): STEP 3 BRIEF 1 SECTION 3 BUILT — the look "tops in frame"; cable app re-exported, STOP for Milko's phone
+
+**Commits:** `e643cf6` (the rewritten section 4 brief, `STEP_3_BRIEF_1_SECTION_4_KIT.md`, committed as Cowork wrote it) and `4a350b9` (section 3). Not pushed.
+
+**What it is:** a new look variant **`tops in frame`** (the look switch: a tap on the readout on TAP TO START cycles `deep fog` → `tops in frame` → `today`; web `?look=tops-in-frame`). Only the pillars' placement changes, on top of the shipped deep fog: about half as many pillars, heights set per side from the camera's projection, widths no longer tied to height, the bridged pair every 8th bar instead of 5th. `monoliths.gd` holds both tables (`PLACEMENTS`: `today`, untouched — measured identical — and `tops in frame`) with the calculation in a comment. **Upright was already true:** `TILT_MAX_DEG` was never read since stage B (removed). Nothing in the rules or the generator reads the pillars (checked: only `field.gd`, the readout, `autoplay.gd`'s gap count, `shot.gd`'s triangle report).
+
+**The new tool `tools/pillar_frame.gd`** (headless, 3 s): the real strips, the real camera, the window walked a unit at a time over 300 bars. **today → tops in frame** (window 2.2 bars, the season's seeds; the 2.5-bar camera reads a little better):
+| | today | tops in frame |
+|---|---|---|
+| readout `mono` L/R | 17 / 18 | **9 / 10** (brief: 8–10) |
+| tops in frame: near / mid / far | 96 / 43 / 11 % | **97 / 90 / 76 %** |
+| tops above the floor: near / mid | 41 / 73 % | **100 / 25 %** |
+| field or hero covered | 0 of 1920 frames | 0 of 1920 |
+| pieces / triangles per 100 bars | 744 / 112 k | **404 / 60 k** (draw calls the same: one mesh per band per strip) |
+
+**Measured, the honest part — the camera is the limit (section 5's business):** the camera sits on the screen-right side (world −x) and looks across 54° down, so the screen-left pillars stand far away, high in the frame. The highest top that stays in frame 80 % of the time: near +11.6 (right) / +4.7 (left), mid +5.8 / **−4.3**, far −3.9 / **−18.8** (the floor is 0). So on the screen-left the mid band's tops end *below* the floor and the far band sinks into the height fog — **a far pillar on the screen-left cannot show its top under this camera** (76 % is the most it gets without vanishing; the pale ones at bar 1's top-left are those). The near band and everything on the right meet the brief. Field coverage is impossible by geometry here: the camera is inside the slab's width (x −6.2, the slab ±9).
+
+**Web shots** (Compatibility, 2556 × 1179, glow off, UI masked): bar 1 ≤ 12/255 1.4 → 2.0 %, darkest tenth 19.8 → 21.4, L/R ×1.01 → ×1.06; bar 11 0.3 → 0.2 %, 19.6 → 22.9, L/R ×1.44 → **×1.17**. Side-by-sides (today | tops in frame | concept): `docs/screenshots/c3-bar1-vs-concept.png`, `c3-bar11-vs-concept.png`. **`frame_probe` not run:** the Mac cannot measure frame cost (2026-10-05) and it opens a game window (hard rule 4); the pieces halved, the draw calls didn't move. **The phone's probe is the number.**
+
+**NEXT (Milko, on the phone, the cable app — ▶ Run from Xcode on `../the-last-game-build/ios`):** compare `deep fog`, `tops in frame` and `today`; run the probe with `tops in frame` on (long press on the readout); verdict. Still open from 2026-10-06: `N slow`, `audio ±X`, the count-in's `mem`. **Then:** section 4 (the new kit, 4a = pieces 1 and 2, then STOP). Worth deciding with Cowork before section 4: whether section 5 (the camera test) should come first, since the camera decides how tall any pillar can be.
+
+### (2026-10-15, evening): ROADMAP STEP 2 DONE — the game installs from TestFlight and runs at 60 fps; next: back to step 3, brief 1 section 3
 
 **Milko's test of the TestFlight install (build 0.8.0 (0.8.0), internal):** the readout held **16.7 ms throughout the run** (reached stage 2), no lag; "looks the same, works the same, runs the same" as the cable app. **Not read this time:** `N slow`, the load line (`load … compat opengl3`), and the look switch (a tap on the readout on TAP TO START); worth one glance on the next run, not needed for step 2.
 
@@ -169,7 +190,7 @@ Milko said to start brief 1 now (step 2 waits only on Apple). Section 1 only.
 
 - **Step 2, TestFlight — waiting on Apple's approval of the paid team.** Then: the paid team's Team ID into the iOS preset; the Release signing fix (2026-10-04 entry below); **confirm the final bundle ID with Milko before the first upload (hard rule 8)**; Archive → upload → install from TestFlight → a full run at 60 fps = step 2 done.
 - **Free signing on the cable app expires 2026-10-10:** ▶ Run again from Xcode if TestFlight is not there by then.
-- **Step 3, brief 1 (the world):** `STEP_3_BRIEF_1_WORLD.md` — sections 1 and 2 done (**"deep fog" shipped**, `b335823`; "today" reachable until section 3 is judged). The 60 fps cap + the probe uncapped + the slow count built (`eb40a7d`), **waiting for the phone** (START HERE). Next: section 3, 4, 5. At its end: the brief moves to `docs/briefs/done/` and a paragraph goes into `docs/ROADMAP.md` step 3 (the brief's "At the end").
+- **Step 3, brief 1 (the world):** `STEP_3_BRIEF_1_WORLD.md` — sections 1 and 2 done (**"deep fog" shipped**, `b335823`; "today" reachable until section 3 is judged). **Section 3 built 2026-10-21 (`4a350b9`), waiting for the phone; section 4 rewritten as `STEP_3_BRIEF_1_SECTION_4_KIT.md`.** The 60 fps cap + the probe uncapped + the slow count built (`eb40a7d`), **waiting for the phone** (START HERE). Next: section 3, 4, 5. At its end: the brief moves to `docs/briefs/done/` and a paragraph goes into `docs/ROADMAP.md` step 3 (the brief's "At the end").
 - **The count-in's memory:** fixed (`9b7ab55`), waiting for the phone's `mem` reading (START HERE step 5).
 - **Milko's own uncommitted edit to `CLAUDE.md`** (the repo map: `fuffens_endless.ogg` → `.wav`) is still in the working tree, not committed by Code (it is his).
 - **Step 3, brief 2 (the character: model v2, one tail, the walk): not written.** Open for Milko: where the model comes from (Higgsfield image-to-3D + Blender cleanup, or built in Blender by script); what exactly is wrong with the walk on the phone; whether v2 keeps today's footprint (`PLAYER_HALF_W` 0.83, `rules.gd:252` — changing it changes the hit box, the validator and the verdicts). Code's recommendation: keep the procedural legs (the no-slide step cycle) and replace the body. Brief 5 §6, the tail sway, waits for this model (today's has two prongs).
