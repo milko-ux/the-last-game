@@ -38,9 +38,11 @@ const CLIFF_FAR := Color("#d6c8da")     # the far mesas on the horizon, the furt
 const CLIFF_NEAR := Color("#bfb3d0")    # ...and the nearer one
 const CLOUD_LIT := Color("#fff6ef")
 const CLOUD_SHADE := Color("#c3bcdc")
-const TILE := Color("#243141")          # the concept's blue slate, the tile face (brief 6 section 4: was #1c2830 teal)
-const SLAB_SIDE := Color("#0c151c")     # the slab's body: its front face, outer sides and pit walls, dark stone (the concept's)
-const TILE_SEAM := Color("#0f5f5a")     # the thin dim line between tiles
+# The floor (step 3 brief 2 section 2): cream limestone, procedural
+# (flat_mats.gd TILE_SHADER; the baked slate atlas retired). The grey
+# look's slate was #243141 on a near-black body.
+const TILE := Color("#d8c9b0")          # the tile face, warm cream
+const SLAB_SIDE := Color("#cdb99c")     # the slab's body: its front face, outer sides and pit walls, the same stone a shade deeper
 const TILE_EDGE := Color("#19d3c9")     # the bright line along the slab's outer rim
 const SAFE := Color("#19d3c9")          # pillars, checkpoint, death line
 const LETHAL_ARMED := Color("#5a1638")  # dark wine magenta, the warning state
