@@ -734,11 +734,14 @@ func _draw_title(c: CanvasItem, font: Font, a: float) -> void:
 
 
 # Draws `text` with `track` extra pixels between letters; returns its
-# total width so a rule can be drawn under it.
+# total width so a rule can be drawn under it. A soft dark shadow under
+# every letter keeps it readable on the canyon's light sky (2026-10-21).
 func _tracked(c: CanvasItem, font: Font, text: String, at: Vector2, size: int, track: float, col: Color) -> float:
 	var x := at.x
+	var shade := Color(Hud.PILL_BODY, 0.3 * col.a)
 	for i in text.length():
 		var ch := text[i]
+		c.draw_string(font, Vector2(x, at.y + 1.5), ch, HORIZONTAL_ALIGNMENT_LEFT, -1, size, shade)
 		c.draw_string(font, Vector2(x, at.y), ch, HORIZONTAL_ALIGNMENT_LEFT, -1, size, col)
 		x += font.get_string_size(ch, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x + track
 	return maxf(0.0, x - at.x - track)

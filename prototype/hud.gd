@@ -242,12 +242,18 @@ func show_end(distance: String, best: String, new_best: bool) -> void:
 # white and a tinted outline, and the highlight along the top edge.
 # `c` is whatever is drawing (any Node2D): a static so menu.gd can call
 # it without owning a Hud.
+# The canyon (2026-10-21, Milko: "all the buttons are barely visible"):
+# the body is DARK glass now -- a deep plum fill under the tint -- so the
+# white label reads on the light sky; the grey world's pill was 7 % white
+# and 8 % tint, made for a near-black background. Outlines up with it.
+const PILL_BODY := Color(0.13, 0.11, 0.22)
+
 static func glass_pill(c: CanvasItem, rect: Rect2, tint: Color, a: float) -> void:
-	c.draw_rect(Rect2(rect.position - Vector2(3, 3), rect.size + Vector2(6, 6)), Color(tint.r, tint.g, tint.b, 0.06 * a), true)
-	c.draw_rect(rect, Color(1, 1, 1, 0.07 * a), true)
-	c.draw_rect(rect, Color(tint.r, tint.g, tint.b, 0.08 * a), true)
-	c.draw_rect(rect, Color(1, 1, 1, 0.28 * a), false, 1.5)
-	c.draw_rect(rect, Color(tint.r, tint.g, tint.b, 0.35 * a), false, 1.0)
+	c.draw_rect(Rect2(rect.position - Vector2(3, 3), rect.size + Vector2(6, 6)), Color(tint.r, tint.g, tint.b, 0.1 * a), true)
+	c.draw_rect(rect, Color(PILL_BODY, 0.55 * a), true)
+	c.draw_rect(rect, Color(tint.r, tint.g, tint.b, 0.2 * a), true)
+	c.draw_rect(rect, Color(1, 1, 1, 0.4 * a), false, 1.5)
+	c.draw_rect(rect, Color(tint.r, tint.g, tint.b, 0.7 * a), false, 1.0)
 	c.draw_line(rect.position + Vector2(6, 1), rect.position + Vector2(rect.size.x - 6, 1), Color(1, 1, 1, 0.42 * a), 1.5)
 
 
