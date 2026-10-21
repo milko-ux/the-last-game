@@ -110,3 +110,11 @@ pr_low_fog_max={
 "type": "float",
 "value": 0.0
 }
+pr_sun_tint={
+"type": "vec3",
+"value": Vector3(1, 1, 1)
+}
+pr_shade_tint={
+"type": "vec3",
+"value": Vector3(0.541, 0.51, 0.761)
+}

@@ -20,6 +20,7 @@ const HazardMath := preload("res://prototype/hazard_math.gd")
 const LapGen := preload("res://prototype/lap_gen.gd")
 const Hud := preload("res://prototype/hud.gd")
 const Looks := preload("res://prototype/looks.gd")
+const TimeOfDay := preload("res://prototype/time_of_day.gd")
 
 # Lives come from the level's knobs (Rules.lives(): 0 on level 1, 3 from
 # level 2). Out of lives = the death screen, then back to level 1.
@@ -189,6 +190,7 @@ func _ready() -> void:
 	FrameMeter.load_scene_started()
 	RenderingServer.frame_post_draw.connect(_on_frame_drawn)
 	rig.publish_light($CreatureLight)
+	TimeOfDay.light = $CreatureLight
 	_dev_url_switches()
 	Looks.apply(self, _url_look)
 	endless = Rules.ENDLESS
@@ -322,6 +324,7 @@ func apply_render_scale(over: float = -1.0) -> void:
 #                 =1 turns one ON, =0 OFF (glow is off by default)
 #   ?look=canyon    start in that look variant (looks.gd; dashes for spaces)
 #   ?pillars=0    the fraction of the pillars kept (the look key "pillars"): the backdrop alone
+#   ?time=night   hold one time of day (time_of_day.gd: morning, sunset, night)
 var _dev_autoplay := false
 var _url_look := {}                 # the look keys of the switches below (finish, scale), applied on top of the look (looks.gd)
 var light_on := true
@@ -391,6 +394,8 @@ func _dev_url_switches() -> void:
 		_url_look["scale"] = float(FrameMeter.url_param("scale"))
 	if FrameMeter.url_param("pillars") != "":
 		_url_look["pillars"] = float(FrameMeter.url_param("pillars"))
+	if FrameMeter.url_param("time") != "":
+		_url_look["time"] = FrameMeter.url_param("time")
 	set_light(FrameMeter.url_param("light") != "0")
 	var tm := FrameMeter.url_param("tonemap")
 	if tm != "":
@@ -922,6 +927,7 @@ func _to_menu() -> void:
 
 
 func _process(delta: float) -> void:
+	TimeOfDay.update(float(distance_m))
 	match state:
 		State.LOADING:
 			_tick_loading()

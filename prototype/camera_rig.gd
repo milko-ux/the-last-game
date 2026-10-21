@@ -99,6 +99,7 @@ var _kick_dir := Vector3.ZERO
 # with two layers of drifting noise.
 const Mats := preload("res://prototype/flat_mats.gd")
 const BACKDROP_DISTANCE := 600.0
+static var backdrop: ShaderMaterial = null     # the last one built (one scene at a time): time_of_day.gd paints it
 const BACKDROP_SHADER := """
 shader_type spatial;
 render_mode unshaded, depth_draw_never, fog_disabled, cull_disabled;
@@ -116,6 +117,7 @@ uniform vec3 cloud_shade : source_color;
 uniform float cloud_depth = 5.0;          // the cloud plane: screen height below the horizon -> distance
 uniform float cloud_scale = 0.22;         // noise cells per unit of that distance
 uniform float cloud_drift = 0.045;        // of the run's travel: the clouds lie far below, they pass slowly
+uniform float night = 0.0;                // the time of day (time_of_day.gd): 1 = stars out, the sun is the moon
 global uniform float pr_window_back;
 FOG_FUNCTIONS
 
@@ -149,10 +151,16 @@ void fragment() {
 	// The sky, the sun's halo and its disc.
 	float t = clamp(s.y / horizon, 0.0, 1.0);
 	vec3 c = mix(sky_top, sky_horizon, t * t);
+	// Stars at night, twinkling, thinning toward the horizon.
+	vec2 g = vec2(s.x * aspect, s.y) * 150.0;
+	float sh = hash2(floor(g));
+	float star = step(0.986, sh) * (1.0 - smoothstep(0.08, 0.3, length(fract(g) - 0.5)));
+	c += vec3(star * (0.65 + 0.35 * sin(TIME * 2.3 + sh * 60.0)) * night * (1.0 - t * t));
 	float r = length(vec2((s.x - sun_pos.x) * aspect, s.y - sun_pos.y));
-	float halo = exp(-r * 6.0) * 0.5 + exp(-r * 18.0) * 0.4;
+	float halo = (exp(-r * 6.0) * 0.5 + exp(-r * 18.0) * 0.4) * (1.0 - 0.45 * night);
 	c = mix(c, sun_glow, clamp(halo, 0.0, 1.0));
-	c = mix(c, sun, 1.0 - smoothstep(sun_radius * 0.85, sun_radius, r));
+	float rad = sun_radius * (1.0 - 0.25 * night);   // the moon a little smaller
+	c = mix(c, sun, 1.0 - smoothstep(rad * 0.85, rad, r));
 	// Two layers of far mesas standing on the horizon, the far one paler.
 	float x = s.x * aspect;
 	float far_top = horizon - 0.012 - 0.05 * mesas(x * 5.0, 1.0);
@@ -181,7 +189,7 @@ void fragment() {
 		c = mix(sea, haze, 1.0 - smoothstep(0.0, 0.3, d));
 	}
 	// The sun's light in the air, over everything below it too.
-	c = mix(c, sun_glow, clamp(exp(-r * 3.0) * 0.18, 0.0, 1.0));
+	c = mix(c, sun_glow, clamp(exp(-r * 3.0) * 0.18 * (1.0 - 0.5 * night), 0.0, 1.0));
 	ALBEDO = c;
 }
 """
@@ -212,6 +220,7 @@ func _build_backdrop() -> void:
 	for k in p:
 		m.set_shader_parameter(k, p[k])
 	quad.material_override = m
+	backdrop = m
 	quad.position = Vector3(0.0, 0.0, -BACKDROP_DISTANCE)
 	quad.extra_cull_margin = 16384.0
 	cam.add_child(quad)

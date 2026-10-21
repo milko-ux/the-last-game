@@ -84,3 +84,44 @@ const LIGHT_SHADE := 0.6
 const SHADE_TINT := Color("#8a82c2")
 const SHADE_TINT_AMOUNT := 0.28
 const SHADOW := Color("#4a4278")        # the drop shadows on the floor (shadows.gd), cool lilac at their alpha; was black
+
+# THE TIMES OF DAY (2026-10-21, Milko: "the sunrise to a sunset and
+# eventually the character is running at night"). time_of_day.gd blends
+# between these as the run goes further. Every set has the same names:
+#   fog          the four haze stops (BG_*), what the world fades into
+#   sky_top / sky_horizon / sun / sun_glow / sun_pos   the backdrop's sky;
+#                sun_pos is on screen (0..1); at night the sun is the moon
+#   cliff_far / cliff_near / cloud_lit / cloud_shade   the backdrop below it
+#   sun_tint     the light's colour on the scenery (floor, mesas; never the
+#                hazards), multiplied in
+#   shade_tint   what a shadow side leans toward (SHADE_TINT in the morning)
+#   shadow       the drop shadows' colour
+#   light_colour / light_energy   the CreatureLight (the hero, the clay)
+#   night        0..1: the stars, and the sun turning into the moon
+# MORNING is the canyon as built (the constants above); sunset and night
+# keep the colour meaning: no amber in the sky (the goal), no magenta.
+const TIMES := {
+	"morning": {
+		"fog": [BG_TOP, BG_THIRD, BG_MIDDLE, BG_BOTTOM],
+		"sky_top": SKY_TOP, "sky_horizon": SKY_HORIZON, "sun": SUN, "sun_glow": SUN_GLOW, "sun_pos": Vector2(0.16, 0.085),
+		"cliff_far": CLIFF_FAR, "cliff_near": CLIFF_NEAR, "cloud_lit": CLOUD_LIT, "cloud_shade": CLOUD_SHADE,
+		"sun_tint": Color(1.0, 1.0, 1.0), "shade_tint": SHADE_TINT, "shadow": SHADOW,
+		"light_colour": Color(1.0, 0.93, 0.84), "light_energy": 1.25, "night": 0.0,
+	},
+	"sunset": {
+		"fog": [Color("#f3c6ae"), Color("#e2b6b8"), Color("#c6a6c6"), Color("#8b80b4")],
+		"sky_top": Color("#6d68a9"), "sky_horizon": Color("#ffc4a2"), "sun": Color("#fff1dc"), "sun_glow": Color("#ffa98e"),
+		"sun_pos": Vector2(0.2, 0.165),
+		"cliff_far": Color("#c69eb3"), "cliff_near": Color("#a386a8"), "cloud_lit": Color("#ffd5c2"), "cloud_shade": Color("#9883b9"),
+		"sun_tint": Color(1.04, 0.88, 0.82), "shade_tint": Color("#6656a6"), "shadow": Color("#3a2c66"),
+		"light_colour": Color(1.0, 0.85, 0.78), "light_energy": 1.15, "night": 0.0,   # warmer turned the magenta hazards toward the goal's amber
+	},
+	"night": {
+		"fog": [Color("#323a6c"), Color("#2b3261"), Color("#252b56"), Color("#1a1e40")],
+		"sky_top": Color("#0c0f2e"), "sky_horizon": Color("#36427e"), "sun": Color("#eef2ff"), "sun_glow": Color("#7d8dd2"),
+		"sun_pos": Vector2(0.78, 0.075),
+		"cliff_far": Color("#313a6d"), "cliff_near": Color("#272d5b"), "cloud_lit": Color("#6070b0"), "cloud_shade": Color("#232a56"),
+		"sun_tint": Color(0.52, 0.58, 0.84), "shade_tint": Color("#1d2254"), "shadow": Color("#0b0d28"),
+		"light_colour": Color(0.64, 0.72, 1.0), "light_energy": 0.85, "night": 1.0,
+	},
+}

@@ -1,5 +1,5 @@
 extends RefCounted
-const Mats := preload("res://prototype/flat_mats.gd")
+const TimeOfDay := preload("res://prototype/time_of_day.gd")
 # ============================================================
 # LOOKS (step 3 brief 1 section 1, 2026-10-05) — named look variants for
 # comparing before / after on the phone. DEBUG BUILDS ONLY: the switch is
@@ -17,8 +17,7 @@ const Mats := preload("res://prototype/flat_mats.gd")
 #   scale     the 3D render scale (track_test.RENDER_SCALE_MOBILE)
 #   pillars   fraction of the pillars kept (monoliths.gd), 1.0 = all
 #   slab      the slab's thickness (field.THICK)
-#   fog             the four fog stops (WorldPalette.BG_*), live globals
-#   low_fog_max     the height fog's most (flat_mats.LOW_FOG_MAX)
+#   time      hold one time of day (time_of_day.gd): "sunset", "night"
 #
 # "canyon" is the shipped look: the palette's own values (step 3 brief 2,
 # 2026-10-21; it replaced brief 1's grey "deep fog" and "today"). Brief
@@ -32,6 +31,9 @@ const Mats := preload("res://prototype/flat_mats.gd")
 
 const LOOKS := [
 	["canyon", {}],
+	# The time of day held still, to judge it without running to it.
+	["sunset", {"time": "sunset"}],
+	["night", {"time": "night"}],
 ]
 
 static var current := 0
@@ -59,11 +61,14 @@ static func _change(extra: Dictionary) -> Dictionary:
 	return change
 
 
-# The part of a look that needs no scene: the fog.
-# The menu calls this (its world uses the same shaders); apply() too.
+# The part of a look that needs no scene: the time of day (its fog, sky
+# and light). The menu calls this (its world uses the same shaders);
+# apply() too.
 static func apply_world(extra: Dictionary = {}) -> void:
 	var change := _change(extra)
-	Mats.publish_fog(change.get("fog", Mats.shipped_fog()), float(change.get("low_fog_max", Mats.LOW_FOG_MAX)))
+	TimeOfDay.forced = String(change.get("time", ""))
+	TimeOfDay.reset()
+	TimeOfDay.update(0.0)
 
 
 # The shipped look, then the current variant, then `extra` (a probe setup,

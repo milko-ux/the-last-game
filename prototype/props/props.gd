@@ -86,7 +86,10 @@ void fragment() {
 	// Matte clay (look pass v2 section 5): less plastic gloss.
 	ROUGHNESS = 0.95;
 	SPECULAR = 0.12;
-	EMISSION = (c * ambient + rim_colour.rgb * fr * (rim_strength + 0.5 * pulse)) * (1.0 - f);
+	// The darker the time of day, the more the clay glows: magenta must
+	// stay magenta at night (time_of_day.gd).
+	float dark = clamp(1.0 - dot(pr_sun_tint, vec3(0.299, 0.587, 0.114)), 0.0, 1.0);
+	EMISSION = (c * (ambient + dark * 0.6) + rim_colour.rgb * fr * (rim_strength + 0.5 * pulse)) * (1.0 - f);
 }
 """
 
@@ -222,7 +225,7 @@ void fragment() {
 	vec3 n = normalize(world_n);
 	float top = smoothstep(0.7, 0.9, n.y);
 	vec3 base = mix(col.rgb, cap, top * col.a * cap_amount);
-	vec3 c = lit_tone(base, n);
+	vec3 c = lit_tone(base, n) * pr_sun_tint;
 	// Sunlit higher up, cooler toward the clouds; faint strata on the sides.
 	c *= mix(0.9, 1.05, smoothstep(-26.0, 6.0, world_pos.y));
 	float band = 1.0 - smoothstep(0.08, 0.2, abs(fract(world_pos.y / strata_every) - 0.5));

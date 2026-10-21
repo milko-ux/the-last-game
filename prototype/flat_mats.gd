@@ -34,7 +34,7 @@ extends RefCounted
 # The unshaded world shaders fake it: `lit_tone()` in the shared head
 # shades a base colour by the face's normal as three tones (top / lit
 # side / shadow side, WorldPalette.LIGHT_*), the shadow side pulled
-# toward WorldPalette.SHADE_TINT. `pr_light_on` 0 (the ?light=0 dev
+# toward the time of day's shade tint. `pr_light_on` 0 (the ?light=0 dev
 # switch) gives the old flat look for an A/B on the phone.
 # ============================================================
 
@@ -128,6 +128,12 @@ global uniform vec4 pr_ripple;      // z centre, half width, strength
 global uniform float pr_build_front;
 global uniform vec3 pr_light_dir;   // toward the light; the CreatureLight's +z
 global uniform float pr_light_on;   // 1, or 0 for the pre-brief-6 flat look
+// The time of day (time_of_day.gd, 2026-10-21): the light's colour on the
+// scenery (white in the morning, warm at sunset, blue and dim at night)
+// and the colour a shadow side leans toward. Hazards never take the
+// first: magenta stays magenta at night.
+global uniform vec3 pr_sun_tint;
+global uniform vec3 pr_shade_tint;
 // Every varying is highp (2026-09-23, the phone's flat uncarved slabs):
 // a world position at z 700+ interpolated at the fragment stage's
 // default precision on iOS is a half float, 0.5 units coarse, which
@@ -152,7 +158,7 @@ vec3 low_fog(vec3 c, float world_y) {
 // steps are a hair wide so a facet on the boundary does not shimmer.
 vec3 lit_tone(vec3 c, vec3 n) {
 	const vec4 tones = LIGHT_TONES;   // top, lit side, shadow side, tint amount
-	const vec3 shade = SHADE_TINT;    // (not `tint`: the clay shader has a uniform of that name)
+	vec3 shade = pr_shade_tint;       // (not `tint`: the clay shader has a uniform of that name)
 	float up = smoothstep(0.55, 0.75, n.y);
 	float lh = length(n.xz);
 	float facing = lh > 0.001 ? dot(n.xz / lh, normalize(pr_light_dir.xz)) : sign(n.y);
@@ -307,7 +313,10 @@ void fragment() {
 	ROUGHNESS = roughness;
 	METALLIC = 0.0;
 	SPECULAR = 0.4;
-	EMISSION = (albedo.rgb * inner_glow + rim_colour.rgb * fr * rim_amount) * (1.0 - f);
+	// The darker the time of day, the more an orb glows from inside: the
+	// goal's amber must not go olive at night (time_of_day.gd).
+	float dark = clamp(1.0 - dot(pr_sun_tint, vec3(0.299, 0.587, 0.114)), 0.0, 1.0);
+	EMISSION = (albedo.rgb * (inner_glow + dark * 1.2) + rim_colour.rgb * fr * rim_amount) * (1.0 - f);
 }
 """
 
@@ -345,6 +354,7 @@ uniform float side_grain_scale = 1.2;
 uniform float tile_variation = 0.03; // +-3 % per tile from a hash of its position
 uniform float ao_width = 0.12;      // fake occlusion this far in from every seam...
 uniform float ao_amount = 0.18;     // ...this much darker
+uniform float day_lit = 1.0;        // 1: the time of day's light colours it; 0 on the armed / lethal plates (they keep their colour)
 FADE_HEAD
 varying highp vec3 local_pos;
 varying highp vec3 local_normal;
@@ -394,6 +404,8 @@ void fragment() {
 	vec3 tint = vec3(1.0 - hs, 1.0 + hs * 0.5, 1.0 + hs);
 	vec3 stone = lit_tone(top ? face.rgb : slab_side.rgb, n) * (1.0 + g + v) * (top ? tint : vec3(1.0));
 	stone *= 1.0 - ao_amount * (1.0 - smoothstep(0.0, ao_width, edge));
+	vec3 sun = mix(vec3(1.0), pr_sun_tint, day_lit);
+	stone *= sun;
 	if (top) {
 		// The bevel: a band inside each edge, lighter where the edge faces
 		// the light, darker where it faces away; and the sheen.
@@ -415,7 +427,7 @@ void fragment() {
 	vec3 base = mix(stone, live.rgb, armed * pr_armed_pulse);
 	float rip = ripple_here();
 	vec3 rim_c = mix(edge_colour.rgb, amber.rgb, pr_rim_amber) * (1.0 + pr_rim_pulse + rip);
-	vec3 seam_c = seam.rgb * (1.0 + pr_seam_pulse + rip * 0.6);
+	vec3 seam_c = seam.rgb * sun * (1.0 + pr_seam_pulse + rip * 0.6);
 	ALBEDO = low_fog(mix(mix(base, seam_c, s), rim_c, r), world_pos.y);
 FADE_APPLY
 }
@@ -485,10 +497,8 @@ static func fog_functions() -> String:
 
 
 static func fade_head() -> String:
-	var t := WorldPalette.SHADE_TINT
 	return FADE_HEAD.replace("FOG_FUNCTIONS", fog_functions()).replace("LIGHT_TONES", "vec4(%.3f, %.3f, %.3f, %.3f)" % [
 			WorldPalette.LIGHT_TOP, WorldPalette.LIGHT_SIDE, WorldPalette.LIGHT_SHADE, WorldPalette.SHADE_TINT_AMOUNT]) \
-		.replace("SHADE_TINT", "vec3(%.4f, %.4f, %.4f)" % [t.r, t.g, t.b]) \
 		.replace("LOW_FOG_RANGE", "vec2(%.1f, %.1f)" % [LOW_FOG_START, LOW_FOG_END])
 
 
@@ -497,7 +507,7 @@ static func fade_head() -> String:
 # used to be written into the shader text; now they are published to
 # every world shader at once, so a look variant (looks.gd) changes them
 # without a recompile. The shipped values go out the first time a world
-# shader is built; Looks.apply_world() overrides them.
+# shader is built; the time of day (time_of_day.gd) repaints them.
 static var _fog_published := false
 
 static func shipped_fog() -> Array:
@@ -739,6 +749,7 @@ static func tile(state: int, half: Vector3, outer: Vector2 = Vector2.ZERO) -> Ma
 		m.set_shader_parameter("sheen_power", SHEEN_POWER)
 		m.set_shader_parameter("live", WorldPalette.LETHAL_LIVE)
 		m.set_shader_parameter("armed", 1.0 if state == 1 else 0.0)
+		m.set_shader_parameter("day_lit", 1.0 if state == 0 else 0.0)
 		m.set_shader_parameter("amber", WorldPalette.GOAL)
 		# Brief 6 section 4: a live plate keeps its grain and bevel -- stone
 		# under the magenta, never a flat rectangle (it used to drop the grain).

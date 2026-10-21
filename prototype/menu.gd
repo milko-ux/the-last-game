@@ -57,6 +57,7 @@ const CameraRig := preload("res://prototype/camera_rig.gd")
 const Hud := preload("res://prototype/hud.gd")
 const Field := preload("res://prototype/field.gd")
 const Looks := preload("res://prototype/looks.gd")
+const TimeOfDay := preload("res://prototype/time_of_day.gd")
 
 const RUN_SCENE := "res://prototype/track_test.tscn"
 const SELECT_SCENE := "res://prototype/level_select.tscn"
@@ -225,6 +226,7 @@ func _ready() -> void:
 	# the same way (brief 6 section 1), so the strip's tiles and the
 	# buildings are shaded here exactly as in the run.
 	rig.publish_light($CreatureLight)
+	TimeOfDay.light = $CreatureLight
 	Looks.apply_world()   # the current look variant's fog and pillars (looks.gd)
 
 	_stage = Node3D.new()
