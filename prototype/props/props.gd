@@ -186,7 +186,12 @@ const KIT_DIR := "res://assets/models/kit/"
 # the atlas times a band's tint, then the same fog as everything else.
 const KIT_SHADER := """
 shader_type spatial;
-render_mode unshaded, fog_disabled;
+// cull_front: the kit's meshes come out of tools/blender/pillars.py
+// INSIDE OUT (every face wound and normalled inward, measured 2026-10-21
+// against a BoxMesh), so the default culling drew only each pillar's far
+// inner walls -- the "hollow" look. Back to the default for a kit that is
+// exported the right way round.
+render_mode unshaded, fog_disabled, cull_front;
 uniform sampler2D atlas : source_color, filter_linear_mipmap, repeat_disable;
 uniform vec3 tint : source_color = vec3(1.0);   // the band's colour, on the baked stone
 uniform float gain = 1.0;
