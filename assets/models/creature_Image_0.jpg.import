@@ -2,8 +2,8 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://dipdn1mjopq8a"
-path="res://.godot/imported/creature_0.jpg-01dec11b0ac7134c9e53e2abdd86544d.ctex"
+uid="uid://cxflqx8gw37df"
+path="res://.godot/imported/creature_Image_0.jpg-0a6122f2b7664f5eec961344e6417312.ctex"
 metadata={
 "vram_texture": false
 }
@@ -13,8 +13,8 @@ generator_parameters={
 
 [deps]
 
-source_file="res://assets/models/creature_0.jpg"
-dest_files=["res://.godot/imported/creature_0.jpg-01dec11b0ac7134c9e53e2abdd86544d.ctex"]
+source_file="res://assets/models/creature_Image_0.jpg"
+dest_files=["res://.godot/imported/creature_Image_0.jpg-0a6122f2b7664f5eec961344e6417312.ctex"]
 
 [params]
 
