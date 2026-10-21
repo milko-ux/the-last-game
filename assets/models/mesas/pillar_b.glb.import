@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://beuku5rw3mmsc"
-path="res://.godot/imported/pillar_slab.glb-124ce070388d5fe155080f33aa50f0ea.scn"
+uid="uid://ogdc1ej5r0cp"
+path="res://.godot/imported/pillar_b.glb-aa1284ac0bda3170d10558f9ad8e3777.scn"
 
 [deps]
 
-source_file="res://assets/models/kit/pillar_slab.glb"
-dest_files=["res://.godot/imported/pillar_slab.glb-124ce070388d5fe155080f33aa50f0ea.scn"]
+source_file="res://assets/models/mesas/pillar_b.glb"
+dest_files=["res://.godot/imported/pillar_b.glb-aa1284ac0bda3170d10558f9ad8e3777.scn"]
 
 [params]
 

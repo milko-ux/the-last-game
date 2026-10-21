@@ -174,37 +174,43 @@ static var _scenes := {}
 static var _mats := {}
 static var _shaders := {}
 static var _low := {}
-static var _kit := {}          # "kit/name" -> Mesh (a low pillar)
-static var _kit_info := {}     # kit -> its kit.json
-static var _atlas := {}        # kit -> its atlas
+static var _kit := {}          # name -> Mesh (a mesa piece)
+static var _kit_info := {}     # the kit's kit.json
 
-# Two kits while step 3 brief 1 section 4 is judged (looks.gd "new kit"):
-# "old", built by script (tools/blender/pillars.py), and "new", the
-# pieces from Higgsfield image-to-3D (tools/blender/kit.py). Each is its
-# own atlas, so its own three band materials; the same shader.
-const KIT_DIRS := {"old": "res://assets/models/kit/", "new": "res://assets/models/kit_new/"}
+# THE MESAS (step 3 brief 2 section 3, 2026-10-21): the canyon's pillar
+# kit, built by script in Blender (tools/blender/mesas.py): stacked
+# faceted tiers, flat shaded, nothing baked. Before the canyon: the grey
+# carved kit (tools/blender/pillars.py, baked atlas) and, briefly, the
+# Higgsfield pieces (tools/blender/kit.py) -- both gone, in git.
+const KIT_DIR := "res://assets/models/mesas/"
 
-# THE PILLAR KIT (brief stage B, 2026-09-24): built and baked in Blender
-# (tools/blender/pillars.py) from our own geometry -- the stone, the
-# light and the occlusion are in the atlas, so the shader is unshaded:
-# the atlas times a band's tint, then the same fog as everything else.
+# One shader for every band. A mesa's pastel colour comes in the vertex
+# COLOR (monoliths.gd picks one per mesa from WorldPalette.MESAS; alpha 1 =
+# a grassy top); each facet is lit by the sun as three tones from its own
+# normal (lit_tone, the same light as the floor). The foot sinks into the
+# clouds: the height fog, broken up by a slow noise so the cloud line is
+# soft, not a ruler. Then the same distance and side haze the old kit had.
 const KIT_SHADER := """
 shader_type spatial;
 render_mode unshaded, fog_disabled;
-uniform sampler2D atlas : source_color, filter_linear_mipmap, repeat_disable;
-uniform vec3 tint : source_color = vec3(1.0);   // the band's colour, on the baked stone
-uniform float gain = 1.0;
+uniform vec3 cap : source_color;          // what a grassy top leans toward
+uniform float cap_amount = 0.55;
+uniform float strata_every = 2.6;         // faint layered rock, this many units apart...
+uniform float strata_dark = 0.05;         // ...this much darker in the grooves
+uniform float cloud_wisp = 5.0;           // how far the cloud line wanders, in units of height
 uniform vec3 side_fog = vec3(16.0, 60.0, 0.85);
 uniform float far_flatten = 0.6;
 FADE_HEAD
 varying highp vec3 world_pos;
-varying highp vec2 uv;
+varying vec3 world_n;
+varying vec4 col;
 
 void vertex() {
 	vec4 wp = MODEL_MATRIX * vec4(VERTEX, 1.0);
 	world_z = wp.z;
 	world_pos = wp.xyz;
-	uv = UV;
+	world_n = normalize(mat3(MODEL_MATRIX) * NORMAL);
+	col = COLOR;
 	fog_sy = screen_y_of(PROJECTION_MATRIX * MODELVIEW_MATRIX * vec4(VERTEX, 1.0));
 }
 
@@ -213,67 +219,46 @@ void fragment() {
 	if (f > 0.97) {
 		discard;
 	}
-	vec3 c = texture(atlas, uv).rgb * tint * gain;
+	vec3 n = normalize(world_n);
+	float top = smoothstep(0.7, 0.9, n.y);
+	vec3 base = mix(col.rgb, cap, top * col.a * cap_amount);
+	vec3 c = lit_tone(base, n);
+	// Sunlit higher up, cooler toward the clouds; faint strata on the sides.
+	c *= mix(0.9, 1.05, smoothstep(-26.0, 6.0, world_pos.y));
+	float band = 1.0 - smoothstep(0.08, 0.2, abs(fract(world_pos.y / strata_every) - 0.5));
+	c *= 1.0 - strata_dark * band * (1.0 - top);
+	c *= 1.0 + grain(world_pos, 1.4) * 0.035;
 	float side = smoothstep(side_fog.x, side_fog.y, abs(world_pos.x)) * side_fog.z;
 	vec3 fog = fog_colour(fog_sy);
 	float away = max(f, side);
 	c = mix(c, (c + fog) * 0.5, smoothstep(0.0, 0.6, away) * far_flatten);
-	ALBEDO = low_fog(mix(c, fog, away), world_pos.y);
+	float wisp = (vnoise(vec3(world_pos.x * 0.12, 0.0, world_pos.z * 0.12 + TIME * 0.05)) * 2.0 - 1.0) * cloud_wisp;
+	ALBEDO = low_fog(mix(c, fog, away), world_pos.y + wisp);
 }
 """
 
 
-static func kit_info(kit: String = "old") -> Dictionary:
-	if not _kit_info.has(kit):
-		var f := FileAccess.open(KIT_DIRS[kit] + "kit.json", FileAccess.READ)
-		_kit_info[kit] = JSON.parse_string(f.get_as_text()) if f != null else {"sizes": {}}
-	return _kit_info[kit]
+static func kit_info() -> Dictionary:
+	if _kit_info.is_empty():
+		var f := FileAccess.open(KIT_DIR + "kit.json", FileAccess.READ)
+		_kit_info = JSON.parse_string(f.get_as_text()) if f != null else {"sizes": {}}
+	return _kit_info
 
 
-# The kit's variant names, in kit.json's order (the old kit's lintel last).
-static func kit_names(kit: String = "old") -> Array:
-	return kit_info(kit).get("sizes", {}).keys()
+# The kit's piece names, in kit.json's order.
+static func kit_names() -> Array:
+	return kit_info().get("sizes", {}).keys()
 
 
-# The old kit's meshes came out of pillars.py INSIDE OUT (every face wound
-# and normalled inward, measured 2026-10-21 against a BoxMesh), so they
-# are turned the right way round here, once, as they load; the new kit
-# is exported right (tools/blender/kit.py).
-static func kit_mesh(name: String, kit: String = "old") -> Mesh:
-	var key := kit + "/" + name
-	if not _kit.has(key):
-		var mesh := mesh_of_path(KIT_DIRS[kit] + "pillar_" + name + ".glb")
-		_kit[key] = _turned_out(mesh) if kit == "old" and mesh != null else mesh
-	return _kit[key]
+static func kit_mesh(name: String) -> Mesh:
+	if not _kit.has(name):
+		_kit[name] = mesh_of_path(KIT_DIR + "pillar_" + name + ".glb")
+	return _kit[name]
 
 
-static func _turned_out(mesh: Mesh) -> Mesh:
-	var a: Array = mesh.surface_get_arrays(0)
-	var idx: PackedInt32Array = a[Mesh.ARRAY_INDEX]
-	for t in idx.size() / 3:
-		var k := idx[t * 3 + 1]
-		idx[t * 3 + 1] = idx[t * 3 + 2]
-		idx[t * 3 + 2] = k
-	var nm: PackedVector3Array = a[Mesh.ARRAY_NORMAL]
-	for i in nm.size():
-		nm[i] = -nm[i]
-	a[Mesh.ARRAY_INDEX] = idx
-	a[Mesh.ARRAY_NORMAL] = nm
-	a[Mesh.ARRAY_TANGENT] = null
-	var out := ArrayMesh.new()
-	out.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, a)
-	return out
-
-
-static func kit_size(name: String, kit: String = "old") -> Vector3:
-	var s: Array = kit_info(kit)["sizes"][name]
+static func kit_size(name: String) -> Vector3:
+	var s: Array = kit_info()["sizes"][name]
 	return Vector3(float(s[0]), float(s[1]), float(s[2]))
-
-
-static func kit_atlas(kit: String = "old") -> Texture2D:
-	if not _atlas.has(kit):
-		_atlas[kit] = load(KIT_DIRS[kit] + "pillar_atlas.png")
-	return _atlas[kit]
 
 
 static func mesh_of_path(path: String) -> Mesh:
@@ -343,63 +328,32 @@ static func building(far: bool = false) -> Material:
 	return _mats[key]
 
 
-# The pillar bands (monoliths.gd, look pass v2): the building shader with
-# a band's colour, and a band's own fade -- the far band is a skyline
-# and keeps going long after the course itself has faded.
-const PILLAR_FADE := [Vector4(14.0, 27.0, 2.0, 10.0), Vector4(22.0, 52.0, 6.0, 20.0), Vector4(30.0, 88.0, 10.0, 30.0)]
-const PILLAR_FLATTEN := [1.0, 0.8, 1.0]   # deep fog (2026-10-06); light fog 1.0, 1.0, 0.92; before it 0.3, 0.6, 0.92
-# Per band: from this far out (|x|) to this far, at most this much toward
-# the fog colour -- the kit shader's side_fog, the haze between the
-# camera and a pillar. Until step 3 brief 1 section 2 every band had the
-# shader's default (16, 60, 0.85), which left the near band (|x| 13-21)
-# with none and its baked shadow faces black. Deep fog (2026-10-06): the
-# near band takes up to 40 %, the mid 55 %, the far 85 % from |x| 0 (so
-# far pillars sit close to the fog). Light fog had mid 0.6, far from 16.
-const PILLAR_SIDE_FOG := [Vector3(0.0, 20.0, 0.4), Vector3(0.0, 40.0, 0.55), Vector3(0.0, 50.0, 0.85)]
+# The pillar bands (monoliths.gd): one material per band, for the band's
+# own fade along z (ahead start, end, behind start, end). The canyon's
+# mesas stay crisp far ahead of the course, which fades out after about
+# two bars (flat_mats FADE_AHEAD_*): faded with it, as the grey look's
+# were (14-27 / 22-52 / 30-88), the whole frame went milky.
+const PILLAR_FADE := [Vector4(34.0, 70.0, 22.0, 44.0), Vector4(44.0, 90.0, 24.0, 48.0), Vector4(60.0, 130.0, 26.0, 52.0)]
+# How much of its contrast a band loses with distance before its colour
+# goes, and per band the haze by distance out (|x| start, end, the most
+# it may take). The canyon (2026-10-21): the near band is crisp, the far
+# one leans into the haze; the grey look's values were 1.0 / 0.8 / 1.0
+# and up to 40 / 55 / 85 %.
+const PILLAR_FLATTEN := [0.0, 0.2, 0.4]
+const PILLAR_SIDE_FOG := [Vector3(0.0, 30.0, 0.0), Vector3(10.0, 60.0, 0.12), Vector3(20.0, 90.0, 0.3)]
 
-# The baked stone reads ~0.35-0.9 in the atlas; a band's tint is what the
-# stone is multiplied by, so NEAR_PILLAR etc. are relative to a mid-grey
-# stone, not absolute colours (see WorldPalette).
-const PILLAR_GAIN := 1.7
-
-static func pillar(band: int, kit: String = "old") -> Material:
-	var key := "pillar_%s_%d" % [kit, band]
+static func pillar(band: int) -> Material:
+	var key := "pillar_%d" % band
 	if not _mats.has(key):
 		var m := ShaderMaterial.new()
 		m.shader = _shader("kit")
-		m.set_shader_parameter("atlas", kit_atlas(kit))
-		m.set_shader_parameter("tint", _pillar_tint[band])
-		m.set_shader_parameter("gain", PILLAR_GAIN)
+		m.set_shader_parameter("cap", WorldPalette.MESA_CAP)
 		var f: Vector4 = PILLAR_FADE[band]
 		m.set_shader_parameter("fade", Quaternion(f.x, f.y, f.z, f.w))
-		m.set_shader_parameter("far_flatten", _pillar_flatten[band])
-		m.set_shader_parameter("side_fog", _pillar_side_fog[band])
+		m.set_shader_parameter("far_flatten", PILLAR_FLATTEN[band])
+		m.set_shader_parameter("side_fog", PILLAR_SIDE_FOG[band])
 		_mats[key] = m
 	return _mats[key]
-
-
-# The bands' tints and flattening as the current look has them (looks.gd,
-# step 3 brief 1 section 2): the three materials are shared by every
-# pillar, so a look switch is three parameter writes.
-static var _pillar_tint: Array = shipped_pillar_tint()
-static var _pillar_flatten: Array = PILLAR_FLATTEN
-static var _pillar_side_fog: Array = PILLAR_SIDE_FOG
-
-static func shipped_pillar_tint() -> Array:
-	return [WorldPalette.NEAR_PILLAR, WorldPalette.MID_PILLAR, WorldPalette.FAR_PILLAR]
-
-
-static func set_pillar_look(tints: Array, flatten: Array, side_fog: Array) -> void:
-	_pillar_tint = tints
-	_pillar_flatten = flatten
-	_pillar_side_fog = side_fog
-	for kit in KIT_DIRS:
-		for band in 3:
-			var key := "pillar_%s_%d" % [kit, band]
-			if _mats.has(key):
-				_mats[key].set_shader_parameter("tint", tints[band])
-				_mats[key].set_shader_parameter("far_flatten", flatten[band])
-				_mats[key].set_shader_parameter("side_fog", side_fog[band])
 
 
 static func size_of(name: String) -> Vector3:

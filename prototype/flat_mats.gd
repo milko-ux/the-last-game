@@ -74,9 +74,9 @@ const SHEEN_AMOUNT := 0.09
 const SHEEN_POWER := 24.0
 # The height fog (brief 6 section 3): from this far below the field to
 # this far, at most this much toward BG_BOTTOM. The slab's underside is
-# at -Field.THICK; the monoliths' feet at -22.
-const LOW_FOG_START := 2.0
-const LOW_FOG_END := 24.0
+# at -Field.THICK; the mesas' feet at -46 (monoliths.gd BASE_Y).
+const LOW_FOG_START := 8.0      # the canyon: the cloud line well below the runway (the grey look: 2 to 24)
+const LOW_FOG_END := 36.0
 const LOW_FOG_MAX := 0.92
 
 # The fog's colour by screen height and the clip-space helper, on their

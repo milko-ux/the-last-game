@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://wuymi66xakb8"
-path="res://.godot/imported/pillar_symbols.glb-d03f6f519f6fdd0c27252890377c8cde.scn"
+uid="uid://dkwtnmsiticpm"
+path="res://.godot/imported/pillar_d.glb-71d16b078b052850e7eed4ec16c6a86e.scn"
 
 [deps]
 
-source_file="res://assets/models/kit/pillar_symbols.glb"
-dest_files=["res://.godot/imported/pillar_symbols.glb-d03f6f519f6fdd0c27252890377c8cde.scn"]
+source_file="res://assets/models/mesas/pillar_d.glb"
+dest_files=["res://.godot/imported/pillar_d.glb-71d16b078b052850e7eed4ec16c6a86e.scn"]
 
 [params]
 

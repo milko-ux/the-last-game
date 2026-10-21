@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://lsplqnyord31"
-path="res://.godot/imported/pillar_stacked.glb-675f251c384f8623cad196cb66748a85.scn"
+uid="uid://bncha2ua8o5jk"
+path="res://.godot/imported/pillar_f.glb-e1f13919b815cd44a80859e5ef7079c4.scn"
 
 [deps]
 
-source_file="res://assets/models/kit/pillar_stacked.glb"
-dest_files=["res://.godot/imported/pillar_stacked.glb-675f251c384f8623cad196cb66748a85.scn"]
+source_file="res://assets/models/mesas/pillar_f.glb"
+dest_files=["res://.godot/imported/pillar_f.glb-e1f13919b815cd44a80859e5ef7079c4.scn"]
 
 [params]
 

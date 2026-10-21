@@ -1,7 +1,7 @@
 extends SceneTree
 # ============================================================
 # PILLAR FRAME — step 3 brief 1 section 3: what the camera does to the
-# pillars, by projection, no rendering. Builds the real monoliths.gd
+# pillars (the mesas since step 3 brief 2), by projection, no rendering. Builds the real monoliths.gd
 # strips, then walks the window along the course
 # a unit at a time with the real camera (camera_rig.gd's offset, FOV,
 # the phone's 2556 x 1179) and counts, per band and side:
@@ -19,7 +19,7 @@ extends SceneTree
 #
 # and per side the readout's own count (monoliths.in_view, `mono L/R`).
 #
-#   godot --headless --path . -s tools/pillar_frame.gd -- bars=2.2 seeds=1,2,3 kit=new
+#   godot --headless --path . -s tools/pillar_frame.gd -- bars=2.2 seeds=1,2,3
 #
 # Dev-only, writes nothing.
 # ============================================================
@@ -45,11 +45,8 @@ func _initialize() -> void:
 	Rig = load("res://prototype/camera_rig.gd")
 	Monoliths = load("res://prototype/monoliths.gd")
 	var bars: float = Rules.WINDOW_BARS_DEFAULT
-	var kit := "old"
 	for a in OS.get_cmdline_user_args():
 		var kv: PackedStringArray = a.split("=")
-		if kv.size() == 2 and kv[0] == "kit":
-			kit = kv[1]
 		if kv.size() == 2 and kv[0] == "seeds":
 			SEEDS = Array(kv[1].split(",")).map(func(x): return int(x))
 		if kv.size() == 2 and kv[0] == "bars":
@@ -67,8 +64,8 @@ func _initialize() -> void:
 	Rig.CAMERA_DISTANCE = Rig.CAMERA_DISTANCE_AT_2_2 + (bars - 2.2) * Rig.CAMERA_DISTANCE_PER_BAR
 	var offset: Vector3 = Rig.camera_offset()
 	var proj := Projection.create_perspective(Rig.FOV, W / H, 0.05, 4000.0)
-	print("PILLAR FRAME  kit %s  window %.1f bars  camera distance %.1f  offset %s  FOV %.0f  %dx%d" % [
-		kit, bars, Rig.CAMERA_DISTANCE, offset, Rig.FOV, W, H])
+	print("PILLAR FRAME  window %.1f bars  camera distance %.1f  offset %s  FOV %.0f  %dx%d" % [
+		bars, Rig.CAMERA_DISTANCE, offset, Rig.FOV, W, H])
 
 	# [band][side] -> totals over every frame of every seed.
 	var seen := []
@@ -91,7 +88,6 @@ func _initialize() -> void:
 	for s in SEEDS:
 		var m = Monoliths.new()
 		m.seed_level = s
-		m.kit = kit
 		m.build_range(Z_FROM, Z_TO)
 		var node_tris := {}
 		for strip in m._strips:

@@ -17,13 +17,9 @@ const Props := preload("res://prototype/props/props.gd")
 #                                               at the corners (finish.gd)
 #   scale     the 3D render scale (track_test.RENDER_SCALE_MOBILE)
 #   pillars   fraction of the pillars kept (monoliths.gd), 1.0 = all
-#   kit       the pillar kit (props.KIT_DIRS): "old" or "new"
 #   slab      the slab's thickness (field.THICK)
 #   fog             the four fog stops (WorldPalette.BG_*), live globals
 #   low_fog_max     the height fog's most (flat_mats.LOW_FOG_MAX)
-#   pillar_tint     the three band tints (WorldPalette.*_PILLAR)
-#   pillar_flatten  the bands' far flattening (props.PILLAR_FLATTEN)
-#   pillar_side_fog the bands' haze by distance out (props.PILLAR_SIDE_FOG)
 #
 # "canyon" is the shipped look: the palette's own values (step 3 brief 2,
 # 2026-10-21; it replaced brief 1's grey "deep fog" and "today"). Brief
@@ -37,7 +33,6 @@ const Props := preload("res://prototype/props/props.gd")
 
 const LOOKS := [
 	["canyon", {}],
-	["new kit", {"kit": "new"}],
 ]
 
 static var current := 0
@@ -51,7 +46,7 @@ static func next() -> void:
 	current = (current + 1) % LOOKS.size()
 
 
-# The web's ?look=<name> (dashes for spaces, e.g. ?look=new-kit): the
+# The web's ?look=<name> (dashes for spaces, e.g. ?look=canyon): the
 # headless web shot's way to pick a variant. An unknown name changes nothing.
 static func select(look: String) -> void:
 	for i in LOOKS.size():
@@ -65,13 +60,11 @@ static func _change(extra: Dictionary) -> Dictionary:
 	return change
 
 
-# The part of a look that needs no scene: the fog and the pillar bands.
+# The part of a look that needs no scene: the fog.
 # The menu calls this (its world uses the same shaders); apply() too.
 static func apply_world(extra: Dictionary = {}) -> void:
 	var change := _change(extra)
 	Mats.publish_fog(change.get("fog", Mats.shipped_fog()), float(change.get("low_fog_max", Mats.LOW_FOG_MAX)))
-	Props.set_pillar_look(change.get("pillar_tint", Props.shipped_pillar_tint()), change.get("pillar_flatten", Props.PILLAR_FLATTEN),
-		change.get("pillar_side_fog", Props.PILLAR_SIDE_FOG))
 
 
 # The shipped look, then the current variant, then `extra` (a probe setup,
@@ -86,5 +79,4 @@ static func apply(scene: Node, extra: Dictionary = {}) -> void:
 	scene.apply_finish()
 	scene.apply_render_scale(float(change.get("scale", -1.0)))
 	scene.field.set_pillar_density(float(change.get("pillars", 1.0)))
-	scene.field.set_pillar_kit(String(change.get("kit", "old")))
 	scene.field.set_slab_thickness(float(change.get("slab", scene.field.THICK)))

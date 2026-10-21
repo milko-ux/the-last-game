@@ -320,7 +320,7 @@ func apply_render_scale(over: float = -1.0) -> void:
 #   ?tonemap=0|aces|agx · ?glow=1 · ?vignette=0 · ?grain=0 · ?msaa=0
 #                 the finishing layer's switches (look pass v2 section 6);
 #                 =1 turns one ON, =0 OFF (glow is off by default)
-#   ?look=new-kit   start in that look variant (looks.gd; dashes for spaces)
+#   ?look=canyon    start in that look variant (looks.gd; dashes for spaces)
 #   ?pillars=0    the fraction of the pillars kept (the look key "pillars"): the backdrop alone
 var _dev_autoplay := false
 var _url_look := {}                 # the look keys of the switches below (finish, scale), applied on top of the look (looks.gd)

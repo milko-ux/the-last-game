@@ -55,7 +55,7 @@ func prepare(bursts: Array) -> void:
 		for m in [Props.clay(false), Props.clay(true), Props.clay_safe(), white]:
 			_queue.append(_prop.bind(model, m, false))
 		_queue.append(_prop.bind(model, Props.clay(false), true))
-	# The pillar bands (monoliths.gd): a kit pillar in each band's material, both kits.
+	# The mesa bands (monoliths.gd): a mesa in each band's material.
 	for band in 3:
 		_queue.append(_pillars.bind(band))
 	# The drop shadows (brief 6): a MultiMesh is its own pipeline variant,
@@ -100,9 +100,17 @@ func _prop(model: String, mat: Material, mirror: bool) -> void:
 	add_child(Props.make(model, Props.size_of(model), "base", mat, 0.0, mirror))
 
 
+# A mesa piece with vertex colours, as monoliths.gd merges them: the
+# colour attribute is part of what the renderer compiles for.
 func _pillars(band: int) -> void:
-	for kit in Props.KIT_DIRS:
-		_mesh(Props.kit_mesh(Props.kit_names(kit)[0], kit), Props.pillar(band, kit))
+	var a: Array = Props.kit_mesh(Props.kit_names()[0]).surface_get_arrays(0)
+	var cols := PackedColorArray()
+	cols.resize(a[Mesh.ARRAY_VERTEX].size())
+	cols.fill(WorldPalette.MESAS[0])
+	a[Mesh.ARRAY_COLOR] = cols
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, a)
+	_mesh(mesh, Props.pillar(band))
 
 
 func _shadows() -> void:

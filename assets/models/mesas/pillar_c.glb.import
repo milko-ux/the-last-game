@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://cit6lt6t88hs3"
-path="res://.godot/imported/pillar_niche.glb-e096c50d49fb71710e19bfc58662fbe6.scn"
+uid="uid://ciucdxqoy1ge"
+path="res://.godot/imported/pillar_c.glb-6a111826494c2c95c49ad4eb27bec0ed.scn"
 
 [deps]
 
-source_file="res://assets/models/kit_new/pillar_niche.glb"
-dest_files=["res://.godot/imported/pillar_niche.glb-e096c50d49fb71710e19bfc58662fbe6.scn"]
+source_file="res://assets/models/mesas/pillar_c.glb"
+dest_files=["res://.godot/imported/pillar_c.glb-6a111826494c2c95c49ad4eb27bec0ed.scn"]
 
 [params]
 

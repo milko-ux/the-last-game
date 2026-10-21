@@ -343,15 +343,6 @@ func set_pillar_density(f: float) -> void:
 		laps[li].monoliths.set_density(f)
 
 
-# The look switch's pillar kit (props.KIT_DIRS), kept for the laps built
-# later too.
-var pillar_kit := "old"
-func set_pillar_kit(k: String) -> void:
-	pillar_kit = k
-	for li in laps:
-		laps[li].monoliths.set_kit(k)
-
-
 func set_slab_thickness(t: float) -> void:
 	for bar in _tiles:
 		var arr: Array = _tiles[bar]
@@ -409,7 +400,6 @@ func _install(lap_index: int, lap_knobs: Dictionary, c, lap_plan: Dictionary, la
 	add_child(lap.root)
 	lap.monoliths = Monoliths.new()
 	lap.monoliths.set_density(pillar_density)
-	lap.monoliths.set_kit(pillar_kit)
 	lap.root.add_child(lap.monoliths)
 	laps[lap_index] = lap
 	if _bar_z0.is_empty():
