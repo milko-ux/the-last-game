@@ -111,13 +111,12 @@ func _build_strip(z0: float, z1: float) -> Dictionary:
 	var verts: Array = []
 	var norms: Array = []
 	var cols: Array = []
-	var idx: Array = []
 	var zs: Array = []
 	var sides: Array = []
 	var boxes: Array = []       # each mesa's box, for tools/pillar_frame.gd
 	for b in BANDS.size():
 		verts.append(PackedVector3Array()); norms.append(PackedVector3Array()); cols.append(PackedColorArray())
-		idx.append(PackedInt32Array()); zs.append(PackedFloat32Array()); sides.append(PackedByteArray()); boxes.append([])
+		zs.append(PackedFloat32Array()); sides.append(PackedByteArray()); boxes.append([])
 	var names: Array = Props.kit_names()
 	var rng := RandomNumberGenerator.new()
 	var bar := int(round((z0 - _origin_z) / BeatClock.BAR_UNITS))
@@ -147,9 +146,9 @@ func _build_strip(z0: float, z1: float) -> Dictionary:
 					if keep[ki] < 1.0:
 						continue
 					keep[ki] -= 1.0
-					var xf := _place(b, name, gap, top - BASE_Y, slim, turn, c, side, zz, verts, norms, cols, idx, zs, sides, boxes)
+					var xf := _place(b, name, gap, top - BASE_Y, slim, turn, c, side, zz, verts, norms, cols, zs, sides, boxes)
 					if c.a > 0.5:
-						_trees(b, name, xf, top - BASE_Y, hash("trees-%d-%d-%d-%d-%d" % [seed_level, bar, b, int(side), i]), verts, norms, cols, idx)
+						_trees(b, name, xf, top - BASE_Y, hash("trees-%d-%d-%d-%d-%d" % [seed_level, bar, b, int(side), i]), verts, norms, cols)
 		z += BeatClock.BAR_UNITS
 		bar += 1
 	var strip := {"z0": z0, "z1": z1, "nodes": [], "zs": zs, "sides": sides, "boxes": boxes}
@@ -162,7 +161,6 @@ func _build_strip(z0: float, z1: float) -> Dictionary:
 			arrays[Mesh.ARRAY_VERTEX] = verts[b]
 			arrays[Mesh.ARRAY_NORMAL] = norms[b]
 			arrays[Mesh.ARRAY_COLOR] = cols[b]
-			arrays[Mesh.ARRAY_INDEX] = idx[b]
 			mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 		mi.mesh = mesh
 		mi.material_override = Props.pillar(b)
@@ -205,7 +203,7 @@ func follow(z_back: float) -> void:
 # by `slim`, turned by `turn` about the vertical, base at BASE_Y, its
 # near side `gap` from the field's edge. Returns its transform.
 func _place(b: int, name: String, gap: float, h: float, slim: float, turn: float, c: Color, side: float, zz: float,
-		verts: Array, norms: Array, cols: Array, idx: Array, zs: Array, sides: Array, boxes: Array) -> Transform3D:
+		verts: Array, norms: Array, cols: Array, zs: Array, sides: Array, boxes: Array) -> Transform3D:
 	var size := Props.kit_size(name)
 	var k := h / size.y
 	var reach := maxf(size.x, size.z) * k * slim * 0.5
@@ -215,7 +213,7 @@ func _place(b: int, name: String, gap: float, h: float, slim: float, turn: float
 	var src: Mesh = Props.kit_mesh(name)
 	if src == null:
 		return xf
-	_append(b, src, xf, c, verts, norms, cols, idx)
+	_append(b, src, xf, c, verts, norms, cols)
 	zs[b].append(zz)
 	sides[b].append(0 if side < 0.0 else 1)
 	boxes[b].append(xf * src.get_aabb())
@@ -227,7 +225,7 @@ func _place(b: int, name: String, gap: float, h: float, slim: float, turn: float
 # never floats. Their own generator, so the mesas around them do not move
 # when the trees change.
 func _trees(b: int, name: String, mesa: Transform3D, h: float, seed: int,
-		verts: Array, norms: Array, cols: Array, idx: Array) -> void:
+		verts: Array, norms: Array, cols: Array) -> void:
 	var trng := RandomNumberGenerator.new()
 	trng.seed = seed
 	var top := Props.kit_top(name)
@@ -241,24 +239,49 @@ func _trees(b: int, name: String, mesa: Transform3D, h: float, seed: int,
 		var kind := trng.randi_range(0, kinds.size() - 1)
 		var xf := Transform3D(Basis(Vector3.UP, trng.randf_range(0.0, TAU)).scaled_local(Vector3.ONE * th), at - Vector3(0.0, th * 0.08, 0.0))
 		var c: Color = WorldPalette.TREES[kind % WorldPalette.TREES.size()]
-		_append(b, Props.tree_mesh(kinds[kind]), xf, Color(c.lightened(trng.randf_range(-0.06, 0.06)), 0.0), verts, norms, cols, idx)
+		_append(b, Props.tree_mesh(kinds[kind]), xf, Color(c.lightened(trng.randf_range(-0.06, 0.06)), 0.0), verts, norms, cols)
 
 
-func _append(b: int, src: Mesh, xf: Transform3D, c: Color, verts: Array, norms: Array, cols: Array, idx: Array) -> void:
+# One piece into a band's arrays, whole arrays at a time (2026-10-21): a
+# strip was ~4.4 ms on the Mac with a GDScript loop over every vertex and
+# index, a frame-and-a-half spike on the phone every time the scenery
+# built ahead. The pieces are flat shaded, so they are kept UNINDEXED
+# (each triangle its own three corners, _flat()), and a transform times a
+# whole PackedVector3Array is one native call. The normals go through the
+# basis's inverse transpose unnormalised: the shader normalises them.
+func _append(b: int, src: Mesh, xf: Transform3D, c: Color, verts: Array, norms: Array, cols: Array) -> void:
 	if src == null:
 		return
-	var a: Array = src.surface_get_arrays(0)
-	var sv: PackedVector3Array = a[Mesh.ARRAY_VERTEX]
-	var sn: PackedVector3Array = a[Mesh.ARRAY_NORMAL]
-	var si: PackedInt32Array = a[Mesh.ARRAY_INDEX]
-	var base: int = verts[b].size()
-	var nb: Basis = xf.basis.inverse().transposed()
-	for i in sv.size():
-		verts[b].append(xf * sv[i])
-		norms[b].append((nb * sn[i]).normalized())
-		cols[b].append(c)
-	for i in si.size():
-		idx[b].append(base + si[i])
+	var flat: Array = _flat(src)
+	var sv: PackedVector3Array = flat[0]
+	verts[b].append_array(xf * sv)
+	norms[b].append_array(Transform3D(xf.basis.inverse().transposed(), Vector3.ZERO) * (flat[1] as PackedVector3Array))
+	var ca := PackedColorArray()
+	ca.resize(sv.size())
+	ca.fill(c)
+	cols[b].append_array(ca)
+
+
+# A piece's triangles as plain corner lists (positions, normals), made
+# once per piece.
+static var _flats := {}
+static func _flat(src: Mesh) -> Array:
+	if not _flats.has(src):
+		var a: Array = src.surface_get_arrays(0)
+		var sv: PackedVector3Array = a[Mesh.ARRAY_VERTEX]
+		var sn: PackedVector3Array = a[Mesh.ARRAY_NORMAL]
+		var si = a[Mesh.ARRAY_INDEX]
+		var v := PackedVector3Array()
+		var n := PackedVector3Array()
+		if si == null:
+			v = sv
+			n = sn
+		else:
+			for i: int in si:
+				v.append(sv[i])
+				n.append(sn[i])
+		_flats[src] = [v, n]
+	return _flats[src]
 
 
 # Called with the window's back edge every frame: a band of a strip is

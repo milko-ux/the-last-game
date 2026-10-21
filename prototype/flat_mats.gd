@@ -397,7 +397,9 @@ void fragment() {
 	// The top is the face; the sides and pit walls are the slab's own dark
 	// stone; both in the light's tones (brief 6 sections 1 and 4).
 	vec3 n = normalize(world_n);
-	float g = grain(world_pos, top ? grain_scale : side_grain_scale) * grain_amount;
+	// One octave, not grain()'s two (2026-10-21, the frame budget: the floor
+	// is a third of the frame; on the cream the second octave did not show).
+	float g = (vnoise(world_pos / (top ? grain_scale : side_grain_scale)) * 2.0 - 1.0) * grain_amount;
 	float v = (hash3(floor(tile_origin * 4.0)) * 2.0 - 1.0) * tile_variation;
 	// A slight hue shift per tile as well as the value: toward blue on some, green on others.
 	float hs = (hash3(floor(tile_origin * 4.0) + vec3(3.0, 7.0, 11.0)) * 2.0 - 1.0) * hue_shift;

@@ -92,7 +92,7 @@ func _initialize() -> void:
 		var node_tris := {}
 		for strip in m._strips:
 			for mi: MeshInstance3D in strip["nodes"]:
-				node_tris[mi] = mi.mesh.surface_get_arrays(0)[Mesh.ARRAY_INDEX].size() / 3 if mi.mesh.get_surface_count() > 0 else 0
+				node_tris[mi] = mi.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX].size() / 3 if mi.mesh.get_surface_count() > 0 else 0   # unindexed since 2026-10-21
 				tris += node_tris[mi]
 			for b in Monoliths.BANDS.size():
 				built += strip["boxes"][b].size()

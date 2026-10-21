@@ -135,7 +135,7 @@ float vnoise2(highp vec2 p) {
 	return mix(mix(hash2(i), hash2(i + vec2(1, 0)), f.x), mix(hash2(i + vec2(0, 1)), hash2(i + vec2(1, 1)), f.x), f.y);
 }
 float fbm(highp vec2 p) {
-	return vnoise2(p) * 0.55 + vnoise2(p * 2.07 + 13.1) * 0.3 + vnoise2(p * 4.3 + 7.7) * 0.15;
+	return vnoise2(p) * 0.62 + vnoise2(p * 2.07 + 13.1) * 0.38;
 }
 // A mesa skyline: plateaus with steep sides, height 0..1 along x.
 float mesas(float x, float seed) {
@@ -151,11 +151,14 @@ void fragment() {
 	// The sky, the sun's halo and its disc.
 	float t = clamp(s.y / horizon, 0.0, 1.0);
 	vec3 c = mix(sky_top, sky_horizon, t * t);
-	// Stars at night, twinkling, thinning toward the horizon.
-	vec2 g = vec2(s.x * aspect, s.y) * 150.0;
-	float sh = hash2(floor(g));
-	float star = step(0.986, sh) * (1.0 - smoothstep(0.08, 0.3, length(fract(g) - 0.5)));
-	c += vec3(star * (0.65 + 0.35 * sin(TIME * 2.3 + sh * 60.0)) * night * (1.0 - t * t));
+	// Stars at night, twinkling, thinning toward the horizon (only where
+	// they can be: the sky, at night).
+	if (night > 0.01 && s.y < horizon) {
+		vec2 g = vec2(s.x * aspect, s.y) * 150.0;
+		float sh = hash2(floor(g));
+		float star = step(0.986, sh) * (1.0 - smoothstep(0.08, 0.3, length(fract(g) - 0.5)));
+		c += vec3(star * (0.65 + 0.35 * sin(TIME * 2.3 + sh * 60.0)) * night * (1.0 - t * t));
+	}
 	float r = length(vec2((s.x - sun_pos.x) * aspect, s.y - sun_pos.y));
 	float halo = (exp(-r * 6.0) * 0.5 + exp(-r * 18.0) * 0.4) * (1.0 - 0.45 * night);
 	c = mix(c, sun_glow, clamp(halo, 0.0, 1.0));
@@ -178,10 +181,12 @@ void fragment() {
 	if (d > 0.0) {
 		highp float z = cloud_depth / (d + 0.05);
 		highp vec2 p = vec2((s.x - 0.5) * aspect * z * 0.5, (z + pr_window_back * cloud_drift / cloud_scale) * 0.4) * cloud_scale;
+		// The light side of a puff from one noise a step toward the sun, not
+		// a second fbm (the frame budget, 2026-10-21).
 		float n = fbm(p);
-		float toward_sun = fbm(p + vec2(0.18, 0.1));
+		float toward_sun = n * 0.6 + vnoise2(p + vec2(0.18, 0.1)) * 0.4;
 		float cover = smoothstep(0.42, 0.56, n);
-		float lit = clamp((n - 0.42) * 3.0 + (n - toward_sun) * 7.0, 0.0, 1.0);
+		float lit = clamp((n - 0.42) * 3.0 + (n - toward_sun) * 12.0, 0.0, 1.0);
 		vec3 cloud = mix(cloud_shade, cloud_lit, lit);
 		vec3 gaps = cloud_shade * 0.8;
 		vec3 sea = mix(gaps, cloud, cover);

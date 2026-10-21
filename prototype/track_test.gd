@@ -462,6 +462,9 @@ func _add_probe() -> void:
 # ------------------------------------------------------------
 const PROBE_HOLD_MS := 700
 var _probe: Node = null
+const FrameGovernor := preload("res://prototype/frame_governor.gd")
+# Phones and the web only: the desktop renders at 1.0 and the tools run headless.
+var _governor = FrameGovernor.new(RENDER_SCALE_MOBILE) if (OS.has_feature("web") or OS.has_feature("mobile")) else null
 var _probe_in_app := false
 var _probe_saved_before := true
 var _hold_from := -1                # msec the readout press began; -1 = no press
@@ -978,6 +981,13 @@ func _process(delta: float) -> void:
 
 
 func _tick_run(delta: float) -> void:
+	# The frame governor (frame_governor.gd): the 3D scale that holds 60 on
+	# a warm phone. Not under the probe or a look's own scale.
+	if _governor != null and _probe == null and not _url_look.has("scale"):
+		var sc := _governor.tick(delta)
+		if not is_equal_approx(sc, get_viewport().scaling_3d_scale):
+			apply_render_scale(sc)
+			FrameMeter.note("3D scale %.2f" % sc)
 	var t := BeatClock.song_time()
 	var ht := BeatClock.hazard_time()
 	var z_back := BeatClock.z_at(t)

@@ -520,6 +520,7 @@ func _update_text() -> void:
 		text = "frame %.1f avg · %.1f worst" % [sum / n, worst]
 		if slow_frames >= 0:
 			text += " · %d slow" % slow_frames
+		text += " · 3D %.2f" % get_viewport().scaling_3d_scale   # the frame governor's (frame_governor.gd)
 		text += "     cpu %.1f avg · %.1f worst ms" % [cpu_sum / n, cpu_worst]
 		if BeatClock.endless and BeatClock.running():
 			# Audio vs clock (ms, - = audio behind) and how much has been slewed to follow it.
