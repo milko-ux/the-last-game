@@ -2,7 +2,20 @@
 
 ## Where we are (2026-10-21) — start here
 
-### START HERE (2026-10-21, evening): THE MONOLITH CANYON — step 3 brief 2 built (sections 1–5), cable app re-exported, STOP for Milko's phone
+### START HERE (2026-10-21, night): CANYON ROUND 2 — the low camera won, trees, four bands, scenery follows the window, readable buttons; cable app re-exported, STOP for Milko's phone
+
+**Milko's verdict on round 1 (phone):** "i like the low camera more … the visuals are still not that close to the image … The mountains on the side are like cut off at the top and are missing the trees on top … they kind of disappear the longer you run … in the menu all the buttons are barely visible." Probe with `low camera`: every row 16.7 ms, control +0.0, "no pillars" = "as is".
+
+**Built:**
+- `a66cba7` **the low camera is the camera**: `camera_rig.gd` 42°, FOV 44, distance 32.5 + 8.333 per bar (× 1.25); the variant, `set_view` and the overrides removed; the menu's distance 17 → 22 (same creature size under the longer lens).
+- `7f352ca` **mesas round 2**: (1) **why they disappeared:** every lap built its own mesas and the next lap is only built ~12 bars before it starts, so the far bands were empty at the end of each lap — now ONE `Monoliths` in `field.gd` builds strips around the window (`monoliths.follow()`, one strip a frame, behind ones dropped); per-lap monoliths and their queue items gone. (2) **trees**: `mesas.py` builds a pine (20 tris) and a round tree (52); 60 % of mesas are grassy and carry 2–6 (own generator, merged into the band mesh, no extra draw); `kit.json` carries each piece's flat top. (3) **broad tops** (tiers shrink less). (4) **density** 0.5 / 0.65 / 0.85 per bar + a fourth band `horizon` (56–120 out, huge, hazy = the canyon walls). (5) tops in frame under the low camera (`tools/pillar_frame.gd`): near / mid / far 83 / 89 / 87 % screen-right, 76 / 84 / 75 % screen-left (horizon 31 %: walls, cut on purpose); **0 of 1920 frames covered**; **~31 k pillar triangles per frame** with trees. Less haze on near/mid, later behind-fade, cloud line 14–44 below the runway.
+- `e922a6e` **buttons**: `Hud.glass_pill` (the one button, menu + end screen + sheets) has a dark plum body (55 %) under the tint; menu titles get a soft shadow.
+
+**Still open:** the hero is lilac-grey clay (concept: white); the near mesas on the camera side read hazy where their bodies go into the clouds; the menu's two grey building models; the far horizon silhouettes are plain. Screenshots: `docs/screenshots/canyon/r2-*`.
+
+**NEXT (Milko, phone — ⌘R in Xcode on `../the-last-game-build/ios/TheLastGame.xcodeproj`):** play to the end of a lap and beyond (the mesas must never thin out), look at the menu buttons; verdict: close enough to D? **Then:** his notes; once approved, the time of day (sunrise → sunset → night). Nothing pushed.
+
+### (2026-10-21, evening) THE MONOLITH CANYON — step 3 brief 2 built (sections 1–5), cable app re-exported, STOP for Milko's phone
 
 **Why:** Milko on the `new kit` (phone, 2026-10-21): closer, "but its still not addictive enough … no colors or textures on the pillars … the floor still kinda weak and the background and pillars also really weak." Probe with `new kit`: every row 16.7 ms, control +0.0 (the 217 k-triangle Higgsfield pillars cost nothing measurable either). Code repainted a real web shot in four directions (`gpt_image_2_5`, 2.75 credits each, `docs/concept/directions/`): A sky ruins, B rune night (Code advised against: its green glow ate the cyan), C jungle temple, **D monolith canyon — Milko's pick**. His next wish once the canyon looks great: **the time of day moving with the run, sunrise → sunset → night** (his answer to "zones per lap"; not built, not roadmapped beyond a line in step 3).
 
