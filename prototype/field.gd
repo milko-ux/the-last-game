@@ -53,10 +53,11 @@ const GOAL_WIDEN := 1.5     # brief 3: each goal post moves out this far over th
 # nothing; the rules never read the nodes).
 const POSE_BEHIND := 14.0
 const POSE_AHEAD := 52.0
-# A lap's monoliths are placed in strips this long (one queue item each).
-const MONOLITH_STRIP := 64.0
 # The plain strip behind a later lap's first bar (see _lead_in).
 const LEAD_IN_LEN := 12.0
+# The mesas around the field: one for the whole run (monoliths.gd follows
+# the window), made with the first lap.
+var monoliths: Node3D = null
 
 # One lap of the rolling set.
 class Lap:
@@ -67,7 +68,6 @@ class Lap:
 	var z0 := 0.0
 	var z1 := 0.0
 	var root: Node3D
-	var monoliths: Node3D
 	var hazards: Array = []
 	var notes: Array = []
 	var checkpoints: Array = []
@@ -152,7 +152,7 @@ func build(with_knobs: Dictionary) -> void:
 		for p in fairness["problems"]:
 			push_error("FAIRNESS: " + String(p))
 
-	var lap := _install(0, knobs, c, level_plan, fairness, 0, true, false)
+	var lap := _install(0, knobs, c, level_plan, fairness, 0, true)
 	lap.first_beat = c.first_bar_beat
 	# The outro and the goal gate: three plain slabs after the last bar.
 	var end_z := lap.z1
@@ -161,8 +161,6 @@ func build(with_knobs: Dictionary) -> void:
 	outro_z1 = end_z + 3 * PLAIN_LEN
 	goal_z = outro_z1 - 1.0
 	lap.queue.append(_gate_mesh.bind(lap.root, goal_z))
-	lap.monoliths.seed_level = Rules.level_of(knobs)
-	lap.queue.append(lap.monoliths.build_range.bind(runup_z0 - 2.0 * PLAIN_LEN, outro_z1 + 3.0 * PLAIN_LEN))
 	build_step(-1)
 	FrameMeter.load_mark("nodes", "%d hazards" % hazards.size())
 
@@ -210,7 +208,7 @@ func _save_verdict(rerolls: Dictionary) -> void:
 # and its nodes are queued. `with_runup`: the first lap of a run also
 # gets the plain slabs of the run-up behind it.
 func add_lap(lap_index: int, lap_knobs: Dictionary, lap_clock, lap_plan: Dictionary, lap_fairness: Dictionary, with_runup: bool) -> void:
-	var lap := _install(lap_index, lap_knobs, lap_clock, lap_plan, lap_fairness, int(lap_clock.bar_offset), with_runup, true)
+	var lap := _install(lap_index, lap_knobs, lap_clock, lap_plan, lap_fairness, int(lap_clock.bar_offset), with_runup)
 	lap.first_beat = lap_clock.global_first_beat()
 	outro_z1 = maxf(outro_z1, lap.z1)
 	fairness = lap_fairness
@@ -235,8 +233,8 @@ func pending_items() -> int:
 
 
 # Builds queued nodes, oldest lap first, until `budget_usec` microseconds
-# are spent (-1 = everything). One item = one bar's tiles, one hazard, one
-# strip of monoliths: a few hundred microseconds each. Returns true when
+# are spent (-1 = everything). One item = one bar's tiles or one hazard:
+# a few hundred microseconds each. Returns true when
 # nothing is left.
 func build_step(budget_usec: int) -> bool:
 	var until := Time.get_ticks_usec() + budget_usec
@@ -339,8 +337,8 @@ func last_bar() -> int:
 var pillar_density := 1.0
 func set_pillar_density(f: float) -> void:
 	pillar_density = f
-	for li in laps:
-		laps[li].monoliths.set_density(f)
+	if monoliths != null:
+		monoliths.set_density(f)
 
 
 func set_slab_thickness(t: float) -> void:
@@ -365,26 +363,18 @@ func set_slab_thickness(t: float) -> void:
 # Monoliths inside the fade-visible range of the window, per side, over
 # every lap (tools/autoplay.gd measures the longest stretch with none).
 func monoliths_in_view(z_back: float) -> Vector2i:
-	var n := Vector2i.ZERO
-	for li in laps:
-		n += laps[li].monoliths.in_view(z_back)
-	return n
+	return monoliths.in_view(z_back) if monoliths != null else Vector2i.ZERO
 
 
 func monolith_counts() -> Dictionary:
-	var out := {"total": 0, "shown": 0, "detailed": 0}
-	for li in laps:
-		var c: Dictionary = laps[li].monoliths.counts()
-		for k in out:
-			out[k] += int(c[k])
-	return out
+	return monoliths.counts() if monoliths != null else {"total": 0, "shown": 0, "detailed": 0}
 
 
 # ------------------------------------------------------------
 # Merging a lap and queueing its nodes (both paths)
 # ------------------------------------------------------------
 func _install(lap_index: int, lap_knobs: Dictionary, c, lap_plan: Dictionary, lap_fairness: Dictionary,
-		bar_offset: int, with_runup: bool, monolith_strips: bool) -> Lap:
+		bar_offset: int, with_runup: bool) -> Lap:
 	var lap := Lap.new()
 	lap.lap = lap_index
 	lap.knobs = lap_knobs
@@ -398,9 +388,13 @@ func _install(lap_index: int, lap_knobs: Dictionary, c, lap_plan: Dictionary, la
 	lap.root = Node3D.new()
 	lap.root.name = "Lap%d" % lap_index
 	add_child(lap.root)
-	lap.monoliths = Monoliths.new()
-	lap.monoliths.set_density(pillar_density)
-	lap.root.add_child(lap.monoliths)
+	if monoliths == null:
+		# The scenery: one for the whole run, seeded by the first lap, and
+		# it builds itself around the window (monoliths.gd follow()).
+		monoliths = Monoliths.new()
+		monoliths.seed_level = int(lap_knobs.get("seed", Rules.level_of(lap_knobs)))
+		monoliths.set_density(pillar_density)
+		add_child(monoliths)
 	laps[lap_index] = lap
 	if _bar_z0.is_empty():
 		_first_bar = lap.first_bar
@@ -437,12 +431,6 @@ func _install(lap_index: int, lap_knobs: Dictionary, c, lap_plan: Dictionary, la
 		_bar_z0.append(z0)
 		_bar_z1.append(z1)
 		lap.queue.append(_bar_tiles.bind(lap, bar_offset + bar, z0, z1))
-	if monolith_strips:
-		lap.monoliths.seed_level = int(lap_knobs.get("seed", Rules.level_of(lap_knobs)))
-		var mz := (runup_z0 - 2.0 * PLAIN_LEN) if with_runup else lap.z0
-		while mz < lap.z1:
-			lap.queue.append(lap.monoliths.build_range.bind(mz, minf(mz + MONOLITH_STRIP, lap.z1)))
-			mz += MONOLITH_STRIP
 	for spec in lap_plan["hazards"]:
 		lap.queue.append(_hazard.bind(lap, spec))
 	lap.queue.append(_notes_and_checkpoints.bind(lap, c, lap_plan))
@@ -648,8 +636,8 @@ func _state_for(bar: int, col: int, row: int, t: float) -> int:
 # Repaint the tiles of the bars near the window. Only changed tiles touch
 # their material, so this is cheap.
 func update_tiles(t: float, z_back: float) -> void:
-	for li in laps:
-		laps[li].monoliths.set_window(z_back)
+	if monoliths != null:
+		monoliths.follow(z_back)
 	if _bar_z0.is_empty():
 		return
 	var lo := bar_at_z(maxf(z_back - 2.0, _bar_z0[0]))

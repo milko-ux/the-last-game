@@ -261,6 +261,25 @@ static func kit_size(name: String) -> Vector3:
 	return Vector3(float(s[0]), float(s[1]), float(s[2]))
 
 
+# A mesa piece's flat top, in piece units: (centre x, centre z, the radius
+# that stays on it) -- where its trees may stand.
+static func kit_top(name: String) -> Vector3:
+	var t: Array = kit_info()["tops"][name]
+	return Vector3(float(t[0]), float(t[1]), float(t[2]))
+
+
+# The trees (mesas.py: "pine", "round"), 1 tall, base at y 0.
+static func tree_names() -> Array:
+	return kit_info().get("trees", {}).keys()
+
+
+static func tree_mesh(name: String) -> Mesh:
+	var key := "tree_" + name
+	if not _kit.has(key):
+		_kit[key] = mesh_of_path(KIT_DIR + key + ".glb")
+	return _kit[key]
+
+
 static func mesh_of_path(path: String) -> Mesh:
 	var scene: PackedScene = load(path)
 	if scene == null:
@@ -333,14 +352,15 @@ static func building(far: bool = false) -> Material:
 # mesas stay crisp far ahead of the course, which fades out after about
 # two bars (flat_mats FADE_AHEAD_*): faded with it, as the grey look's
 # were (14-27 / 22-52 / 30-88), the whole frame went milky.
-const PILLAR_FADE := [Vector4(34.0, 70.0, 22.0, 44.0), Vector4(44.0, 90.0, 24.0, 48.0), Vector4(60.0, 130.0, 26.0, 52.0)]
+const PILLAR_FADE := [Vector4(34.0, 70.0, 40.0, 70.0), Vector4(44.0, 90.0, 40.0, 70.0), Vector4(60.0, 130.0, 40.0, 70.0),
+	Vector4(90.0, 200.0, 30.0, 60.0)]
 # How much of its contrast a band loses with distance before its colour
 # goes, and per band the haze by distance out (|x| start, end, the most
 # it may take). The canyon (2026-10-21): the near band is crisp, the far
 # one leans into the haze; the grey look's values were 1.0 / 0.8 / 1.0
 # and up to 40 / 55 / 85 %.
-const PILLAR_FLATTEN := [0.0, 0.2, 0.4]
-const PILLAR_SIDE_FOG := [Vector3(0.0, 30.0, 0.0), Vector3(10.0, 60.0, 0.12), Vector3(20.0, 90.0, 0.3)]
+const PILLAR_FLATTEN := [0.0, 0.0, 0.2, 0.45]
+const PILLAR_SIDE_FOG := [Vector3(0.0, 30.0, 0.0), Vector3(10.0, 60.0, 0.0), Vector3(20.0, 90.0, 0.18), Vector3(40.0, 150.0, 0.5)]
 
 static func pillar(band: int) -> Material:
 	var key := "pillar_%d" % band

@@ -56,7 +56,7 @@ func prepare(bursts: Array) -> void:
 			_queue.append(_prop.bind(model, m, false))
 		_queue.append(_prop.bind(model, Props.clay(false), true))
 	# The mesa bands (monoliths.gd): a mesa in each band's material.
-	for band in 3:
+	for band in Props.PILLAR_FADE.size():
 		_queue.append(_pillars.bind(band))
 	# The drop shadows (brief 6): a MultiMesh is its own pipeline variant,
 	# so the warm-up draws one instance of the real thing.

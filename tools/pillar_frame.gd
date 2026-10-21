@@ -109,8 +109,8 @@ func _initialize() -> void:
 			var look := Vector3(0.0, 0.0, z_back + depth * 0.5)
 			var cam := Transform3D(Basis(), look + offset).looking_at(look, Vector3.UP)
 			var view := cam.affine_inverse()
-			var frame_seen := [0, 0, 0]
-			var frame_in := [0, 0, 0]
+			var frame_seen := []; frame_seen.resize(Monoliths.BANDS.size()); frame_seen.fill(0)
+			var frame_in := []; frame_in.resize(Monoliths.BANDS.size()); frame_in.fill(0)
 			var blockers: Array = []
 			var vis := Vector2.ZERO
 			for strip in m._strips:
@@ -154,7 +154,7 @@ func _initialize() -> void:
 			z_back += 1.0
 		m.free()
 
-	var names := ["near", "mid", "far"]
+	var names := ["near", "mid", "far", "horiz"]
 	print("band  side          in view/frame  top in frame  top above floor  allowed top 80 % / 50 %")
 	for b in Monoliths.BANDS.size():
 		for side in 2:

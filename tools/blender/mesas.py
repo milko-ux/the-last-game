@@ -13,11 +13,19 @@
 # game's mesa shader lights each facet by the sun as three tones and
 # gives it its pastel colour (props.gd), so the mesh carries only shape.
 #
+# Also two TREES (2026-10-21, Milko: "missing the trees on top of the
+# mountains"): a pine (two stacked six-sided cones) and a round one (a
+# low ball on a stub), 1 tall, base at y 0. monoliths.gd stands a few on
+# every grassy mesa top.
+#
 # Writes assets/models/mesas/pillar_<name>.glb (base at y 0, HEIGHT tall,
-# centred on x/z) and kit.json (each piece's size, Godot's x, y up, z).
-# Deterministic: the same seed per piece every run.
+# centred on x/z), tree_<name>.glb, and kit.json: each mesa's size
+# (Godot's x, y up, z), its flat top (the centre x / z and the radius
+# that stays inside it, in piece units -- where the trees may stand), and
+# each tree's size. Deterministic: the same seed per piece every run.
 # ============================================================
 import bpy, bmesh, json, math, os, random
+from mathutils import Matrix
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.normpath(os.path.join(HERE, "..", "..", "assets", "models", "mesas"))
@@ -43,6 +51,7 @@ def tier_ring(rng, sides, scale, dx, dy):
 def build(name, seed, tiers):
     rng = random.Random(seed)
     bm = bmesh.new()
+    top = None
     # Tier heights: shares of HEIGHT, the lowest tallest (it runs down into the clouds).
     shares = [rng.uniform(0.7, 1.3) for _ in range(tiers)]
     shares[0] += 1.0
@@ -54,7 +63,7 @@ def build(name, seed, tiers):
         h = HEIGHT * shares[t] / total
         sides = rng.randint(6, 9)
         ring = tier_ring(rng, sides, scale, dx, dy)
-        taper = rng.uniform(0.86, 0.95)
+        taper = rng.uniform(0.9, 0.97)
         cx = sum(p[0] for p in ring) / sides
         cy = sum(p[1] for p in ring) / sides
         lo = [bm.verts.new((x, y, z)) for (x, y) in ring]
@@ -63,11 +72,14 @@ def build(name, seed, tiers):
             j = (i + 1) % sides
             bm.faces.new((lo[i], lo[j], hi[j], hi[i]))
         bm.faces.new(hi)                      # the top: a ledge, or the mesa's flat top
+        # The top tier's cap: its centre and the radius inside it.
+        inner = min(math.hypot(v.co.x - cx, v.co.y - cy) for v in hi) * math.cos(math.pi / sides)
+        top = (cx, cy, inner)
         if t == 0:
             bm.faces.new(list(reversed(lo)))  # the foot (deep in the clouds, but closed)
         # The next tier: narrower, nudged off centre, so a ledge shows.
         z += h
-        scale *= rng.uniform(0.72, 0.88) * taper
+        scale *= rng.uniform(0.84, 0.95) * taper
         dx = cx + rng.uniform(-0.18, 0.18)
         dy = cy + rng.uniform(-0.18, 0.18)
     bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
@@ -77,27 +89,69 @@ def build(name, seed, tiers):
     ox = (min(xs) + max(xs)) * 0.5; oy = (min(ys) + max(ys)) * 0.5
     for v in bm.verts:
         v.co.x -= ox; v.co.y -= oy
+    top = (top[0] - ox, top[1] - oy, top[2])
     me = bpy.data.meshes.new("pillar_" + name)
     bm.to_mesh(me); bm.free()
     for p in me.polygons:
         p.use_smooth = False
     ob = bpy.data.objects.new("pillar_" + name, me)
     bpy.context.collection.objects.link(ob)
+    return ob, top
+
+
+def cone(bm, r, z0, z1, sides, turn):
+    ring = [bm.verts.new((r * math.cos(turn + 2 * math.pi * i / sides), r * math.sin(turn + 2 * math.pi * i / sides), z0)) for i in range(sides)]
+    apex = bm.verts.new((0.0, 0.0, z1))
+    for i in range(sides):
+        bm.faces.new((ring[i], ring[(i + 1) % sides], apex))
+    bm.faces.new(list(reversed(ring)))
+
+
+def tree(name):
+    bm = bmesh.new()
+    if name == "pine":
+        cone(bm, 0.42, 0.0, 0.62, 6, 0.0)
+        cone(bm, 0.3, 0.42, 1.0, 6, 0.5)
+    else:
+        bmesh.ops.create_cone(bm, cap_ends=True, segments=5, radius1=0.08, radius2=0.08, depth=0.4,
+                              matrix=Matrix.Translation((0, 0, 0.2)))
+        bmesh.ops.create_uvsphere(bm, u_segments=6, v_segments=4, radius=0.36,
+                                  matrix=Matrix.Translation((0, 0, 0.64)))
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    bmesh.ops.triangulate(bm, faces=bm.faces)
+    me = bpy.data.meshes.new("tree_" + name)
+    bm.to_mesh(me); bm.free()
+    for p in me.polygons:
+        p.use_smooth = False
+    ob = bpy.data.objects.new("tree_" + name, me)
+    bpy.context.collection.objects.link(ob)
     return ob
+
+
+def export(ob, path):
+    bpy.ops.object.select_all(action='DESELECT'); ob.select_set(True)
+    bpy.context.view_layer.objects.active = ob
+    bpy.ops.export_scene.gltf(filepath=path, use_selection=True, export_format='GLB', export_yup=True,
+                              export_apply=True, export_materials='NONE', export_normals=True, export_texcoords=False)
 
 
 bpy.ops.wm.read_factory_settings(use_empty=True)
 sizes = {}
+tops = {}
+trees = {}
 tris = {}
 for (name, seed, tiers) in PIECES:
-    ob = build(name, seed, tiers)
+    ob, top = build(name, seed, tiers)
     d = ob.dimensions
     sizes[name] = [round(d.x, 4), round(d.z, 4), round(d.y, 4)]   # Godot's (x, y up, z)
+    tops[name] = [round(top[0], 4), round(-top[1], 4), round(top[2], 4)]   # Godot's z is Blender's -y
     tris[name] = len(ob.data.polygons)
-    bpy.ops.object.select_all(action='DESELECT'); ob.select_set(True)
-    bpy.context.view_layer.objects.active = ob
-    bpy.ops.export_scene.gltf(filepath=os.path.join(OUT, "pillar_%s.glb" % name), use_selection=True,
-                              export_format='GLB', export_yup=True, export_apply=True, export_materials='NONE',
-                              export_normals=True, export_texcoords=False)
-json.dump({"sizes": sizes}, open(os.path.join(OUT, "kit.json"), "w"), indent=1)
-print("MESAS DONE", OUT, "triangles", tris, "sizes", sizes)
+    export(ob, os.path.join(OUT, "pillar_%s.glb" % name))
+for name in ["pine", "round"]:
+    ob = tree(name)
+    d = ob.dimensions
+    trees[name] = [round(d.x, 4), round(d.z, 4), round(d.y, 4)]
+    tris["tree_" + name] = len(ob.data.polygons)
+    export(ob, os.path.join(OUT, "tree_%s.glb" % name))
+json.dump({"sizes": sizes, "tops": tops, "trees": trees}, open(os.path.join(OUT, "kit.json"), "w"), indent=1)
+print("MESAS DONE", OUT, "triangles", tris, "tops", tops, "trees", trees)

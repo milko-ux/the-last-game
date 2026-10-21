@@ -2,13 +2,18 @@ extends Node3D
 # ============================================================
 # MONOLITHS -- the mesas around the field. THE CANYON (step 3 brief 2
 # section 3, 2026-10-21; concept D): pastel stone mesas rise out of the
-# cloud sea on both sides, in three bands:
+# cloud sea on both sides, in four bands:
 #
-#   near   beside the slab; the tallest, a few tops above the runway
-#   mid    further out, tops below the runway
-#   far    out in the haze, tops well below: from this camera, which
-#          looks steeply down, you see them from above, sunlit tops
-#          standing in the clouds
+#   near     beside the slab; the tallest, a few tops above the runway
+#   mid      further out, tops below the runway
+#   far      out in the haze, tops well below: from this camera, which
+#            looks down, you see them from above, sunlit tops standing in
+#            the clouds
+#   horizon  huge ones far out, overlapping into the canyon's walls
+#            (2026-10-21: without them the distance emptied)
+#
+# A grassy top carries a few trees (mesas.py's pine and round one),
+# merged into the same mesh: no extra draw.
 #
 # Their feet are far down in the clouds (BASE_Y; the height fog takes
 # them). Tops below the runway are the point: the camera cannot show a
@@ -25,6 +30,15 @@ extends Node3D
 #
 # Placed deterministically per bar from a seeded generator, so the same
 # level looks the same on every device. z is time, like everything else.
+#
+# THE SCENERY FOLLOWS THE WINDOW (2026-10-21): in a run, ONE instance
+# (field.gd) builds the strips around the window as it travels --
+# follow() -- and drops the ones behind. Until then every lap had its own,
+# built with the lap, and the next lap is only built ~12 bars before it
+# starts: the far bands, drawn up to 130+ units ahead, had nothing to draw
+# at the end of every lap ("they kind of disappear the longer you run",
+# Milko on the phone). Nothing in the game reads the mesas, so they need
+# no lap. build_range() stays for the tools.
 # ============================================================
 
 const Mats := preload("res://prototype/flat_mats.gd")
@@ -40,17 +54,21 @@ const BASE_Y := -46.0            # feet deep in the clouds: the height fog disso
 # are ~1.9 wide and 8 tall, so a mesa 50 tall is ~12 wide at 1.0; at
 # 0.5-1.0 they read as crystal pencils, not mesas).
 const BANDS := [
-	{"gap": Vector2(2.5, 9.0), "top": Vector2(-8.0, 6.0), "chance": 0.3, "slim": Vector2(1.0, 1.6)},
-	{"gap": Vector2(10.0, 26.0), "top": Vector2(-16.0, -2.0), "chance": 0.3, "slim": Vector2(1.2, 2.0)},
-	{"gap": Vector2(26.0, 56.0), "top": Vector2(-26.0, -8.0), "chance": 0.45, "slim": Vector2(1.4, 2.4)},
+	{"gap": Vector2(2.5, 9.0), "top": Vector2(-8.0, 3.0), "chance": 0.5, "slim": Vector2(1.0, 1.6)},
+	{"gap": Vector2(10.0, 26.0), "top": Vector2(-15.0, -3.0), "chance": 0.65, "slim": Vector2(1.2, 2.0)},
+	{"gap": Vector2(26.0, 56.0), "top": Vector2(-22.0, -8.0), "chance": 0.85, "slim": Vector2(1.4, 2.4)},
+	{"gap": Vector2(56.0, 120.0), "top": Vector2(-30.0, -12.0), "chance": 1.0, "slim": Vector2(2.4, 4.0)},
 ]
-const GRASSY := 0.45             # the share of mesas whose top is grassy
+const GRASSY := 0.6              # the share of mesas whose top is grassy, and so has trees
+const TREES := Vector2i(2, 6)    # trees on a grassy top
+const TREE_H := Vector2(0.05, 0.09)   # a tree's height as a share of its mesa's (clamped to TREE_H_MAX)
+const TREE_H_MAX := 4.0
 # Lower on the screen-left (world +x), per band: the camera sits on the
 # screen-right side, so the screen-left mesas stand far off, high in the
 # frame, and a top there is cut by the frame's edge unless it is lower
 # (tools/pillar_frame.gd, 2026-10-21: tops in frame on the screen-left
 # 32 / 45 / 35 % against 60 / 78 / 73 % on the right).
-const SCREEN_LEFT_DROP := [4.0, 6.0, 8.0]
+const SCREEN_LEFT_DROP := [4.0, 6.0, 8.0, 8.0]
 # How tall a pillar can be and still show its top is the camera's call,
 # not this table's: tools/pillar_frame.gd measures it. Under today's
 # camera (54 degrees down, from the screen-right side) a top stays in
@@ -60,8 +78,8 @@ const SCREEN_LEFT_DROP := [4.0, 6.0, 8.0]
 # from it, "tops in frame", lost on the phone and is gone).
 # How far ahead of the window's back edge a band is drawn at all (its
 # material's fade has taken it by then), and how far behind.
-const SHOW_BEHIND := 56.0
-const SHOW_AHEAD := [72.0, 92.0, 132.0]     # each band's fade end (props.PILLAR_FADE), plus a little
+const SHOW_BEHIND := 72.0      # the bands' behind-fade end (props.PILLAR_FADE), plus a little
+const SHOW_AHEAD := [72.0, 92.0, 132.0, 202.0]     # each band's fade end (props.PILLAR_FADE), plus a little
 
 # Part of the seed: the level (the dev path) or SEASON_SEED + lap.
 var seed_level := 1
@@ -87,16 +105,19 @@ func build_range(z_from: float, z_to: float) -> void:
 		z += STRIP
 
 
-func _build_strip(z0: float, z1: float) -> void:
+func _build_strip(z0: float, z1: float) -> Dictionary:
 	# Per band: the merged arrays of every mesa in the strip (one mesh, one
 	# draw), and each mesa's z / side for the readouts.
-	var verts: Array = [PackedVector3Array(), PackedVector3Array(), PackedVector3Array()]
-	var norms: Array = [PackedVector3Array(), PackedVector3Array(), PackedVector3Array()]
-	var cols: Array = [PackedColorArray(), PackedColorArray(), PackedColorArray()]
-	var idx: Array = [PackedInt32Array(), PackedInt32Array(), PackedInt32Array()]
-	var zs: Array = [PackedFloat32Array(), PackedFloat32Array(), PackedFloat32Array()]
-	var sides: Array = [PackedByteArray(), PackedByteArray(), PackedByteArray()]
-	var boxes: Array = [[], [], []]       # each mesa's box, for tools/pillar_frame.gd
+	var verts: Array = []
+	var norms: Array = []
+	var cols: Array = []
+	var idx: Array = []
+	var zs: Array = []
+	var sides: Array = []
+	var boxes: Array = []       # each mesa's box, for tools/pillar_frame.gd
+	for b in BANDS.size():
+		verts.append(PackedVector3Array()); norms.append(PackedVector3Array()); cols.append(PackedColorArray())
+		idx.append(PackedInt32Array()); zs.append(PackedFloat32Array()); sides.append(PackedByteArray()); boxes.append([])
 	var names: Array = Props.kit_names()
 	var rng := RandomNumberGenerator.new()
 	var bar := int(round((z0 - _origin_z) / BeatClock.BAR_UNITS))
@@ -126,7 +147,9 @@ func _build_strip(z0: float, z1: float) -> void:
 					if keep[ki] < 1.0:
 						continue
 					keep[ki] -= 1.0
-					_place(b, name, gap, top - BASE_Y, slim, turn, c, side, zz, verts, norms, cols, idx, zs, sides, boxes)
+					var xf := _place(b, name, gap, top - BASE_Y, slim, turn, c, side, zz, verts, norms, cols, idx, zs, sides, boxes)
+					if c.a > 0.5:
+						_trees(b, name, xf, top - BASE_Y, hash("trees-%d-%d-%d-%d-%d" % [seed_level, bar, b, int(side), i]), verts, norms, cols, idx)
 		z += BeatClock.BAR_UNITS
 		bar += 1
 	var strip := {"z0": z0, "z1": z1, "nodes": [], "zs": zs, "sides": sides, "boxes": boxes}
@@ -148,13 +171,41 @@ func _build_strip(z0: float, z1: float) -> void:
 		add_child(mi)
 		strip["nodes"].append(mi)
 	_strips.append(strip)
+	return strip
+
+
+# The run's way (field.gd, every frame): the strips that cover the window's
+# reach (SHOW_BEHIND behind, the furthest band's SHOW_AHEAD ahead) on a
+# fixed STRIP grid from z 0, built one per call once the first set is up
+# (a strip is a few hundred microseconds); the ones behind it go. A rewind
+# (a death sends the song back) builds the missing ones the same way.
+var _by_index := {}              # strip index (z0 / STRIP) -> its strip
+func follow(z_back: float) -> void:
+	if _origin_z == INF:
+		_origin_z = 0.0
+	var lo := floori((z_back - SHOW_BEHIND) / STRIP)
+	var hi := floori((z_back + SHOW_AHEAD.max()) / STRIP)
+	for i in _by_index.keys():
+		if i < lo or i > hi + 1:
+			var strip: Dictionary = _by_index[i]
+			for mi: MeshInstance3D in strip["nodes"]:
+				mi.queue_free()
+			_strips.erase(strip)
+			_by_index.erase(i)
+	var first := _by_index.is_empty()
+	for i in range(lo, hi + 1):
+		if not _by_index.has(i):
+			_by_index[i] = _build_strip(i * STRIP, (i + 1) * STRIP)
+			if not first:
+				break
+	set_window(z_back)
 
 
 # One mesa: the kit piece scaled to `h` (uniform), broadened or thinned
 # by `slim`, turned by `turn` about the vertical, base at BASE_Y, its
-# near side `gap` from the field's edge.
+# near side `gap` from the field's edge. Returns its transform.
 func _place(b: int, name: String, gap: float, h: float, slim: float, turn: float, c: Color, side: float, zz: float,
-		verts: Array, norms: Array, cols: Array, idx: Array, zs: Array, sides: Array, boxes: Array) -> void:
+		verts: Array, norms: Array, cols: Array, idx: Array, zs: Array, sides: Array, boxes: Array) -> Transform3D:
 	var size := Props.kit_size(name)
 	var k := h / size.y
 	var reach := maxf(size.x, size.z) * k * slim * 0.5
@@ -162,6 +213,38 @@ func _place(b: int, name: String, gap: float, h: float, slim: float, turn: float
 	var basis := Basis(Vector3.UP, turn).scaled_local(Vector3(k * slim, k, k * slim))
 	var xf := Transform3D(basis, Vector3(x, BASE_Y, zz))
 	var src: Mesh = Props.kit_mesh(name)
+	if src == null:
+		return xf
+	_append(b, src, xf, c, verts, norms, cols, idx)
+	zs[b].append(zz)
+	sides[b].append(0 if side < 0.0 else 1)
+	boxes[b].append(xf * src.get_aabb())
+	return xf
+
+
+# A few trees on a grassy mesa's flat top (props.kit_top: where the top
+# is in the piece), each its own size and turn, base a little sunk so it
+# never floats. Their own generator, so the mesas around them do not move
+# when the trees change.
+func _trees(b: int, name: String, mesa: Transform3D, h: float, seed: int,
+		verts: Array, norms: Array, cols: Array, idx: Array) -> void:
+	var trng := RandomNumberGenerator.new()
+	trng.seed = seed
+	var top := Props.kit_top(name)
+	var y := Props.kit_size(name).y
+	var kinds: Array = Props.tree_names()
+	for t in trng.randi_range(TREES.x, TREES.y):
+		var a := trng.randf_range(0.0, TAU)
+		var r := sqrt(trng.randf()) * top.z * 0.8
+		var at := mesa * Vector3(top.x + cos(a) * r, y, top.y + sin(a) * r)
+		var th := minf(h * trng.randf_range(TREE_H.x, TREE_H.y), TREE_H_MAX)
+		var kind := trng.randi_range(0, kinds.size() - 1)
+		var xf := Transform3D(Basis(Vector3.UP, trng.randf_range(0.0, TAU)).scaled_local(Vector3.ONE * th), at - Vector3(0.0, th * 0.08, 0.0))
+		var c: Color = WorldPalette.TREES[kind % WorldPalette.TREES.size()]
+		_append(b, Props.tree_mesh(kinds[kind]), xf, Color(c.lightened(trng.randf_range(-0.06, 0.06)), 0.0), verts, norms, cols, idx)
+
+
+func _append(b: int, src: Mesh, xf: Transform3D, c: Color, verts: Array, norms: Array, cols: Array, idx: Array) -> void:
 	if src == null:
 		return
 	var a: Array = src.surface_get_arrays(0)
@@ -176,9 +259,6 @@ func _place(b: int, name: String, gap: float, h: float, slim: float, turn: float
 		cols[b].append(c)
 	for i in si.size():
 		idx[b].append(base + si[i])
-	zs[b].append(zz)
-	sides[b].append(0 if side < 0.0 else 1)
-	boxes[b].append(xf * src.get_aabb())
 
 
 # Called with the window's back edge every frame: a band of a strip is
@@ -209,10 +289,12 @@ func set_density(f: float) -> void:
 func _rebuild() -> void:
 	var built: Array = _strips
 	_strips = []
+	_by_index.clear()
 	for strip in built:
 		for mi: MeshInstance3D in strip["nodes"]:
 			mi.queue_free()
-		_build_strip(float(strip["z0"]), float(strip["z1"]))
+		var again := _build_strip(float(strip["z0"]), float(strip["z1"]))
+		_by_index[int(round(float(strip["z0"]) / STRIP))] = again
 
 
 # For tools/autoplay.gd's gap measurement and the dev readout: how many

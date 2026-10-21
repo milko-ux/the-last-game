@@ -57,6 +57,7 @@ const HERO_RIM := Color("#ffb9a0")      # brief 6 section 5: the rim on the hero
 # look's three dark band tints (#1e252e / #262e38 / #3e4756) are gone.
 const MESAS := [Color("#bcaad6"), Color("#a9c2a8"), Color("#e6cba5"), Color("#a3b4d6"), Color("#ddd2c4"), Color("#e9c3a9")]   # lilac, sage, sand, slate blue, pale stone, warm peach
 const MESA_CAP := Color("#b8cf90")
+const TREES := [Color("#6f9b68"), Color("#8db36e")]     # the pines, the round ones (monoliths.gd)
 # The carved stone of the building models (2026-09-20: their material is
 # procedural now, so the stone's colour lives here instead of in the
 # model's baked texture). Near ones, and the far huge ones the fog carries.
