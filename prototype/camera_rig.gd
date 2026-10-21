@@ -213,7 +213,11 @@ func _build_backdrop() -> void:
 	sh.code = BACKDROP_SHADER.replace("FOG_FUNCTIONS", Mats.fog_functions())
 	var m := ShaderMaterial.new()
 	m.shader = sh
-	m.render_priority = -100
+	# Drawn LAST of the opaque things (2026-10-21): it is behind all of
+	# them, so the depth test leaves it only the pixels nothing covers --
+	# its clouds and stars are the costliest pixels in the frame, and at
+	# -100 (first) it painted the whole screen every frame under the mesas.
+	m.render_priority = 100
 	var p := {"sky_top": WorldPalette.SKY_TOP, "sky_horizon": WorldPalette.SKY_HORIZON, "sun": WorldPalette.SUN,
 		"sun_glow": WorldPalette.SUN_GLOW, "cliff_far": WorldPalette.CLIFF_FAR, "cliff_near": WorldPalette.CLIFF_NEAR,
 		"cloud_lit": WorldPalette.CLOUD_LIT, "cloud_shade": WorldPalette.CLOUD_SHADE}

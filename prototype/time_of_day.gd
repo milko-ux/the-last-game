@@ -44,7 +44,7 @@ static func update(metres: float) -> void:
 	var at := fposmod(metres, CYCLE_M)
 	if forced != "":
 		at = _held_at(forced)
-	if absf(at - _last) < 0.25:
+	if absf(at - _last) < 1.0:
 		return
 	_last = at
 	_publish(blend(at))

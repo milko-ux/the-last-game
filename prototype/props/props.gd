@@ -207,6 +207,7 @@ FADE_HEAD
 varying highp vec3 world_pos;
 varying vec3 world_n;
 varying vec4 col;
+varying float wisp;
 
 void vertex() {
 	vec4 wp = MODEL_MATRIX * vec4(VERTEX, 1.0);
@@ -214,6 +215,9 @@ void vertex() {
 	world_pos = wp.xyz;
 	world_n = normalize(mat3(MODEL_MATRIX) * NORMAL);
 	col = COLOR;
+	// Per vertex, not per pixel (2026-10-21: the canyon's mesas cover most
+	// of the frame, and the phone went from 16.7 to ~24 ms a frame).
+	wisp = (vnoise(vec3(wp.x * 0.12, 0.0, wp.z * 0.12 + TIME * 0.05)) * 2.0 - 1.0) * cloud_wisp;
 	fog_sy = screen_y_of(PROJECTION_MATRIX * MODELVIEW_MATRIX * vec4(VERTEX, 1.0));
 }
 
@@ -230,12 +234,10 @@ void fragment() {
 	c *= mix(0.9, 1.05, smoothstep(-26.0, 6.0, world_pos.y));
 	float band = 1.0 - smoothstep(0.08, 0.2, abs(fract(world_pos.y / strata_every) - 0.5));
 	c *= 1.0 - strata_dark * band * (1.0 - top);
-	c *= 1.0 + grain(world_pos, 1.4) * 0.035;
 	float side = smoothstep(side_fog.x, side_fog.y, abs(world_pos.x)) * side_fog.z;
 	vec3 fog = fog_colour(fog_sy);
 	float away = max(f, side);
 	c = mix(c, (c + fog) * 0.5, smoothstep(0.0, 0.6, away) * far_flatten);
-	float wisp = (vnoise(vec3(world_pos.x * 0.12, 0.0, world_pos.z * 0.12 + TIME * 0.05)) * 2.0 - 1.0) * cloud_wisp;
 	ALBEDO = low_fog(mix(c, fog, away), world_pos.y + wisp);
 }
 """
