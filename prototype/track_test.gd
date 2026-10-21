@@ -320,13 +320,18 @@ func apply_render_scale(over: float = -1.0) -> void:
 #   ?tonemap=0|aces|agx · ?glow=1 · ?vignette=0 · ?grain=0 · ?msaa=0
 #                 the finishing layer's switches (look pass v2 section 6);
 #                 =1 turns one ON, =0 OFF (glow is off by default)
-#   ?look=deep-fog  start in that look variant (looks.gd; dashes for spaces)
+#   ?look=new-kit   start in that look variant (looks.gd; dashes for spaces)
+#   ?pillars=0    the fraction of the pillars kept (the look key "pillars"): the backdrop alone
 var _dev_autoplay := false
 var _url_look := {}                 # the look keys of the switches below (finish, scale), applied on top of the look (looks.gd)
 var light_on := true
 # The finishing layer (brief 6 sections 7-8): what is on, and the
 # tonemapper. Defaults are the shipped look; the switches above flip them.
-const TONEMAP_DEFAULT := "aces"   # picked with web shots: AgX greys the magenta and the cyan, ACES keeps them (look pass v2 section 6)
+# The canyon (step 3 brief 2, 2026-10-21): LINEAR -- the world is unshaded
+# and its colours are authored as they should reach the screen; ACES
+# turned the pastels and the cream grey (measured on the web shot). Until
+# then "aces", picked because AgX greyed the magenta and the cyan.
+const TONEMAP_DEFAULT := "linear"
 const GLOW_HDR_THRESHOLD := 0.9      # only the emissives bloom: the cyan rim, a live seam, amber (0.82 bloomed the plates)
 const GLOW_INTENSITY := 0.35
 const GLOW_STRENGTH := 0.9
@@ -384,6 +389,8 @@ func _dev_url_switches() -> void:
 		Looks.select(FrameMeter.url_param("look"))
 	if FrameMeter.url_param("scale") != "":
 		_url_look["scale"] = float(FrameMeter.url_param("scale"))
+	if FrameMeter.url_param("pillars") != "":
+		_url_look["pillars"] = float(FrameMeter.url_param("pillars"))
 	set_light(FrameMeter.url_param("light") != "0")
 	var tm := FrameMeter.url_param("tonemap")
 	if tm != "":

@@ -12,7 +12,7 @@ extends CanvasLayer
 # ?vignette=0 and ?grain=0 (dev URL switches) turn each off for an A/B.
 # ============================================================
 
-const VIGNETTE := 0.5           # at the corners (deep fog, 2026-10-06: the frame's edges darker; was 0.25)
+const VIGNETTE := 0.18          # at the corners (the canyon, 2026-10-21: a light frame, the sky must stay clear; deep fog had 0.5)
 const VIGNETTE_START := 0.55    # of the half diagonal, where it begins
 const GRAIN := 0.02             # alpha of the speckle (0.035 read as noise, not film)
 # The grain's alpha was tuned on the web, where Compatibility blends 2D in

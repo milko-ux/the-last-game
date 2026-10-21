@@ -72,51 +72,115 @@ var _kick_dir := Vector3.ZERO
 @onready var cam: Camera3D = $Camera3D
 
 
-# Brief 2 section 4: the background is a vertical gradient drawn on an
-# unlit quad that rides on the camera far behind everything (the cheapest
-# thing that looks the same on the web renderer and native). Brief 6
-# section 3: four stops (WorldPalette.BG_TOP / THIRD / MIDDLE / BOTTOM),
-# painted by the SAME fog_colour() every world material fades toward, so
-# a faded thing goes toward exactly what is behind it. Nothing else back
-# there (the far pillar band, monoliths.gd, is the skyline).
+# THE BACKDROP: a painting on an unlit quad that rides on the camera far
+# behind everything (the cheapest thing that looks the same on the web
+# renderer and native). Step 3 brief 2 section 1 (the canyon, 2026-10-21):
+# painted in SCREEN space, like a film's backdrop -- the camera never
+# turns during a run, it only travels, and what is infinitely far does
+# not move when you travel. Top to bottom:
+#
+#   the sky      SKY_TOP to SKY_HORIZON, the sun's disc and halo
+#   far mesas    two layers of flat-topped silhouettes on the horizon
+#   the clouds   a sea of them below the horizon, in perspective (a
+#                plane far below the runway), drifting toward the camera
+#                as the run travels: the one part with depth
+#
+# All of it laid ON the fog's gradient (fog_colour, the same function
+# every world material fades toward), so a far thing fades toward the
+# haze behind it. The horizon sits high (the camera looks steeply down,
+# so a true horizon would be above the frame; nobody can tell). The
+# sun's place matches the world's light (pr_light_dir comes from the
+# screen-left, behind the camera, so the sun is up on the left).
+# Brief 2 section 4 / brief 6 section 3 were a four-stop grey gradient
+# with two layers of drifting noise.
 const Mats := preload("res://prototype/flat_mats.gd")
 const BACKDROP_DISTANCE := 600.0
-# Brief 2b section 5: the gradient carries two layers of slow noise (fog
-# with weather in it) in a world-ish space that scrolls with the window.
 const BACKDROP_SHADER := """
 shader_type spatial;
 render_mode unshaded, depth_draw_never, fog_disabled, cull_disabled;
-uniform vec2 quad_size;
-uniform float big_scale = 40.0;
-uniform float big_contrast = 0.06;
-uniform float big_speed = 0.05;
-uniform float small_scale = 12.0;
-uniform float small_contrast = 0.03;
-uniform float small_speed = 0.12;
+uniform float horizon = 0.2;              // screen height of the horizon, 0 top .. 1 bottom
+uniform vec2 sun_pos = vec2(0.16, 0.085); // the sun's centre on screen
+uniform float sun_radius = 0.032;         // in screen heights
+uniform vec3 sky_top : source_color;
+uniform vec3 sky_horizon : source_color;
+uniform vec3 sun : source_color;
+uniform vec3 sun_glow : source_color;
+uniform vec3 cliff_far : source_color;
+uniform vec3 cliff_near : source_color;
+uniform vec3 cloud_lit : source_color;
+uniform vec3 cloud_shade : source_color;
+uniform float cloud_depth = 5.0;          // the cloud plane: screen height below the horizon -> distance
+uniform float cloud_scale = 0.22;         // noise cells per unit of that distance
+uniform float cloud_drift = 0.045;        // of the run's travel: the clouds lie far below, they pass slowly
 global uniform float pr_window_back;
 FOG_FUNCTIONS
 
-float hash2(vec2 p) {
+// highp throughout: the drift reaches thousands of units in a long run,
+// and the phone's fragment stage defaults to half floats.
+float hash2(highp vec2 p) {
 	p = fract(p * vec2(0.3183099, 0.3678794) + vec2(0.1, 0.7));
 	p *= 23.0;
 	return fract(p.x * p.y * (p.x + p.y));
 }
-float vnoise2(vec2 p) {
-	vec2 i = floor(p);
+float vnoise2(highp vec2 p) {
+	highp vec2 i = floor(p);
 	vec2 f = fract(p);
 	f = f * f * (3.0 - 2.0 * f);
 	return mix(mix(hash2(i), hash2(i + vec2(1, 0)), f.x), mix(hash2(i + vec2(0, 1)), hash2(i + vec2(1, 1)), f.x), f.y);
 }
+float fbm(highp vec2 p) {
+	return vnoise2(p) * 0.55 + vnoise2(p * 2.07 + 13.1) * 0.3 + vnoise2(p * 4.3 + 7.7) * 0.15;
+}
+// A mesa skyline: plateaus with steep sides, height 0..1 along x.
+float mesas(float x, float seed) {
+	float n = vnoise2(vec2(x, seed));
+	float top = 0.55 + 0.45 * vnoise2(vec2(x * 0.37, seed + 5.0));
+	return smoothstep(0.46, 0.49, n) * top;
+}
 
 void fragment() {
-	// UV -> a "world-ish" plane in units, scrolling at 20 % of the window.
-	vec2 p = (UV - 0.5) * quad_size * 0.25 + vec2(0.0, pr_window_back * 0.2);
-	float big = vnoise2(p / big_scale + vec2(TIME * big_speed / big_scale, 0.0)) * 2.0 - 1.0;
-	float small = vnoise2(p / small_scale + vec2(0.0, TIME * small_speed / small_scale)) * 2.0 - 1.0;
-	ALBEDO = fog_colour(UV.y) * (1.0 + big * big_contrast + small * small_contrast);
+	vec2 s = SCREEN_UV;
+	float aspect = VIEWPORT_SIZE.x / VIEWPORT_SIZE.y;
+	vec3 haze = fog_colour(s.y);
+	// The sky, the sun's halo and its disc.
+	float t = clamp(s.y / horizon, 0.0, 1.0);
+	vec3 c = mix(sky_top, sky_horizon, t * t);
+	float r = length(vec2((s.x - sun_pos.x) * aspect, s.y - sun_pos.y));
+	float halo = exp(-r * 6.0) * 0.5 + exp(-r * 18.0) * 0.4;
+	c = mix(c, sun_glow, clamp(halo, 0.0, 1.0));
+	c = mix(c, sun, 1.0 - smoothstep(sun_radius * 0.85, sun_radius, r));
+	// Two layers of far mesas standing on the horizon, the far one paler.
+	float x = s.x * aspect;
+	float far_top = horizon - 0.012 - 0.05 * mesas(x * 5.0, 1.0);
+	float near_top = horizon - 0.004 - 0.085 * mesas(x * 3.2 + 4.0, 9.0);
+	if (s.y > far_top) {
+		c = mix(cliff_far, haze, 0.25 + 0.5 * smoothstep(far_top, horizon, s.y));
+	}
+	if (s.y > near_top) {
+		c = mix(cliff_near, haze, 0.15 + 0.6 * smoothstep(near_top, horizon + 0.01, s.y));
+	}
+	// The cloud sea: a plane far below, seen in perspective. Puffs: the
+	// noise's height is the cloud's thickness, lit on the side toward the
+	// sun, the gaps between them deep lilac (looking down into the drop).
+	float d = s.y - horizon;
+	if (d > 0.0) {
+		highp float z = cloud_depth / (d + 0.05);
+		highp vec2 p = vec2((s.x - 0.5) * aspect * z * 0.5, (z + pr_window_back * cloud_drift / cloud_scale) * 0.4) * cloud_scale;
+		float n = fbm(p);
+		float toward_sun = fbm(p + vec2(0.18, 0.1));
+		float cover = smoothstep(0.42, 0.56, n);
+		float lit = clamp((n - 0.42) * 3.0 + (n - toward_sun) * 7.0, 0.0, 1.0);
+		vec3 cloud = mix(cloud_shade, cloud_lit, lit);
+		vec3 gaps = cloud_shade * 0.8;
+		vec3 sea = mix(gaps, cloud, cover);
+		// Toward the horizon the clouds thin into haze.
+		c = mix(sea, haze, 1.0 - smoothstep(0.0, 0.3, d));
+	}
+	// The sun's light in the air, over everything below it too.
+	c = mix(c, sun_glow, clamp(exp(-r * 3.0) * 0.18, 0.0, 1.0));
+	ALBEDO = c;
 }
 """
-
 
 
 func _ready() -> void:
@@ -138,7 +202,11 @@ func _build_backdrop() -> void:
 	var m := ShaderMaterial.new()
 	m.shader = sh
 	m.render_priority = -100
-	m.set_shader_parameter("quad_size", mesh.size)
+	var p := {"sky_top": WorldPalette.SKY_TOP, "sky_horizon": WorldPalette.SKY_HORIZON, "sun": WorldPalette.SUN,
+		"sun_glow": WorldPalette.SUN_GLOW, "cliff_far": WorldPalette.CLIFF_FAR, "cliff_near": WorldPalette.CLIFF_NEAR,
+		"cloud_lit": WorldPalette.CLOUD_LIT, "cloud_shade": WorldPalette.CLOUD_SHADE}
+	for k in p:
+		m.set_shader_parameter(k, p[k])
 	quad.material_override = m
 	quad.position = Vector3(0.0, 0.0, -BACKDROP_DISTANCE)
 	quad.extra_cull_margin = 16384.0

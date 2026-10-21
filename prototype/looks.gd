@@ -25,14 +25,9 @@ const Props := preload("res://prototype/props/props.gd")
 #   pillar_flatten  the bands' far flattening (props.PILLAR_FLATTEN)
 #   pillar_side_fog the bands' haze by distance out (props.PILLAR_SIDE_FOG)
 #
-# "deep fog" (section 2) is the shipped look: the palette's own values
-# (Milko's phone verdict, 2026-10-06; "light fog", the first try, was
-# flatter than today and is gone).
-# "today" is the look before section 2, kept in the palette as TODAY_*
-# until section 3 is judged.
-#
-# Sections 3 and 5 of the brief add entries (tops in frame,
-# the camera tests) and the keys they need. A value lives where it lives
+# "canyon" is the shipped look: the palette's own values (step 3 brief 2,
+# 2026-10-21; it replaced brief 1's grey "deep fog" and "today"). Brief
+# 2's section 5 adds the camera test. A value lives where it lives
 # today; a variant only names the change.
 #
 # On the phone: on TAP TO START, a TAP on the frame readout (top right)
@@ -41,10 +36,8 @@ const Props := preload("res://prototype/props/props.gd")
 # ============================================================
 
 const LOOKS := [
-	["deep fog", {}],
+	["canyon", {}],
 	["new kit", {"kit": "new"}],
-	["today", {"fog": WorldPalette.TODAY_FOG, "pillar_tint": WorldPalette.TODAY_PILLAR, "pillar_flatten": [0.3, 0.6, 0.92],
-		"pillar_side_fog": [Vector3(16.0, 60.0, 0.85), Vector3(16.0, 60.0, 0.85), Vector3(16.0, 60.0, 0.85)], "vignette": 0.25}],
 ]
 
 static var current := 0
@@ -58,7 +51,7 @@ static func next() -> void:
 	current = (current + 1) % LOOKS.size()
 
 
-# The web's ?look=<name> (dashes for spaces, e.g. ?look=deep-fog): the
+# The web's ?look=<name> (dashes for spaces, e.g. ?look=new-kit): the
 # headless web shot's way to pick a variant. An unknown name changes nothing.
 static func select(look: String) -> void:
 	for i in LOOKS.size():

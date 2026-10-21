@@ -14,23 +14,30 @@ extends RefCounted
 # black, dim seams, one bright rim, two-tone monoliths.
 # ============================================================
 
-# The fog (brief 6 section 3, with Milko's correction 2026-09-23: the
-# brief had it backwards). The concept is LIGHT at the top and in the
-# distance, dark below: four stops, top of frame, a third down, the
-# middle, the bottom. The backdrop is this gradient; every distant thing
-# fades toward it at its own screen height, so far things get lighter,
-# never black; below the slab everything sinks toward BG_BOTTOM.
-# LIGHT FOG (step 3 brief 1 section 2, 2026-10-05): the old stops were the
-# concept's colours as measured, but ACES (track_test TONEMAP_DEFAULT)
-# crushes everything under ~30/255 (12 -> 2, 18 -> 5, 24 -> 10), so the
-# lower fog came out near black. These are solved so that what reaches
-# the SCREEN (Compatibility, ACES, measured on the web shot) is
-# (85,97,115) / (70,79,94) / (54,61,74) / (36,41,51): the old top, and a
-# dark blue-grey bottom instead of black.
-const BG_TOP := Color("#4e5662")
-const BG_THIRD := Color("#454b55")
-const BG_MIDDLE := Color("#3b4049")
-const BG_BOTTOM := Color("#2e323a")
+# THE CANYON (step 3 brief 2, 2026-10-21: Milko picked concept D,
+# docs/concept/directions/D_monolith_canyon.png). The colours below up to
+# the next heading are THE TIME OF DAY -- today the only one, a warm low
+# morning sun; a later sunset or night is a second set of the same names.
+#
+# The fog: the haze the world fades into, by screen height (four stops:
+# top of frame, a third down, the middle, the bottom), and what the
+# height fog sinks the mesas' feet toward (BG_BOTTOM: the clouds in
+# shadow). The backdrop (camera_rig.gd) paints the sky, the far cliffs
+# and the cloud sea ON this gradient, so a far thing fades toward what is
+# behind it. Before the canyon these were the grey fog's blue-greys.
+const BG_TOP := Color("#f2dccb")        # the haze at the horizon
+const BG_THIRD := Color("#eadad9")
+const BG_MIDDLE := Color("#ddd1e0")     # the cloud sea, lit and shaded, on average
+const BG_BOTTOM := Color("#bdb7d8")     # the clouds in shadow, far below
+# The backdrop's painting (camera_rig.gd BACKDROP_SHADER).
+const SKY_TOP := Color("#b9b8dc")       # the sky at the top of the frame, soft lilac-blue
+const SKY_HORIZON := Color("#f7dcc4")   # warm peach just above the horizon
+const SUN := Color("#fff4e0")
+const SUN_GLOW := Color("#ffd9b8")      # the sun's halo: peach, never the goal's amber
+const CLIFF_FAR := Color("#d6c8da")     # the far mesas on the horizon, the furthest layer...
+const CLIFF_NEAR := Color("#bfb3d0")    # ...and the nearer one
+const CLOUD_LIT := Color("#fff6ef")
+const CLOUD_SHADE := Color("#c3bcdc")
 const TILE := Color("#243141")          # the concept's blue slate, the tile face (brief 6 section 4: was #1c2830 teal)
 const SLAB_SIDE := Color("#0c151c")     # the slab's body: its front face, outer sides and pit walls, dark stone (the concept's)
 const TILE_SEAM := Color("#0f5f5a")     # the thin dim line between tiles
@@ -65,11 +72,6 @@ const MONOLITH_FAR := Color("#3a404a")
 const NEAR_PILLAR := Color("#1e252e")
 const MID_PILLAR := Color("#262e38")
 const FAR_PILLAR := Color("#3e4756")
-# THE LOOK BEFORE "light fog" and "deep fog" (step 3 brief 1 section 2):
-# the fog stops and band tints as they were, reachable on the phone as
-# the look variant "today" (looks.gd) until Milko has compared the two.
-const TODAY_FOG := [Color("#556173"), Color("#38404e"), Color("#1b2029"), Color("#0c1016")]
-const TODAY_PILLAR := [Color("#1b232c"), Color("#222a34"), Color("#384150")]
 const BUILDING_STONE := Color("#5c6272")
 const BUILDING_STONE_FAR := Color("#4f5664")
 # Brief 6 section 1: the one light. Every unshaded block (tiles, slab
