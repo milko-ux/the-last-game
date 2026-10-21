@@ -38,10 +38,10 @@ The game ships as an app, so we test what players will actually run instead of S
 **Result (2026-10-15):** build 0.8.0 (0.8.0), bundle ID `se.karrot.thelastgame`, App Store Connect name "The Last Game by KARROT" ("The Last Game" was taken), uploaded as **TestFlight Internal Only** (it carries the debug engine: the dev readout and look switch). Installed from TestFlight on Milko's iPhone: **16.7 ms throughout a run**, nothing different from the cable app. The app runs the Compatibility renderer (OpenGL ES 3.0, 2026-10-04) and is capped at 60 fps (2026-10-06). Android is still to come, before step 6.
 
 ## 3. Look, round 3
-- The monolith canyon (concept D, `STEP_3_BRIEF_2_CANYON.md`, Milko's pick 2026-10-21 — it replaced "monoliths like the grey concept"): sky, cloud sea, cream floor, pastel mesas, warm light.
+- The monolith canyon (concept D, `STEP_3_BRIEF_2_CANYON.md`, Milko's pick 2026-10-21 — it replaced "monoliths like the grey concept"): sky, cloud sea, cream floor, pastel mesas with trees, warm light. Built and approved on the phone 2026-10-21 ("We are really getting close now!! YES!").
 - Character model v2: one tail, better walk and motion.
 - The rules stay: colour meaning (magenta = kills, cyan = safe, amber = goal); the world is stone, clay, cloud and haze; glass and glow only in the UI; no AI images as textures.
-- After the canyon is approved: the time of day changes with the run (sunrise → sunset → night) — Milko's answer to "world zones per lap".
+- The time of day changes with the run (morning → sunset → night → dawn, one day per 950 m; `prototype/time_of_day.gd`) — Milko's answer to "world zones per lap". Built 2026-10-21.
 
 **Done when:** Milko would post a screenshot of a normal frame.
 

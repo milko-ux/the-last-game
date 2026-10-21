@@ -2,7 +2,19 @@
 
 ## Where we are (2026-10-21) — start here
 
-### START HERE (2026-10-21, night): CANYON ROUND 2 — the low camera won, trees, four bands, scenery follows the window, readable buttons; cable app re-exported, STOP for Milko's phone
+### START HERE (2026-10-21, late): THE TIME OF DAY + the shield fix; canyon approved; cable app re-exported, STOP for Milko's phone
+
+**Milko on round 2 (phone):** "We are really getting close now!! YES! Im really liking it" — **the canyon is approved**. He looked for the sunset / night (they did not exist yet: Code had told him they were the next step) and asked for the day to pass faster; the shield "doesnt follow the character when you jump".
+
+**Built:**
+- `09a773a` **the shield**: the bubble is a child of the player, whose `position.y` IS the jump, and it added `player.y` again every frame (twice as high on a jump); the pop burst had the same double y. Now a fixed local height.
+- `c883dfa` **the time of day** (`prototype/time_of_day.gd`): `WorldPalette.TIMES` (morning = the canyon, sunset, night; the same names each), blended by the run's distance (the HUD's metres; a rewind never turns the clock back): morning to 150 m, sunset 300–420, night 560–800, morning at 950, round again. All uniforms (new globals `pr_sun_tint`, `pr_shade_tint`; the backdrop's material via `camera_rig.backdrop`; the shadows' fill; the CreatureLight), published only when the blend moves — nothing to prewarm. Night: stars, a moon, blue light. **Colour meaning held:** the hazards and the armed / lethal plates never take the light's colour (`day_lit` 0); orbs and clay glow more the darker it gets (amber notes went olive at night); the sunset light on the clay is pale (warmer made magenta look like amber). **Look switch:** `canyon` → `sunset` → `night`; web `?time=sunset|night`. Screenshots `docs/screenshots/canyon/time-*.png`.
+
+**Where step 3 stands:** canyon ✓ (approved), time of day ✓ (built, not yet seen on the phone), **character model v2 (one tail, better walk and motion) not started** — the step's last item. Done when Milko would post a screenshot of a normal frame.
+
+**NEXT (Milko, phone — ⌘R):** tap the readout on TAP TO START for `sunset` and `night`; play a run past 300 m to watch it turn; a jump with the shield on. **Then:** Code's proposal (to agree with Milko): finish step 3 with the character v2 (white clay like the concept, one tail, the walk), then step 4 (sound effects first: the biggest missing piece of feel). Nothing pushed.
+
+### (2026-10-21, night) CANYON ROUND 2 — the low camera won, trees, four bands, scenery follows the window, readable buttons; cable app re-exported, STOP for Milko's phone
 
 **Milko's verdict on round 1 (phone):** "i like the low camera more … the visuals are still not that close to the image … The mountains on the side are like cut off at the top and are missing the trees on top … they kind of disappear the longer you run … in the menu all the buttons are barely visible." Probe with `low camera`: every row 16.7 ms, control +0.0, "no pillars" = "as is".
 
