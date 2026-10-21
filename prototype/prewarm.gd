@@ -55,7 +55,7 @@ func prepare(bursts: Array) -> void:
 		for m in [Props.clay(false), Props.clay(true), Props.clay_safe(), white]:
 			_queue.append(_prop.bind(model, m, false))
 		_queue.append(_prop.bind(model, Props.clay(false), true))
-	# The pillar bands (monoliths.gd): a kit pillar in each band's material.
+	# The pillar bands (monoliths.gd): a kit pillar in each band's material, both kits.
 	for band in 3:
 		_queue.append(_pillars.bind(band))
 	# The drop shadows (brief 6): a MultiMesh is its own pipeline variant,
@@ -101,7 +101,8 @@ func _prop(model: String, mat: Material, mirror: bool) -> void:
 
 
 func _pillars(band: int) -> void:
-	_mesh(Props.kit_mesh("plain"), Props.pillar(band))
+	for kit in Props.KIT_DIRS:
+		_mesh(Props.kit_mesh(Props.kit_names(kit)[0], kit), Props.pillar(band, kit))
 
 
 func _shadows() -> void:

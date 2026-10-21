@@ -17,6 +17,7 @@ const Props := preload("res://prototype/props/props.gd")
 #                                               at the corners (finish.gd)
 #   scale     the 3D render scale (track_test.RENDER_SCALE_MOBILE)
 #   pillars   fraction of the pillars kept (monoliths.gd), 1.0 = all
+#   kit       the pillar kit (props.KIT_DIRS): "old" or "new"
 #   slab      the slab's thickness (field.THICK)
 #   fog             the four fog stops (WorldPalette.BG_*), live globals
 #   low_fog_max     the height fog's most (flat_mats.LOW_FOG_MAX)
@@ -41,6 +42,7 @@ const Props := preload("res://prototype/props/props.gd")
 
 const LOOKS := [
 	["deep fog", {}],
+	["new kit", {"kit": "new"}],
 	["today", {"fog": WorldPalette.TODAY_FOG, "pillar_tint": WorldPalette.TODAY_PILLAR, "pillar_flatten": [0.3, 0.6, 0.92],
 		"pillar_side_fog": [Vector3(16.0, 60.0, 0.85), Vector3(16.0, 60.0, 0.85), Vector3(16.0, 60.0, 0.85)], "vignette": 0.25}],
 ]
@@ -91,4 +93,5 @@ static func apply(scene: Node, extra: Dictionary = {}) -> void:
 	scene.apply_finish()
 	scene.apply_render_scale(float(change.get("scale", -1.0)))
 	scene.field.set_pillar_density(float(change.get("pillars", 1.0)))
+	scene.field.set_pillar_kit(String(change.get("kit", "old")))
 	scene.field.set_slab_thickness(float(change.get("slab", scene.field.THICK)))

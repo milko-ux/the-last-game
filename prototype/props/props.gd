@@ -174,11 +174,15 @@ static var _scenes := {}
 static var _mats := {}
 static var _shaders := {}
 static var _low := {}
-static var _kit := {}          # variant name -> Mesh (the low pillar from assets/models/kit)
-static var _kit_info := {}     # kit.json
-static var _atlas: Texture2D = null
+static var _kit := {}          # "kit/name" -> Mesh (a low pillar)
+static var _kit_info := {}     # kit -> its kit.json
+static var _atlas := {}        # kit -> its atlas
 
-const KIT_DIR := "res://assets/models/kit/"
+# Two kits while step 3 brief 1 section 4 is judged (looks.gd "new kit"):
+# "old", built by script (tools/blender/pillars.py), and "new", the
+# pieces from Higgsfield image-to-3D (tools/blender/kit.py). Each is its
+# own atlas, so its own three band materials; the same shader.
+const KIT_DIRS := {"old": "res://assets/models/kit/", "new": "res://assets/models/kit_new/"}
 
 # THE PILLAR KIT (brief stage B, 2026-09-24): built and baked in Blender
 # (tools/blender/pillars.py) from our own geometry -- the stone, the
@@ -186,12 +190,7 @@ const KIT_DIR := "res://assets/models/kit/"
 # the atlas times a band's tint, then the same fog as everything else.
 const KIT_SHADER := """
 shader_type spatial;
-// cull_front: the kit's meshes come out of tools/blender/pillars.py
-// INSIDE OUT (every face wound and normalled inward, measured 2026-10-21
-// against a BoxMesh), so the default culling drew only each pillar's far
-// inner walls -- the "hollow" look. Back to the default for a kit that is
-// exported the right way round.
-render_mode unshaded, fog_disabled, cull_front;
+render_mode unshaded, fog_disabled;
 uniform sampler2D atlas : source_color, filter_linear_mipmap, repeat_disable;
 uniform vec3 tint : source_color = vec3(1.0);   // the band's colour, on the baked stone
 uniform float gain = 1.0;
@@ -224,33 +223,57 @@ void fragment() {
 """
 
 
-static func kit_info() -> Dictionary:
-	if _kit_info.is_empty():
-		var f := FileAccess.open(KIT_DIR + "kit.json", FileAccess.READ)
-		_kit_info = JSON.parse_string(f.get_as_text()) if f != null else {"sizes": {}}
-	return _kit_info
+static func kit_info(kit: String = "old") -> Dictionary:
+	if not _kit_info.has(kit):
+		var f := FileAccess.open(KIT_DIRS[kit] + "kit.json", FileAccess.READ)
+		_kit_info[kit] = JSON.parse_string(f.get_as_text()) if f != null else {"sizes": {}}
+	return _kit_info[kit]
 
 
-# The kit's variant names, in kit.json's order (the lintel last).
-static func kit_names() -> Array:
-	return kit_info().get("sizes", {}).keys()
+# The kit's variant names, in kit.json's order (the old kit's lintel last).
+static func kit_names(kit: String = "old") -> Array:
+	return kit_info(kit).get("sizes", {}).keys()
 
 
-static func kit_mesh(name: String) -> Mesh:
-	if not _kit.has(name):
-		_kit[name] = mesh_of_path(KIT_DIR + "pillar_" + name + ".glb")
-	return _kit[name]
+# The old kit's meshes came out of pillars.py INSIDE OUT (every face wound
+# and normalled inward, measured 2026-10-21 against a BoxMesh), so they
+# are turned the right way round here, once, as they load; the new kit
+# is exported right (tools/blender/kit.py).
+static func kit_mesh(name: String, kit: String = "old") -> Mesh:
+	var key := kit + "/" + name
+	if not _kit.has(key):
+		var mesh := mesh_of_path(KIT_DIRS[kit] + "pillar_" + name + ".glb")
+		_kit[key] = _turned_out(mesh) if kit == "old" and mesh != null else mesh
+	return _kit[key]
 
 
-static func kit_size(name: String) -> Vector3:
-	var s: Array = kit_info()["sizes"][name]
+static func _turned_out(mesh: Mesh) -> Mesh:
+	var a: Array = mesh.surface_get_arrays(0)
+	var idx: PackedInt32Array = a[Mesh.ARRAY_INDEX]
+	for t in idx.size() / 3:
+		var k := idx[t * 3 + 1]
+		idx[t * 3 + 1] = idx[t * 3 + 2]
+		idx[t * 3 + 2] = k
+	var nm: PackedVector3Array = a[Mesh.ARRAY_NORMAL]
+	for i in nm.size():
+		nm[i] = -nm[i]
+	a[Mesh.ARRAY_INDEX] = idx
+	a[Mesh.ARRAY_NORMAL] = nm
+	a[Mesh.ARRAY_TANGENT] = null
+	var out := ArrayMesh.new()
+	out.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, a)
+	return out
+
+
+static func kit_size(name: String, kit: String = "old") -> Vector3:
+	var s: Array = kit_info(kit)["sizes"][name]
 	return Vector3(float(s[0]), float(s[1]), float(s[2]))
 
 
-static func kit_atlas() -> Texture2D:
-	if _atlas == null:
-		_atlas = load(KIT_DIR + "pillar_atlas.png")
-	return _atlas
+static func kit_atlas(kit: String = "old") -> Texture2D:
+	if not _atlas.has(kit):
+		_atlas[kit] = load(KIT_DIRS[kit] + "pillar_atlas.png")
+	return _atlas[kit]
 
 
 static func mesh_of_path(path: String) -> Mesh:
@@ -339,12 +362,12 @@ const PILLAR_SIDE_FOG := [Vector3(0.0, 20.0, 0.4), Vector3(0.0, 40.0, 0.55), Vec
 # stone, not absolute colours (see WorldPalette).
 const PILLAR_GAIN := 1.7
 
-static func pillar(band: int) -> Material:
-	var key := "pillar_%d" % band
+static func pillar(band: int, kit: String = "old") -> Material:
+	var key := "pillar_%s_%d" % [kit, band]
 	if not _mats.has(key):
 		var m := ShaderMaterial.new()
 		m.shader = _shader("kit")
-		m.set_shader_parameter("atlas", kit_atlas())
+		m.set_shader_parameter("atlas", kit_atlas(kit))
 		m.set_shader_parameter("tint", _pillar_tint[band])
 		m.set_shader_parameter("gain", PILLAR_GAIN)
 		var f: Vector4 = PILLAR_FADE[band]
@@ -370,12 +393,13 @@ static func set_pillar_look(tints: Array, flatten: Array, side_fog: Array) -> vo
 	_pillar_tint = tints
 	_pillar_flatten = flatten
 	_pillar_side_fog = side_fog
-	for band in 3:
-		var key := "pillar_%d" % band
-		if _mats.has(key):
-			_mats[key].set_shader_parameter("tint", tints[band])
-			_mats[key].set_shader_parameter("far_flatten", flatten[band])
-			_mats[key].set_shader_parameter("side_fog", side_fog[band])
+	for kit in KIT_DIRS:
+		for band in 3:
+			var key := "pillar_%s_%d" % [kit, band]
+			if _mats.has(key):
+				_mats[key].set_shader_parameter("tint", tints[band])
+				_mats[key].set_shader_parameter("far_flatten", flatten[band])
+				_mats[key].set_shader_parameter("side_fog", side_fog[band])
 
 
 static func size_of(name: String) -> Vector3:

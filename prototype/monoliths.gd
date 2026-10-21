@@ -82,8 +82,9 @@ func _build_strip(z0: float, z1: float) -> void:
 	var zs: Array = [PackedFloat32Array(), PackedFloat32Array(), PackedFloat32Array()]
 	var sides: Array = [PackedByteArray(), PackedByteArray(), PackedByteArray()]
 	var boxes: Array = [[], [], []]       # each piece's box, for tools/pillar_frame.gd
-	var names: Array = Props.kit_names()
+	var names: Array = Props.kit_names(kit)
 	var pillars: Array = names.filter(func(n): return n != "lintel")
+	var has_lintel := names.has("lintel")
 	var rng := RandomNumberGenerator.new()
 	var bar := int(round((z0 - _origin_z) / BeatClock.BAR_UNITS))
 	# set_density's thinning, per band and side: a pillar is kept each time
@@ -100,7 +101,7 @@ func _build_strip(z0: float, z1: float) -> void:
 				var n: int = rng.randi_range(band["n"].x, band["n"].y)
 				# The near band: every LINTEL_EVERY bars, a pair of the same
 				# pillar with the bridge piece across them, instead of one.
-				var pair: bool = b == 0 and bar % LINTEL_EVERY == (2 if side < 0.0 else 4)
+				var pair: bool = has_lintel and b == 0 and bar % LINTEL_EVERY == (2 if side < 0.0 else 4)
 				for i in n:
 					var name: String = pillars[rng.randi_range(0, pillars.size() - 1)]
 					var gap: float = rng.randf_range(band["gap"].x, band["gap"].y)
@@ -113,11 +114,11 @@ func _build_strip(z0: float, z1: float) -> void:
 						continue
 					keep[ki] -= 1.0
 					if pair and i == 0:
-						var lsize := Props.kit_size("lintel")
+						var lsize := Props.kit_size("lintel", kit)
 						var span := lsize.z * 0.9
 						var x0 := _place(b, name, gap, h, slim, side, zz, verts, norms, uvs, idx, zs, sides, boxes)
 						_place(b, name, gap, h, slim, side, zz + span, verts, norms, uvs, idx, zs, sides, boxes)
-						var k := h / Props.kit_size(name).y * slim * 0.9   # the lintel's scale follows the pair
+						var k := h / Props.kit_size(name, kit).y * slim * 0.9   # the lintel's scale follows the pair
 						_append(b, "lintel", Transform3D(Basis.IDENTITY.scaled(Vector3(k, k, span / lsize.z)),
 							Vector3(x0, BASE_Y + h, zz + span * 0.5)), verts, norms, uvs, idx, zs, sides, boxes, side)
 					else:
@@ -137,7 +138,7 @@ func _build_strip(z0: float, z1: float) -> void:
 			arrays[Mesh.ARRAY_INDEX] = idx[b]
 			mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 		mi.mesh = mesh
-		mi.material_override = Props.pillar(b)
+		mi.material_override = Props.pillar(b, kit)
 		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		mi.visible = false
 		add_child(mi)
@@ -150,7 +151,7 @@ func _build_strip(z0: float, z1: float) -> void:
 # tilted (the light is baked in). Returns its x.
 func _place(b: int, name: String, gap: float, h: float, slim: float, side: float, zz: float,
 		verts: Array, norms: Array, uvs: Array, idx: Array, zs: Array, sides: Array, boxes: Array) -> float:
-	var size := Props.kit_size(name)
+	var size := Props.kit_size(name, kit)
 	var k := h / size.y
 	var reach := maxf(size.x, size.z) * k * slim * 0.5
 	var x := side * (Rules.half_width() + gap + reach)
@@ -161,7 +162,7 @@ func _place(b: int, name: String, gap: float, h: float, slim: float, side: float
 
 func _append(b: int, name: String, xf: Transform3D, verts: Array, norms: Array, uvs: Array, idx: Array,
 		zs: Array, sides: Array, boxes: Array, side: float) -> void:
-	var src: Mesh = Props.kit_mesh(name)
+	var src: Mesh = Props.kit_mesh(name, kit)
 	if src == null:
 		return
 	var a: Array = src.surface_get_arrays(0)
@@ -204,6 +205,20 @@ func set_density(f: float) -> void:
 	if is_equal_approx(f, _density):
 		return
 	_density = f
+	_rebuild()
+
+
+# Which pillar kit the strips are built from (props.KIT_DIRS), the look
+# switch's "kit": the same rebuild from the same seeds.
+var kit := "old"
+func set_kit(k: String) -> void:
+	if k == kit or not Props.KIT_DIRS.has(k):
+		return
+	kit = k
+	_rebuild()
+
+
+func _rebuild() -> void:
 	var built: Array = _strips
 	_strips = []
 	for strip in built:

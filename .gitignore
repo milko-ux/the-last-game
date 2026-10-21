@@ -12,3 +12,6 @@ build/
 # Godot MCP editor addon - per-machine dev tooling, not part of the game
 addons/godot_mcp/
 docs/**/*.import
+
+# Blender imports tools/blender/stone.py as a module
+__pycache__/

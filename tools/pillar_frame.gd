@@ -19,7 +19,7 @@ extends SceneTree
 #
 # and per side the readout's own count (monoliths.in_view, `mono L/R`).
 #
-#   godot --headless --path . -s tools/pillar_frame.gd -- bars=2.2 seeds=1,2,3
+#   godot --headless --path . -s tools/pillar_frame.gd -- bars=2.2 seeds=1,2,3 kit=new
 #
 # Dev-only, writes nothing.
 # ============================================================
@@ -45,8 +45,11 @@ func _initialize() -> void:
 	Rig = load("res://prototype/camera_rig.gd")
 	Monoliths = load("res://prototype/monoliths.gd")
 	var bars: float = Rules.WINDOW_BARS_DEFAULT
+	var kit := "old"
 	for a in OS.get_cmdline_user_args():
 		var kv: PackedStringArray = a.split("=")
+		if kv.size() == 2 and kv[0] == "kit":
+			kit = kv[1]
 		if kv.size() == 2 and kv[0] == "seeds":
 			SEEDS = Array(kv[1].split(",")).map(func(x): return int(x))
 		if kv.size() == 2 and kv[0] == "bars":
@@ -64,8 +67,8 @@ func _initialize() -> void:
 	Rig.CAMERA_DISTANCE = Rig.CAMERA_DISTANCE_AT_2_2 + (bars - 2.2) * Rig.CAMERA_DISTANCE_PER_BAR
 	var offset: Vector3 = Rig.camera_offset()
 	var proj := Projection.create_perspective(Rig.FOV, W / H, 0.05, 4000.0)
-	print("PILLAR FRAME  window %.1f bars  camera distance %.1f  offset %s  FOV %.0f  %dx%d" % [
-		bars, Rig.CAMERA_DISTANCE, offset, Rig.FOV, W, H])
+	print("PILLAR FRAME  kit %s  window %.1f bars  camera distance %.1f  offset %s  FOV %.0f  %dx%d" % [
+		kit, bars, Rig.CAMERA_DISTANCE, offset, Rig.FOV, W, H])
 
 	# [band][side] -> totals over every frame of every seed.
 	var seen := []
@@ -82,20 +85,31 @@ func _initialize() -> void:
 	var on_screen := Vector2.ZERO
 	var built := 0                      # pieces built (pillars and bridges) and their triangles, every seed
 	var tris := 0
+	var drawn := 0                      # triangles in the strips set_window shows, summed over frames
+	var drawn_max := 0
 
 	for s in SEEDS:
 		var m = Monoliths.new()
 		m.seed_level = s
+		m.kit = kit
 		m.build_range(Z_FROM, Z_TO)
+		var node_tris := {}
 		for strip in m._strips:
 			for mi: MeshInstance3D in strip["nodes"]:
-				if mi.mesh.get_surface_count() > 0:
-					tris += mi.mesh.surface_get_arrays(0)[Mesh.ARRAY_INDEX].size() / 3
+				node_tris[mi] = mi.mesh.surface_get_arrays(0)[Mesh.ARRAY_INDEX].size() / 3 if mi.mesh.get_surface_count() > 0 else 0
+				tris += node_tris[mi]
 			for b in Monoliths.BANDS.size():
 				built += strip["boxes"][b].size()
 		var z_back := Z_FROM + 40.0
 		while z_back < Z_TO - 120.0:
 			frames += 1
+			m.set_window(z_back)
+			var shown := 0
+			for mi in node_tris:
+				if mi.visible:
+					shown += node_tris[mi]
+			drawn += shown
+			drawn_max = maxi(drawn_max, shown)
 			var look := Vector3(0.0, 0.0, z_back + depth * 0.5)
 			var cam := Transform3D(Basis(), look + offset).looking_at(look, Vector3.UP)
 			var view := cam.affine_inverse()
@@ -163,6 +177,7 @@ func _initialize() -> void:
 	print("frames with a band under 80 %% tops in frame: %d of %d" % [low_frames, frames])
 	print("built per 100 bars: %.0f pieces, %.0f triangles (one mesh per band per strip either way)" % [
 		float(built) / SEEDS.size(), float(tris) / SEEDS.size()])
+	print("triangles in the shown strips per frame: %.0f average, %d most" % [float(drawn) / frames, drawn_max])
 	print("frames where a pillar covers the field or the hero: %d of %d" % [cover_frames, frames])
 	quit()
 
