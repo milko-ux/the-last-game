@@ -1,8 +1,18 @@
 # Phase R prototype — "an album you survive"
 
-## Where we are (2026-10-21) — start here
+## Where we are (2026-10-22) — start here
 
-### START HERE (2026-10-21, late night): character v2 part 1 (one tail, lavender), the 1 km scarf, the frame-cost fix; cable app re-exported, STOP for Milko's phone
+### START HERE (2026-10-22): TOMORROW BEGINS WITH MILKO'S LONG PHONE TEST
+
+**First thing:** remind Milko of the long play test — it is on his Notion to-do list (Kontrolltornet → To-dos, "The Last Game: långt speltest på telefonen (frame + 3D-siffran)", dated 2026-10-22). The cable app in `../the-last-game-build/ios/` is already exported from the latest code (`a12e084`): he quits Xcode (⌘Q), `! open /Users/benim/the-last-game-build/ios/TheLastGame.xcodeproj`, ⌘R, plays a long normal run (past 300 m: the sun goes down), and reads off the readout **frame avg / worst** (target 16.7 / ~17), **the `3D` number** (0.75 = full; 0.65–0.6 = the frame governor is working for a warm phone) and whether the picture ever looks soft.
+
+**Then, by his result:**
+- **16.7 holds** → step 3 ("Look, round 3") is done: canyon ✓, time of day ✓, character v2 ✓ (one tail, lavender, tail/flipper motion; Milko: the walk is fine), the 1 km scarf as the first unlock. Tick it in `docs/ROADMAP.md` and start **step 4: sound effects first** (jump, land, dot pickup, near-miss, shield on, shield pop; then the menu, clay hearts, leaderboard, button states, settings).
+- **Still slow** → more headroom before anything else: candidates are the shipped 3D scale (0.75 → 0.7), MSAA, the horizon band's size, a cheaper cloud sea; the probe only covers bars 9–12 on a cool phone, so judge by the readout in a long run.
+
+**State of the repo:** everything from 2026-10-21 is committed and **pushed by Milko up to `daf99b5`**; `613d6e1` (a README note) and this entry are local only. Today's history is below, newest first.
+
+### (2026-10-21, late night) character v2 part 1 (one tail, lavender), the 1 km scarf, the frame-cost fix; cable app re-exported
 
 **Milko on the time of day (phone):** "Everything works, all the readout look great!"; the shield now jumps with the creature. **But the frame was ~24 ms average** (~1700 slow, cpu 3.6) on his iPhone 14 Pro after mesas round 2 + the time of day. He agreed the order (hero → sound effects → canyon polish), picked **hero C** and **the scarf as the 1 km unlock, shown in the menu as a teaser**; outfits for sale later. Asked about ads before every run / after game over — Code advised against (ROADMAP step 7 has the options; his earlier rule "rewarded only, never on death" stands).
 
