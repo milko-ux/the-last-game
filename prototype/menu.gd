@@ -64,11 +64,12 @@ const SELECT_SCENE := "res://prototype/level_select.tscn"
 # ------------------------------------------------------------
 # THE SHOT
 # ------------------------------------------------------------
-# The camera is the game's own (camera_rig.gd: yaw 24°, pitch 54°, FOV
-# 55), only closer: the rig works out its distance from the window
+# The camera is the game's own (camera_rig.gd: yaw 24°, pitch 42°, FOV
+# 44), only closer: the rig works out its distance from the window
 # depth it is given, so the depth below is chosen to land on
-# MENU_DISTANCE and nothing else.
-const MENU_DISTANCE := 17.0
+# MENU_DISTANCE and nothing else. 17 under the old 55-degree lens;
+# x 1.29 for the 44-degree one keeps the creature the same size.
+const MENU_DISTANCE := 22.0
 # The rig always looks straight down the field's centre line (its x is
 # forced to 0), so the creature is moved off centre instead of the
 # camera: the whole stage sits this far along +x, which puts it to the

@@ -1,6 +1,5 @@
 extends RefCounted
 const Mats := preload("res://prototype/flat_mats.gd")
-const CameraRig := preload("res://prototype/camera_rig.gd")
 # ============================================================
 # LOOKS (step 3 brief 1 section 1, 2026-10-05) — named look variants for
 # comparing before / after on the phone. DEBUG BUILDS ONLY: the switch is
@@ -18,14 +17,12 @@ const CameraRig := preload("res://prototype/camera_rig.gd")
 #   scale     the 3D render scale (track_test.RENDER_SCALE_MOBILE)
 #   pillars   fraction of the pillars kept (monoliths.gd), 1.0 = all
 #   slab      the slab's thickness (field.THICK)
-#   camera    [pitch degrees, FOV, distance factor] (camera_rig.gd); the
-#             shipped camera is [54, 55, 1.0]
 #   fog             the four fog stops (WorldPalette.BG_*), live globals
 #   low_fog_max     the height fog's most (flat_mats.LOW_FOG_MAX)
 #
 # "canyon" is the shipped look: the palette's own values (step 3 brief 2,
 # 2026-10-21; it replaced brief 1's grey "deep fog" and "today"). Brief
-# 2's section 5 adds the camera test. A value lives where it lives
+# 2's camera test ("low camera") won and is the camera now. A value lives where it lives
 # today; a variant only names the change.
 #
 # On the phone: on TAP TO START, a TAP on the frame readout (top right)
@@ -35,10 +32,6 @@ const CameraRig := preload("res://prototype/camera_rig.gd")
 
 const LOOKS := [
 	["canyon", {}],
-	# Section 5's camera test: lower and further back through a longer
-	# lens, so the field keeps its size, more of the sky shows and the
-	# mesas stand more upright.
-	["low camera", {"camera": [42.0, 44.0, 1.25]}],
 ]
 
 static var current := 0
@@ -86,5 +79,3 @@ static func apply(scene: Node, extra: Dictionary = {}) -> void:
 	scene.apply_render_scale(float(change.get("scale", -1.0)))
 	scene.field.set_pillar_density(float(change.get("pillars", 1.0)))
 	scene.field.set_slab_thickness(float(change.get("slab", scene.field.THICK)))
-	var view: Array = change.get("camera", [CameraRig.CAMERA_PITCH_DEG, CameraRig.FOV, 1.0])
-	scene.rig.set_view(float(view[0]), float(view[1]), float(view[2]))
