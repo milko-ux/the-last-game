@@ -45,6 +45,12 @@ const CAMERA_DISTANCE_AT_2_2 := 26.0
 const CAMERA_DISTANCE_PER_BAR := 6.667
 static var CAMERA_DISTANCE := 26.0
 const FOV := 55.0
+# THE CAMERA TEST (step 3 brief 2 section 5): the look switch (looks.gd
+# "low camera") overrides the pitch, the lens and the distance; these
+# are what the rig reads, and they start as the shipped camera above.
+static var pitch_deg := CAMERA_PITCH_DEG
+static var fov := FOV
+static var distance_scale := 1.0
 # false: joystick up = down the field regardless of the yaw (world-
 # relative). true: joystick up = away from the camera.
 const INPUT_CAMERA_RELATIVE := false
@@ -184,7 +190,7 @@ void fragment() {
 
 
 func _ready() -> void:
-	cam.fov = FOV
+	cam.fov = fov
 	_build_backdrop()
 	BeatClock.downbeat.connect(_on_downbeat)
 	set_window(0.0)
@@ -225,8 +231,17 @@ func configure(k: Dictionary) -> void:
 # new lap's first two bars, so neither the window nor the camera snaps.
 func set_window_depth(depth: float) -> void:
 	_window_depth = depth
-	CAMERA_DISTANCE = CAMERA_DISTANCE_AT_2_2 + (depth / Rules.BAR_LENGTH - 2.2) * CAMERA_DISTANCE_PER_BAR
+	CAMERA_DISTANCE = (CAMERA_DISTANCE_AT_2_2 + (depth / Rules.BAR_LENGTH - 2.2) * CAMERA_DISTANCE_PER_BAR) * distance_scale
 	set_window(window_back)
+
+
+# The camera test's view (looks.gd): pitch, lens, distance factor. Takes
+# effect at once (the distance is recomputed for the current window).
+func set_view(pitch: float, lens: float, scale: float) -> void:
+	pitch_deg = pitch
+	fov = lens
+	distance_scale = scale
+	set_window_depth(_window_depth)
 
 
 func _on_downbeat(_bar: int) -> void:
@@ -280,7 +295,7 @@ func set_window(z_back: float) -> void:
 # The camera's offset from the look-at point for the reference angle.
 static func camera_offset() -> Vector3:
 	var yaw := deg_to_rad(CAMERA_YAW_DEG)
-	var pitch := deg_to_rad(CAMERA_PITCH_DEG)
+	var pitch := deg_to_rad(pitch_deg)
 	var flat := CAMERA_DISTANCE * cos(pitch)
 	return Vector3(-flat * sin(yaw), CAMERA_DISTANCE * sin(pitch), -flat * cos(yaw))
 
@@ -304,7 +319,7 @@ func _process(delta: float) -> void:
 	if _kick_t > 0.0:
 		_kick_t -= delta
 		kick_u = maxf(_kick_t, 0.0) / _kick_s
-	cam.fov = FOV * (1.0 + PUNCH * punch + _kick_fov * kick_u)
+	cam.fov = fov * (1.0 + PUNCH * punch + _kick_fov * kick_u)
 
 	var off := Vector3.ZERO
 	if _shake_t > 0.0:
