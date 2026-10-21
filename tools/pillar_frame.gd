@@ -2,7 +2,7 @@ extends SceneTree
 # ============================================================
 # PILLAR FRAME — step 3 brief 1 section 3: what the camera does to the
 # pillars, by projection, no rendering. Builds the real monoliths.gd
-# strips for a placement table, then walks the window along the course
+# strips, then walks the window along the course
 # a unit at a time with the real camera (camera_rig.gd's offset, FOV,
 # the phone's 2556 x 1179) and counts, per band and side:
 #
@@ -19,9 +19,9 @@ extends SceneTree
 #
 # and per side the readout's own count (monoliths.in_view, `mono L/R`).
 #
-#   godot --headless --path . -s tools/pillar_frame.gd -- placement=tops-in-frame bars=2.2 seeds=1,2,3
+#   godot --headless --path . -s tools/pillar_frame.gd -- bars=2.2 seeds=1,2,3
 #
-# Dashes for spaces in the placement name. Dev-only, writes nothing.
+# Dev-only, writes nothing.
 # ============================================================
 
 # Loaded in _initialize, not preloaded: they need the BeatClock autoload.
@@ -44,12 +44,9 @@ func _initialize() -> void:
 	Props = load("res://prototype/props/props.gd")
 	Rig = load("res://prototype/camera_rig.gd")
 	Monoliths = load("res://prototype/monoliths.gd")
-	var placement := "today"
 	var bars: float = Rules.WINDOW_BARS_DEFAULT
 	for a in OS.get_cmdline_user_args():
 		var kv: PackedStringArray = a.split("=")
-		if kv.size() == 2 and kv[0] == "placement":
-			placement = kv[1].replace("-", " ")
 		if kv.size() == 2 and kv[0] == "seeds":
 			SEEDS = Array(kv[1].split(",")).map(func(x): return int(x))
 		if kv.size() == 2 and kv[0] == "bars":
@@ -67,15 +64,15 @@ func _initialize() -> void:
 	Rig.CAMERA_DISTANCE = Rig.CAMERA_DISTANCE_AT_2_2 + (bars - 2.2) * Rig.CAMERA_DISTANCE_PER_BAR
 	var offset: Vector3 = Rig.camera_offset()
 	var proj := Projection.create_perspective(Rig.FOV, W / H, 0.05, 4000.0)
-	print("PILLAR FRAME placement=%s  window %.1f bars  camera distance %.1f  offset %s  FOV %.0f  %dx%d" % [
-		placement, bars, Rig.CAMERA_DISTANCE, offset, Rig.FOV, W, H])
+	print("PILLAR FRAME  window %.1f bars  camera distance %.1f  offset %s  FOV %.0f  %dx%d" % [
+		bars, Rig.CAMERA_DISTANCE, offset, Rig.FOV, W, H])
 
 	# [band][side] -> totals over every frame of every seed.
 	var seen := []
 	var top_in := []
 	var above := []
 	var allowed := []                   # [band][side] -> every sighting's highest top in frame
-	for b in Monoliths.BANDS:
+	for b in Monoliths.BANDS.size():
 		seen.append([0, 0]); top_in.append([0, 0]); above.append([0, 0])
 		allowed.append([PackedFloat32Array(), PackedFloat32Array()])
 	var frames := 0
@@ -88,14 +85,13 @@ func _initialize() -> void:
 
 	for s in SEEDS:
 		var m = Monoliths.new()
-		m.placement = placement
 		m.seed_level = s
 		m.build_range(Z_FROM, Z_TO)
 		for strip in m._strips:
 			for mi: MeshInstance3D in strip["nodes"]:
 				if mi.mesh.get_surface_count() > 0:
 					tris += mi.mesh.surface_get_arrays(0)[Mesh.ARRAY_INDEX].size() / 3
-			for b in Monoliths.BANDS:
+			for b in Monoliths.BANDS.size():
 				built += strip["boxes"][b].size()
 		var z_back := Z_FROM + 40.0
 		while z_back < Z_TO - 120.0:
@@ -108,7 +104,7 @@ func _initialize() -> void:
 			var blockers: Array = []
 			var vis := Vector2.ZERO
 			for strip in m._strips:
-				for b in Monoliths.BANDS:
+				for b in Monoliths.BANDS.size():
 					var f4: Vector4 = Props.PILLAR_FADE[b]
 					for box: AABB in strip["boxes"][b]:
 						var c := box.get_center()
@@ -137,7 +133,7 @@ func _initialize() -> void:
 						if box.end.y > 0.0:
 							above[b][side] += 1
 						allowed[b][side].append(_highest_top(box, view, proj))
-			for b in Monoliths.BANDS:
+			for b in Monoliths.BANDS.size():
 				if frame_seen[b] >= 3 and float(frame_in[b]) / frame_seen[b] < 0.8:
 					low_frames += 1
 					break
@@ -150,7 +146,7 @@ func _initialize() -> void:
 
 	var names := ["near", "mid", "far"]
 	print("band  side          in view/frame  top in frame  top above floor  allowed top 80 % / 50 %")
-	for b in Monoliths.BANDS:
+	for b in Monoliths.BANDS.size():
 		for side in 2:
 			var n: int = seen[b][side]
 			var al: PackedFloat32Array = allowed[b][side]
