@@ -2,7 +2,18 @@
 
 ## Where we are (2026-10-21) — start here
 
-### START HERE (2026-10-21, late): THE TIME OF DAY + the shield fix; canyon approved; cable app re-exported, STOP for Milko's phone
+### START HERE (2026-10-21, late night): character v2 part 1 (one tail, lavender), the 1 km scarf, the frame-cost fix; cable app re-exported, STOP for Milko's phone
+
+**Milko on the time of day (phone):** "Everything works, all the readout look great!"; the shield now jumps with the creature. **But the frame was ~24 ms average** (~1700 slow, cpu 3.6) on his iPhone 14 Pro after mesas round 2 + the time of day. He agreed the order (hero → sound effects → canyon polish), picked **hero C** and **the scarf as the 1 km unlock, shown in the menu as a teaser**; outfits for sale later. Asked about ads before every run / after game over — Code advised against (ROADMAP step 7 has the options; his earlier rule "rewarded only, never on death" stands).
+
+**Built:**
+- `9284120` **frame cost** (not yet measured on the phone): the mesa shader's per-pixel grain gone and its cloud wisp per vertex; the backdrop draws LAST (render priority 100: the depth test leaves it only the uncovered pixels — it painted the whole screen under the mesas before); the time of day republishes per metre.
+- `14c39d7` + `963e86a` **character v2 part 1**: `tools/blender/creature_tail.py` melts the model's right tail prong onto the body (pushed onto the fitted ellipsoid, ellipsoid normals: no hole, texture untouched; cutting + filling left folds); `CLAY_BOOST` makes the clay a brighter cooler lavender, picked out by colour (blue over green) so the eye keeps its white; legs and death pop match. The re-exported GLB names its image `Image_0`: one texture copy now (the old `creature_0.jpg` was packed twice, +5 MB).
+- `3fd1591` **the scarf** (`prototype/scarf.gd`): built in code, chunky knit band under the eye (body measured slice by slice — a fitted ellipsoid put it round the feet), knot on the camera's side, two ends streaming with speed (`flutter`). `Progress.scarf_unlocked` (saved), unlocked the moment `distance_m` passes 1000 ("SCARF UNLOCKED", haptic); the menu's creature always wears it with "REACH 1 KM TO UNLOCK THE SCARF" until then; look switch `scarf` to wear it in a run. Prewarmed. The HUD's word pill is dark glass.
+
+**NEXT (Milko, phone — ⌘R):** when the phone is cool, the probe (long press) — is the frame back at 16.7? Look at the hero (lavender, one tail) and the scarf (menu, and `scarf` on the readout). **Then:** character v2 part 2 (the better walk and motion), then step 4's sound effects. Nothing pushed.
+
+### (2026-10-21, late) THE TIME OF DAY + the shield fix; canyon approved; cable app re-exported, STOP for Milko's phone
 
 **Milko on round 2 (phone):** "We are really getting close now!! YES! Im really liking it" — **the canyon is approved**. He looked for the sunset / night (they did not exist yet: Code had told him they were the next step) and asked for the day to pass faster; the shield "doesnt follow the character when you jump".
 

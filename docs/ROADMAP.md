@@ -39,7 +39,7 @@ The game ships as an app, so we test what players will actually run instead of S
 
 ## 3. Look, round 3
 - The monolith canyon (concept D, `STEP_3_BRIEF_2_CANYON.md`, Milko's pick 2026-10-21 — it replaced "monoliths like the grey concept"): sky, cloud sea, cream floor, pastel mesas with trees, warm light. Built and approved on the phone 2026-10-21 ("We are really getting close now!! YES!").
-- Character model v2: one tail, better walk and motion.
+- Character model v2: one tail, better walk and motion. **One tail and the brighter lavender done 2026-10-21** (Milko picked `docs/concept/hero/C_bright_lilac.jpg`); the 1 km scarf built (the first unlock; the menu shows it as a teaser). Still open: the better walk and motion.
 - The rules stay: colour meaning (magenta = kills, cyan = safe, amber = goal); the world is stone, clay, cloud and haze; glass and glow only in the UI; no AI images as textures.
 - The time of day changes with the run (morning → sunset → night → dawn, one day per 950 m; `prototype/time_of_day.gd`) — Milko's answer to "world zones per lap". Built 2026-10-21.
 
@@ -74,5 +74,6 @@ The roast-style death/run-over screen people want to post. It's how the game spr
 ## 7. Launch, then money
 - App Store + Google Play release.
 - Rewarded video ads only, **never on death**.
-- Later: character skins/outfits.
+- Later: character skins/outfits — the scarf (`prototype/scarf.gd`, 1 km) is the first item and the slot outfits use; some earned by distance, some bought.
+- **Options discussed 2026-10-21, to decide at soft launch with real player numbers** (the rule above stands until then): a "watch an ad to continue" once per run; a "remove ads" or supporter purchase; occasional interstitials only with limits (never before a session's first run, never on day one, at most one per ~3 game overs, never after a new best). Milko asked about a short ad before every run and after every game over; Code advised against (the top reason players delete runners; ad length is the network's, 5–30 s, not 3–5).
 - Later: monthly sponsored leaderboard prizes (top 3 globally and top 3 per country) once there are players.
