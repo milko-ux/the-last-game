@@ -13,7 +13,8 @@ extends SceneTree
 #   frames=8      stills across ONE stride, sampled by PHASE not by time
 #   slide=1       measure each foot's world drift while planted; no shots
 #   jump=1        leave the floor and shoot the tuck
-#   cam=side | front | back
+#   cam=side | front | back | three | game | chase   (three: front three-quarter, a little above; chase: the run camera's angle from close by)
+#   scarf=1       the creature wears the 1 km scarf (scarf.gd)
 # ============================================================
 
 var out := "/tmp/walk"
@@ -24,6 +25,7 @@ var slide := false
 var jump := false
 var speed := 1.0
 var at := -1.0                     # at=SEC: one shot at that moment instead
+var scarf := false
 
 var _rig: Node3D = null            # the stand-in player
 var _creature: Node3D = null
@@ -65,6 +67,7 @@ func _initialize() -> void:
 			"jump": jump = kv[1] == "1"
 			"speed": speed = float(kv[1])
 			"at": at = float(kv[1])
+			"scarf": scarf = kv[1] == "1"
 	var root := get_root()
 	var world := Node3D.new()
 	root.add_child(world)
@@ -99,6 +102,8 @@ func _initialize() -> void:
 	_creature = load("res://prototype/creature.tscn").instantiate()
 	_rig.add_child(_creature)
 	_rig.creature = _creature
+	if scarf:
+		_creature.wear_scarf(true)
 
 	_cam = Camera3D.new()
 	_cam.fov = 26.0
@@ -186,14 +191,17 @@ func _drive(delta: float) -> void:
 
 func _aim() -> void:
 	var p: Vector3 = _rig.global_position
-	if cam_kind == "game":
+	if cam_kind == "game" or cam_kind == "chase":
 		# The game's own camera angle and lens (camera_rig.gd), at the
 		# distance the player is really seen from, so "does it read at
-		# phone size" can be answered without the live scene.
-		_cam.fov = 55.0
+		# phone size" can be answered without the live scene. chase: the
+		# same angle from close by, the run's view of the creature enlarged.
+		# camera_rig.gd's FOV, CAMERA_YAW_DEG, _PITCH_DEG, _DISTANCE_AT_2_2
+		# (copied: preloading it here needs the BeatClock autoload).
+		_cam.fov = 44.0
 		var yaw := deg_to_rad(24.0)
-		var pitch := deg_to_rad(54.0)
-		var dist := 26.0
+		var pitch := deg_to_rad(42.0)
+		var dist := 32.5 if cam_kind == "game" else 9.0
 		var dir3 := Vector3(sin(yaw) * cos(pitch), sin(pitch), -cos(yaw) * cos(pitch))
 		_cam.global_position = Vector3(p.x, 0.0, p.z) + dir3 * dist
 		_cam.look_at(Vector3(p.x, 1.0, p.z), Vector3.UP)
@@ -203,6 +211,8 @@ func _aim() -> void:
 		off = Vector3(0.0, 1.3, 8.5)
 	elif cam_kind == "back":
 		off = Vector3(0.0, 1.3, -8.5)
+	elif cam_kind == "three":
+		off = Vector3(-5.5, 3.2, 6.0)
 	_cam.global_position = Vector3(p.x, 0.0, p.z) + off
 	_cam.look_at(Vector3(p.x, 0.95, p.z), Vector3.UP)
 
