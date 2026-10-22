@@ -15,8 +15,8 @@ extends Node
 # when the streak breaks. The scale is the song's strongest notes, the
 # same ones the WAVs are tuned to (make_sfx.py).
 #
-# On the Master bus, so Settings' SOUND OFF (Progress.sound_on mutes the
-# Master bus) silences these with the music.
+# On the Effects bus (Progress makes it), so Settings' EFFECTS OFF
+# silences these and leaves the music playing.
 # ============================================================
 
 const DIR := "res://assets/audio/sfx/"
@@ -25,12 +25,12 @@ const DIR := "res://assets/audio/sfx/"
 const VOLUME := {
 	"jump": -11.0,  # dB  every jump: present, never in front of the song
 	"land": -13.0,  # dB  every landing: felt more than heard
-	"pickup": -9.0,  # dB  the dots: the melody on top
+	"pickup": -13.0,  # dB  the dots: the melody on top (-9 was too loud, Milko 2026-10-22)
 	"near_miss": -8.0,  # dB  a reward, so it may stand out
 	"shield_on": -6.0,  # dB  once in a while, an event
 	"shield_pop": -4.0,  # dB  saved your run: the loudest good thing
 	"death": -5.0,  # dB
-	"tap": -14.0,  # dB  buttons
+	"tap": -15.0,  # dB  buttons: a dry click (make_sfx.py)
 }
 const PITCH_JITTER := {"jump": 0.04, "land": 0.06, "tap": 0.03, "near_miss": 0.05}
 # Semitones above the root, climbed one step per dot of the streak.
@@ -50,6 +50,7 @@ func _ready() -> void:
 			var p := AudioStreamPlayer.new()
 			p.stream = stream
 			p.volume_db = float(VOLUME[name])
+			p.bus = Progress.EFFECTS_BUS
 			add_child(p)
 			voices.append(p)
 		_players[name] = voices

@@ -590,10 +590,14 @@ func _tap(what: String) -> void:
 			_panel = Sheet.SETTINGS
 		"close":
 			_close_panel()
-		"sound_on":
-			Progress.set_sound(true)
-		"sound_off":
-			Progress.set_sound(false)
+		"effects_on":
+			Progress.set_effects(true)
+		"effects_off":
+			Progress.set_effects(false)
+		"music_on":
+			Progress.set_music(true)
+		"music_off":
+			Progress.set_music(false)
 		"random":
 			Profile.reroll()
 		"edit":
@@ -816,7 +820,7 @@ func _draw_name_chip(c: CanvasItem, screen: Vector2, font: Font, a: float) -> vo
 # ------------------------------------------------------------
 func _draw_settings(c: CanvasItem, screen: Vector2, font: Font) -> void:
 	var pw := 520.0
-	var ph := 406.0
+	var ph := 480.0
 	var panel := Rect2(screen * 0.5 - Vector2(pw, ph) * 0.5, Vector2(pw, ph))
 	# A panel this big cannot be a tinted pane — the tint becomes a wash.
 	# It is the background colour first, then the glass edge on top.
@@ -827,30 +831,33 @@ func _draw_settings(c: CanvasItem, screen: Vector2, font: Font) -> void:
 	var cx := panel.get_center().x
 	Hud.centre_text(c, font, "SETTINGS", Vector2(cx, py + 44.0), 21, Color(1, 1, 1, 0.92))
 
-	# Sound
-	c.draw_string(font, Vector2(px + 34.0, py + 140.0), "SOUND",
-		HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color(Palette.TEXT.r, Palette.TEXT.g, Palette.TEXT.b, 0.9))
-	var on_rect := Rect2(Vector2(cx + 16.0, py + 100.0), Vector2(92.0, TAP_MIN))
-	var off_rect := Rect2(Vector2(cx + 118.0, py + 100.0), Vector2(92.0, TAP_MIN))
-	_rects["sound_on"] = on_rect
-	_rects["sound_off"] = off_rect
-	_toggle(c, font, on_rect, "ON", Progress.sound_on)
-	_toggle(c, font, off_rect, "OFF", not Progress.sound_on)
+	# Sound: the effects and the music, each on its own (Progress).
+	for row in [["EFFECTS", "effects", Progress.effects_on, 84.0], ["MUSIC", "music", Progress.music_on, 158.0]]:
+		var top: float = py + float(row[3])
+		var on: bool = row[2]
+		c.draw_string(font, Vector2(px + 34.0, top + 40.0), String(row[0]),
+			HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color(Palette.TEXT.r, Palette.TEXT.g, Palette.TEXT.b, 0.9))
+		var on_rect := Rect2(Vector2(cx + 16.0, top), Vector2(92.0, TAP_MIN))
+		var off_rect := Rect2(Vector2(cx + 118.0, top), Vector2(92.0, TAP_MIN))
+		_rects[String(row[1]) + "_on"] = on_rect
+		_rects[String(row[1]) + "_off"] = off_rect
+		_toggle(c, font, on_rect, "ON", on)
+		_toggle(c, font, off_rect, "OFF", not on)
 
 	# Nickname
-	c.draw_string(font, Vector2(px + 34.0, py + 200.0), "NAME",
+	c.draw_string(font, Vector2(px + 34.0, py + 274.0), "NAME",
 		HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color(Palette.TEXT.r, Palette.TEXT.g, Palette.TEXT.b, 0.9))
-	var field := Rect2(Vector2(px + 34.0, py + 214.0), Vector2(230.0, TAP_MIN))
+	var field := Rect2(Vector2(px + 34.0, py + 288.0), Vector2(230.0, TAP_MIN))
 	_rects["name_field"] = field
 	if not _editing_name:
 		Hud.glass_pill(c, field, WorldPalette.SAFE, 0.6)
 		Hud.centre_text(c, font, Profile.username, field.get_center() + Vector2(0, -1), 19, Color(1, 1, 1, 0.92))
 	if Profile.claimed:
-		c.draw_string(font, Vector2(px + 280.0, py + 254.0), "your account name",
+		c.draw_string(font, Vector2(px + 280.0, py + 328.0), "your account name",
 			HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(Palette.TEXT.r, Palette.TEXT.g, Palette.TEXT.b, 0.6))
 	else:
-		var rnd := Rect2(Vector2(px + 276.0, py + 214.0), Vector2(100.0, TAP_MIN))
-		var ed := Rect2(Vector2(px + 388.0, py + 214.0), Vector2(98.0, TAP_MIN))
+		var rnd := Rect2(Vector2(px + 276.0, py + 288.0), Vector2(100.0, TAP_MIN))
+		var ed := Rect2(Vector2(px + 388.0, py + 288.0), Vector2(98.0, TAP_MIN))
 		_rects["random"] = rnd
 		_rects["edit"] = ed
 		Hud.glass_pill(c, rnd, Palette.TEXT, 0.7)
@@ -860,7 +867,7 @@ func _draw_settings(c: CanvasItem, screen: Vector2, font: Font) -> void:
 
 	# The account: the existing panel, nothing new.
 	if Talo.configured():
-		var acc := Rect2(Vector2(px + 34.0, py + 302.0), Vector2(pw - 68.0, 72.0))
+		var acc := Rect2(Vector2(px + 34.0, py + 376.0), Vector2(pw - 68.0, 72.0))
 		_rects["account"] = acc
 		Hud.glass_pill(c, acc, Palette.GOAL, 0.9)
 		var label := "ACCOUNT" if Talo.logged_in() else "REGISTER  ·  LOG IN"
@@ -870,7 +877,7 @@ func _draw_settings(c: CanvasItem, screen: Vector2, font: Font) -> void:
 			Color(Palette.TEXT.r, Palette.TEXT.g, Palette.TEXT.b, 0.7))
 	else:
 		Hud.centre_text(c, font, "accounts are not set up in this build",
-			Vector2(cx, py + 340.0), 13,
+			Vector2(cx, py + 414.0), 13,
 			Color(Palette.TEXT.r, Palette.TEXT.g, Palette.TEXT.b, 0.55))
 
 	var close := Rect2(Vector2(px + pw - 16.0 - TAP_MIN, py + 16.0), Vector2(TAP_MIN, TAP_MIN))

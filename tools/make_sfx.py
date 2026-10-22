@@ -103,8 +103,9 @@ def room(x: np.ndarray, length: float = 0.25) -> np.ndarray:
 	return dry + ROOM_MIX * wet
 
 
-def finish(x: np.ndarray) -> np.ndarray:
-	x = room(x)
+def finish(x: np.ndarray, dry: bool = False) -> np.ndarray:
+	if not dry:
+		x = room(x)
 	# A 3 ms fade at both ends, so no file starts or stops with a click.
 	f = int(0.003 * SR)
 	x[:f] *= np.linspace(0, 1, f)
@@ -203,14 +204,19 @@ def death() -> np.ndarray:
 
 
 def tap() -> np.ndarray:
-	# A button: a small wooden tick.
-	dur = 0.07
+	# A button: a dry, crisp click, like a phone keyboard's. Round 1 was a
+	# pitched wooden tick (D6) with the room on it -- Milko: "the menu
+	# buttons get a bit annoying" -- a note on every tap is a melody
+	# nobody asked for. Now no pitch to hear and no tail: a snap of
+	# bright noise and a tiny knock under it, 25 ms, played dry.
+	dur = 0.025
 	t = t_of(dur)
-	tick = np.sin(2 * np.pi * note(4, 1) * t) * env(t, 0.0008, 0.012)
-	click = high(noise(len(t)), 3000) * env(t, 0.0003, 0.002)
-	return tick + 0.3 * click
+	snap = band(noise(len(t)), 2500, 7000) * env(t, 0.0002, 0.0015)
+	knock = band(noise(len(t)), 500, 1400) * env(t, 0.0004, 0.004)
+	return snap + 0.6 * knock
 
 
+DRY = {"tap"}          # no room on these
 SOUNDS = {"jump": jump, "land": land, "pickup": pickup, "near_miss": near_miss,
 	"shield_on": shield_on, "shield_pop": shield_pop, "death": death, "tap": tap}
 
@@ -219,7 +225,7 @@ def write_all() -> dict:
 	os.makedirs(OUT, exist_ok=True)
 	made = {}
 	for name, fn in SOUNDS.items():
-		x = finish(fn().astype(np.float64))
+		x = finish(fn().astype(np.float64), dry=name in DRY)
 		wavfile.write(os.path.join(OUT, name + ".wav"), SR, (x * 32767).astype(np.int16))
 		made[name] = x
 		print("%-11s %.2f s" % (name, len(x) / SR))

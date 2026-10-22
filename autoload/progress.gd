@@ -117,20 +117,44 @@ func unlock_scarf() -> void:
 # ------------------------------------------------------------
 # SETTINGS (Phase E section 7 — the menu's SETTINGS panel)
 # ------------------------------------------------------------
-# Sound off MUTES the master bus; it never stops the stream. BeatClock
-# reads the song's playback position every frame to stay in sync, and a
-# stopped stream has no position — a muted one keeps running silently.
-var sound_on := true
+# EFFECTS and MUSIC are switched separately (2026-10-22, Milko; one
+# SOUND switch before). Two buses under Master, made here at start: the
+# song plays on Music (track_test.tscn), the sound effects on Effects
+# (sfx.gd). Off MUTES a bus; it never stops the stream. BeatClock reads
+# the song's playback position every frame to stay in sync, and a stopped
+# stream has no position — a muted one keeps running silently.
+const MUSIC_BUS := "Music"
+const EFFECTS_BUS := "Effects"
+var music_on := true
+var effects_on := true
 
 
-func set_sound(on: bool) -> void:
-	sound_on = on
+func set_music(on: bool) -> void:
+	music_on = on
+	apply_sound()
+	save_progress()
+
+
+func set_effects(on: bool) -> void:
+	effects_on = on
 	apply_sound()
 	save_progress()
 
 
 func apply_sound() -> void:
-	AudioServer.set_bus_mute(0, not sound_on)
+	AudioServer.set_bus_mute(_bus(MUSIC_BUS), not music_on)
+	AudioServer.set_bus_mute(_bus(EFFECTS_BUS), not effects_on)
+
+
+# The bus's index, made (sending to Master) the first time it is asked for.
+static func _bus(bus_name: String) -> int:
+	var i := AudioServer.get_bus_index(bus_name)
+	if i == -1:
+		i = AudioServer.bus_count
+		AudioServer.add_bus(i)
+		AudioServer.set_bus_name(i, bus_name)
+		AudioServer.set_bus_send(i, "Master")
+	return i
 
 
 func set_graduated() -> void:
@@ -233,7 +257,7 @@ func save_progress() -> void:
 		return
 	f.store_string(JSON.stringify({"standard_cleared": standard_cleared, "best_song_time": best_song_time,
 		"best_score": best_score, "levels_cleared": levels_cleared,
-		"graduated": graduated, "best_distance": best_distance, "best_run": best_run, "sound_on": sound_on, "scarf_unlocked": scarf_unlocked}))
+		"graduated": graduated, "best_distance": best_distance, "best_run": best_run, "music_on": music_on, "effects_on": effects_on, "scarf_unlocked": scarf_unlocked}))
 	f.close()
 
 
@@ -263,5 +287,8 @@ func load_progress() -> void:
 		var br = parsed.get("best_run", {})
 		if br is Dictionary:
 			best_run = br
-		sound_on = bool(parsed.get("sound_on", true))
+		# A save from before the split has one "sound_on": it sets both.
+		var sound_on := bool(parsed.get("sound_on", true))
+		music_on = bool(parsed.get("music_on", sound_on))
+		effects_on = bool(parsed.get("effects_on", sound_on))
 		scarf_unlocked = bool(parsed.get("scarf_unlocked", false))

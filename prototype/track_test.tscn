@@ -36,6 +36,7 @@ light_energy = 1.25
 shadow_enabled = false
 
 [node name="Music" type="AudioStreamPlayer" parent="."]
+bus = &"Music"
 
 [node name="Field" type="Node3D" parent="."]
 script = ExtResource("2_field")
