@@ -2,7 +2,15 @@
 
 ## Where we are (2026-10-22) — start here
 
-### START HERE (2026-10-22, late afternoon): STEP 3 DONE — STEP 4 (FEEL AND UI) STARTS WITH THE SOUND EFFECTS
+### START HERE (2026-10-22, evening): STEP 4 — CLAY HEARTS + THE MOCKUP MENU BUILT, MILKO TESTS BOTH ON THE PHONE
+
+Milko asked for the two together, one phone test for both, then the readable leaderboard and the pressed / disabled button states after.
+- **Clay hearts for lives** (`876d03b`, `Hud.clay_heart`): coral clay (`WorldPalette.HEART` `#ef7a64`), dome-shaded rings, a lip, a highlight, specks; a lost life is a pale dent, and the heart squashes flat over it for 0.45 s. Only drawn while lives are on (a graduated player, or from lap 1).
+- **The main menu after `docs/concept/UI/ref-menu.png`** (`23ca6e6`): its layout and its layered buttons (`ref-button-layers.png` → `Hud.capsule_button`) in the canyon's colours — THE LAST / GAME centred, the creature as the hero (the menu's camera: straight down the strip, low and close, `camera_rig.gd` `yaw_deg` / `pitch_deg` / `distance` — the run's camera unchanged), a cyan PLAY capsule between a trophy (leaderboard) and a gear (settings), BEST in amber bottom left. **The two grey carved buildings are gone from the menu** — their models (`building_tall*`, `building_stacked*`) are now used nowhere; ask Milko before deleting the files.
+- The settings sheet, the leaderboard, the end screen and the pause panel still use the old square `glass_pill`: they get the capsule with the **readable leaderboard** and the **pressed / disabled states** (Milko's next two).
+- Cable app exported 16:18. **Milko judges the menu and the hearts on the phone.**
+
+### (2026-10-22, late afternoon) STEP 3 DONE — STEP 4 (FEEL AND UI) STARTS WITH THE SOUND EFFECTS
 
 **Since the entry below:** Milko confirmed on the phone that a swipe home brings back the pause panel. Then, on his go-ahead:
 - **His phone's save reset** over the cable (`xcrun devicectl device copy to ... Documents/progress.save`, the app terminated first so it could not write its old numbers back): best 0, scarf locked — the fake 1097 m is gone. Never on the leaderboard (the phone plays as a guest: `claimed: false`).
