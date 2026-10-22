@@ -32,6 +32,11 @@ var shield := 0.0           # 0..1
 var shield_armed := false
 var shield_pop := 0.0       # 1 -> 0 after the shield was used (the ring flashes)
 const SIDE_GAP := 120.0     # from the screen's centre line to the lives / the ring
+const HEART_SIZE := 26.0
+const HEART_GAP := 32.0
+const HEART_POP_S := 0.45
+var _heart_pop := []        # per heart, 1 -> 0 after it was lost
+var _lives_seen := -1
 const HUD_Y := 38.0
 # The end screen (section 6, minimal: the share / roast screen is its own
 # brief). Distance big, BEST, NEW BEST when it is, RETRY (big) and MENU.
@@ -64,6 +69,15 @@ const PAUSE_SIZE := 66.0                 # 48 pt on the phone
 
 func _process(delta: float) -> void:
 	shield_pop = maxf(0.0, shield_pop - delta * 2.5)
+	if _heart_pop.size() != lives_max:
+		_heart_pop.resize(lives_max)
+		_heart_pop.fill(0.0)
+	if _lives_seen >= 0 and lives < _lives_seen:
+		for i in range(lives, mini(_lives_seen, lives_max)):
+			_heart_pop[i] = 1.0
+	_lives_seen = lives
+	for i in _heart_pop.size():
+		_heart_pop[i] = maxf(0.0, float(_heart_pop[i]) - delta / HEART_POP_S)
 	end_alpha = minf(1.0, end_alpha + delta * 3.0) if end_shown else 0.0
 	if word_alpha > 0.0 and word == "":
 		word_alpha = maxf(0.0, word_alpha - delta * 2.5)
@@ -72,7 +86,7 @@ func _process(delta: float) -> void:
 	# repaint, and iOS Safari's GPU process crashes on that churn (see
 	# ui/ui.gd's header). Steady play repaints nothing.
 	var key := [endless, end_shown, end_alpha, paused, countin, fill, best, ticks, lit, word, word_alpha,
-		lives, lives_max, shield, shield_armed, shield_pop, show_pause, end_distance, end_best, end_new_best,
+		lives, lives_max, _heart_pop.duplicate(), shield, shield_armed, shield_pop, show_pause, end_distance, end_best, end_new_best,
 		end_rank, end_join, get_viewport_rect().size]
 	if key != _drawn_key:
 		_drawn_key = key
@@ -157,13 +171,15 @@ var _last_word := ""
 func _draw_run_hud(screen: Vector2) -> void:
 	_draw_pause_button()
 	var cx := screen.x * 0.5
+	# The lives as clay hearts (2026-10-22): a lost one is a dent, and for
+	# HEART_POP_S after the loss the heart squashes flat over its dent.
 	for i in lives_max:
-		var c := Vector2(cx - SIDE_GAP - i * 22.0, HUD_Y)
+		var c := Vector2(cx - SIDE_GAP - i * HEART_GAP, HUD_Y)
 		var on := i < lives
-		draw_circle(c, 8.0, Color(1, 1, 1, 0.06))
-		draw_arc(c, 8.0, 0.0, TAU, 24, Color(1, 1, 1, 0.30), 1.5, true)
-		if on:
-			draw_circle(c, 5.0, Color(Palette.EDGE.r, Palette.EDGE.g, Palette.EDGE.b, 0.85))
+		clay_heart(self, c, HEART_SIZE, WorldPalette.HEART, 1.0, on)
+		var pop: float = _heart_pop[i] if i < _heart_pop.size() else 0.0
+		if not on and pop > 0.0:
+			clay_heart(self, c, HEART_SIZE, WorldPalette.HEART, pop, true, 1.0 - pop)
 	var rc := Vector2(cx + SIDE_GAP, HUD_Y)
 	var r := 11.0 + 5.0 * shield_pop
 	draw_circle(rc, r, Color(1, 1, 1, 0.05))
@@ -252,6 +268,85 @@ static func glass_pill(c: CanvasItem, rect: Rect2, tint: Color, a: float) -> voi
 	c.draw_rect(rect, Color(1, 1, 1, 0.4 * a), false, 1.5)
 	c.draw_rect(rect, Color(tint.r, tint.g, tint.b, 0.7 * a), false, 1.0)
 	c.draw_line(rect.position + Vector2(6, 1), rect.position + Vector2(rect.size.x - 6, 1), Color(1, 1, 1, 0.42 * a), 1.5)
+
+
+# THE CLAY HEART (2026-10-22, step 4: "clay hearts for lives"). One life,
+# drawn as a puffy lump of clay: the heart outline as rings shrinking to
+# its middle, each ring shaded as a dome lit from the upper left (so it
+# reads round, not flat), a darker lip under it like the buttons', a soft
+# highlight on the left lobe and a few pressed-in specks. `full` false:
+# the life is gone -- a flat, pale dent where the heart was. `squash` > 0
+# squashes it flat and wide (the moment a life is lost).
+const HEART_RINGS := [1.0, 0.82, 0.6, 0.34, 0.0]
+
+static func clay_heart(c: CanvasItem, centre: Vector2, size: float, col: Color, a: float, full := true, squash := 0.0) -> void:
+	var k := Vector2(1.0 + 0.35 * squash, 1.0 - 0.45 * squash) * size / 34.0
+	var outline := _heart_points(32)
+	if not full:
+		var dent := PackedVector2Array()
+		for p in outline:
+			dent.append(centre + p * k)
+		c.draw_colored_polygon(dent, Color(PILL_BODY, 0.28 * a))
+		var ring := dent.duplicate()
+		ring.append(dent[0])
+		c.draw_polyline(ring, Color(1, 1, 1, 0.35 * a), 1.2, true)
+		return
+	# The lip: the same heart a little lower, in the clay's shadow.
+	var lip := PackedVector2Array()
+	for p in outline:
+		lip.append(centre + (p + Vector2(0, 2.6)) * k)
+	c.draw_colored_polygon(lip, Color(col.darkened(0.45), a))
+	# The body: ring by ring, each band shaded as a dome. draw_primitive,
+	# not draw_polygon: a band piece is drawn as given (a quad, or the
+	# centre's triangle), never triangulated -- near the notch a piece can
+	# fold over itself, which the triangulator refuses with an error.
+	var light := Vector3(-0.55, -0.6, 0.6).normalized()
+	for ri in HEART_RINGS.size() - 1:
+		var s0: float = HEART_RINGS[ri]
+		var s1: float = HEART_RINGS[ri + 1]
+		for i in outline.size():
+			var j := (i + 1) % outline.size()
+			var corners := [[outline[i], s0], [outline[j], s0], [outline[j], s1], [outline[i], s1]]
+			if s1 == 0.0:
+				corners.pop_back()       # the middle: one point, a triangle
+			var pts := PackedVector2Array()
+			var cols := PackedColorArray()
+			for q in corners:
+				pts.append(centre + q[0] * q[1] * k)
+				cols.append(_clay_shade(col, q[0], q[1], light, a))
+			c.draw_primitive(pts, cols, PackedVector2Array())
+	var edge := PackedVector2Array()
+	for p in outline:
+		edge.append(centre + p * k)
+	edge.append(edge[0])
+	c.draw_polyline(edge, Color(col.darkened(0.3), a), 1.0, true)
+	# The highlight on the left lobe, and three specks pressed into the clay.
+	c.draw_circle(centre + Vector2(-8.5, -6.0) * k, 3.4 * k.y, Color(1, 1, 1, 0.38 * a))
+	c.draw_circle(centre + Vector2(-9.5, -7.0) * k, 1.5 * k.y, Color(1, 1, 1, 0.5 * a))
+	for sp in [Vector2(5.0, -3.0), Vector2(-2.0, 6.0), Vector2(8.0, 4.0)]:
+		c.draw_circle(centre + sp * k, 0.8 * k.y, Color(col.darkened(0.3), 0.6 * a))
+
+
+# The heart's outline around its middle, ~34 units across (the classic
+# heart curve, x = 16 sin^3 t, y = 13 cos t - 5 cos 2t - 2 cos 3t - cos 4t,
+# turned screen-way up and centred on its bulk rather than its box).
+static func _heart_points(n: int) -> PackedVector2Array:
+	var pts := PackedVector2Array()
+	for i in n:
+		var t := TAU * float(i) / n
+		var x := 16.0 * pow(sin(t), 3.0)
+		var y := 13.0 * cos(t) - 5.0 * cos(2.0 * t) - 2.0 * cos(3.0 * t) - cos(4.0 * t)
+		pts.append(Vector2(x, -y - 2.5))
+	return pts
+
+
+# A point of the heart at ring `s` (1 = its edge, 0 = its middle), shaded
+# as if the heart were a dome: the edge faces out, the middle faces you.
+static func _clay_shade(col: Color, p: Vector2, s: float, light: Vector3, a: float) -> Color:
+	var d := p.normalized() if p.length() > 0.001 else Vector2.ZERO
+	var n := Vector3(d.x * s, d.y * s, sqrt(maxf(0.0, 1.0 - s * s * 0.85))).normalized()
+	var lit := clampf(n.dot(light), 0.0, 1.0)
+	return Color(col.darkened(0.32).lerp(col.lightened(0.22), lit), a)
 
 
 # A distance the way the game writes it: "1 240 m". Thin groups of three,
