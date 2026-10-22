@@ -11,7 +11,9 @@
 - **The scarf, round 2** (`f1f194d`): stuffed knit band, stitch columns along it, ends that fly out to the camera's side with tassels, soft grey sage `#a3b98f`. Judged by Code on the walk rig (new `scarf=1`, `cam=three|chase`) and the menu shot; **Milko judges it on the phone** — the cable app is re-exported with it (15:19).
 - **Step 3 ticked done in `docs/ROADMAP.md`** (`1329269`).
 
-**Next: step 4.** The first decision is Milko's: who makes the sound effects (him, as the musician; Code-synthesised; or a CC0 library) — asked 2026-10-22. All commits from `4154376` on are local; Milko pushes with `! git push origin phase-r-prototype`.
+**Step 4 started: the sound effects are built** (`aa33ee9`; Milko chose "I make them in code"). `tools/make_sfx.py` synthesises eight WAVs into `assets/audio/sfx/` (jump, land, pickup, near_miss, shield_on, shield_pop, death, tap), tuned to the song's strongest notes Bb C D E A (a chroma count — **ask Milko the song's real key**; `ROOT_HZ` is one line). `prototype/sfx.gd` (autoload `Sfx`) plays them, owns the volumes, and climbs a scale with the dot streak. New: the **near-miss** (a lethal box within 0.2 of the hit box, survived; gates left out — they were 22 of 37 at pad 0.6), ~9 per 158 s bot lap. Volumes and pitches are measured, **not heard** — Code cannot listen: the listening mix is `../the-last-game-build/sfx_preview.wav` (16 s of the song with every sound placed over it) and the cable app is re-exported with them (15:42). **Milko's verdict on the phone decides: too loud / too quiet / which sound is wrong.** Then step 4 continues: the menu styled like the mockup, clay hearts, the readable leaderboard, button states, settings (sound and music separately — they share the Master bus today).
+
+All commits from `4154376` on are local; Milko pushes with `! git push origin phase-r-prototype`.
 
 ### (2026-10-22, afternoon) THE LONG PHONE TEST PASSED; A PHONE-CALL CHEAT FOUND AND FIXED
 
