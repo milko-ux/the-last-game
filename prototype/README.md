@@ -2,7 +2,18 @@
 
 ## Where we are (2026-10-22) — start here
 
-### START HERE (2026-10-22, afternoon): THE LONG PHONE TEST PASSED; A PHONE-CALL CHEAT FOUND AND FIXED
+### START HERE (2026-10-22, late afternoon): STEP 3 DONE — STEP 4 (FEEL AND UI) STARTS WITH THE SOUND EFFECTS
+
+**Since the entry below:** Milko confirmed on the phone that a swipe home brings back the pause panel. Then, on his go-ahead:
+- **His phone's save reset** over the cable (`xcrun devicectl device copy to ... Documents/progress.save`, the app terminated first so it could not write its old numbers back): best 0, scarf locked — the fake 1097 m is gone. Never on the leaderboard (the phone plays as a guest: `claimed: false`).
+- **The leaderboard verified live:** `tools/talo_check.gd` steps 1–12 PASS (register, post #1 GLOBAL / #1 SE, props, country rank, delete). It then waits 660 s for Talo's listing cache to drop the deleted row; the kill switch cut that wait, as expected. **Milko must Register (menu) or JOIN (end screen) and accept consent for his own runs to post** — guests never post.
+- **Roadmap step 7:** the crown item — a golden top hat for the leaderboard's top 3, lost when you drop out; after a server-side plausibility check (`604ab78`).
+- **The scarf, round 2** (`f1f194d`): stuffed knit band, stitch columns along it, ends that fly out to the camera's side with tassels, soft grey sage `#a3b98f`. Judged by Code on the walk rig (new `scarf=1`, `cam=three|chase`) and the menu shot; **Milko judges it on the phone** — the cable app is re-exported with it (15:19).
+- **Step 3 ticked done in `docs/ROADMAP.md`** (`1329269`).
+
+**Next: step 4.** The first decision is Milko's: who makes the sound effects (him, as the musician; Code-synthesised; or a CC0 library) — asked 2026-10-22. All commits from `4154376` on are local; Milko pushes with `! git push origin phase-r-prototype`.
+
+### (2026-10-22, afternoon) THE LONG PHONE TEST PASSED; A PHONE-CALL CHEAT FOUND AND FIXED
 
 **Milko's long run (14:30):** frame avg / worst **16.7 / 17.5**, `3D` stayed at **0.75** (the governor never had to step down), no errors; the sunset starts at 300 m and reads at 330–340 m; the scarf appeared at 1 km. By the plan below that is "16.7 holds" → step 3 is done once Milko says so; then step 4 (sound).
 
