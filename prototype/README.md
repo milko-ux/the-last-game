@@ -2,7 +2,13 @@
 
 ## Where we are (2026-10-22) — start here
 
-### START HERE (2026-10-22): TOMORROW BEGINS WITH MILKO'S LONG PHONE TEST
+### START HERE (2026-10-22, afternoon): THE LONG PHONE TEST PASSED; A PHONE-CALL CHEAT FOUND AND FIXED
+
+**Milko's long run (14:30):** frame avg / worst **16.7 / 17.5**, `3D` stayed at **0.75** (the governor never had to step down), no errors; the sunset starts at 300 m and reads at 330–340 m; the scarf appeared at 1 km. By the plan below that is "16.7 holds" → step 3 is done once Milko says so; then step 4 (sound).
+
+**The phone-call cheat (black box, `Documents/blackbox.log` copied off the phone with `xcrun devicectl device copy from --domain-type appDataContainer --domain-identifier se.karrot.thelastgame`):** a call at ~386 m put the app in the background for 276 s. iOS stops the main loop but the run's clock is the system clock, so on return it read 276 s later; checkpoints were taken by TIME alone, so every one up to 1100 m counted as passed in one frame, the back edge killed the creature, and the rewind put it at z 1104 — a 1097 m "best" and the scarf, with nobody playing. Fixed in `4154376` (`track_test.gd`): (1) the run pauses on `NOTIFICATION_APPLICATION_FOCUS_OUT` / `_PAUSED` (phone and web only, not with a bot), a running count-in goes back to the panel; (2) a checkpoint also needs `player.position.z >= cp.z`, so any clock jump can cost a life, never gain metres. Headless proof (a 60 s `OS.delay_msec` freeze at 187 m on top of `autoplay.gd`): old code 379 m after it, new code 187 m. Not on the leaderboard (the phone is not signed in), but Milko's phone save holds the fake 1097 m best and the scarf. **Cable app re-exported with the fix (14:57) — Milko to test: start a run, take/fake a call or swipe home, come back → the pause panel, RESUME, same distance.** Also seen: the black box logs "app paused" but no "app resumed" on iOS (minor, the readout's session marker only).
+
+### (2026-10-22, morning) the plan for the long phone test
 
 **First thing:** remind Milko of the long play test — it is on his Notion to-do list (Kontrolltornet → To-dos, "The Last Game: långt speltest på telefonen (frame + 3D-siffran)", dated 2026-10-22). The cable app in `../the-last-game-build/ios/` is already exported from the latest code (`a12e084`): he quits Xcode (⌘Q), `! open /Users/benim/the-last-game-build/ios/TheLastGame.xcodeproj`, ⌘R, plays a long normal run (past 300 m: the sun goes down), and reads off the readout **frame avg / worst** (target 16.7 / ~17), **the `3D` number** (0.75 = full; 0.65–0.6 = the frame governor is working for a warm phone) and whether the picture ever looks soft.
 
