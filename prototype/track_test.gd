@@ -1013,8 +1013,12 @@ func _tick_run(delta: float) -> void:
 	_update_demo(ht)
 	field.widen_goal(clampf((player.position.z - (field.goal_z - BeatClock.BAR_UNITS)) / BeatClock.BAR_UNITS, 0.0, 1.0))
 
+	# A checkpoint counts once its time has come AND the player stands past
+	# it. Time alone was not enough (2026-10-22): a phone call let the
+	# clock run 276 s with nobody playing, every checkpoint up to 1100 m
+	# was "passed" in one frame, and the next death rewound the player there.
 	for cp in field.checkpoints:
-		if float(cp["t"]) > float(checkpoint.get("t", -1.0)) and t >= float(cp["t"]):
+		if float(cp["t"]) > float(checkpoint.get("t", -1.0)) and t >= float(cp["t"]) and player.position.z >= float(cp["z"]):
 			checkpoint = {"t": cp["t"], "resume_t": cp["resume_t"], "x": cp["x"], "z": cp["z"], "bar": cp["bar"]}
 			FrameMeter.note("checkpoint")
 			field.mark_checkpoint(cp)
@@ -1329,6 +1333,24 @@ func pause_run() -> void:
 	FrameMeter.note("pause")
 	print("PAUSE t=%.3f bar=%d audio=%.3f distance=%d lives=%d" % [BeatClock.song_time(), BeatClock.current_bar(),
 		music.get_playback_position(), distance_m, lives])
+
+
+# The phone takes over (a call, the home screen, Control Centre): the run
+# pauses as if the pause button was tapped; a count-in already running
+# goes back to the panel. Phone and web only: a Mac tool's window losing
+# focus must not pause its run.
+func _notification(what: int) -> void:
+	if what != NOTIFICATION_APPLICATION_FOCUS_OUT and what != NOTIFICATION_APPLICATION_PAUSED:
+		return
+	if not (OS.has_feature("mobile") or OS.has_feature("web")) or not endless or bot != null:
+		return
+	if state == State.COUNTIN:
+		state = State.PAUSED
+		hud.countin = 0.0
+		hud.paused = true
+	else:
+		pause_run()
+	BlackBox.record("app lost focus, run state now %s" % State.keys()[state])
 
 
 func resume_run() -> void:
