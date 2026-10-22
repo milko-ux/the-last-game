@@ -26,6 +26,7 @@ Profile="*res://autoload/profile.gd"
 Consent="*res://autoload/consent.gd"
 Talo="*res://autoload/talo.gd"
 BeatClock="*res://prototype/beat_clock.gd"
+Sfx="*res://prototype/sfx.gd"
 
 [display]
 

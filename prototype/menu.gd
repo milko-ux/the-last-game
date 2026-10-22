@@ -572,6 +572,7 @@ func _input(event: InputEvent) -> void:
 		_finish_name_edit()
 	for key in _rects:
 		if _rects[key].has_point(pos):
+			Sfx.play("tap")
 			_tap(String(key))
 			return
 	if _panel == Sheet.SETTINGS:

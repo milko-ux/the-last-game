@@ -824,6 +824,7 @@ func _charge_shield() -> void:
 	shield_meter = mini(SHIELD_COST, shield_meter + mini(maxi(streak, 1), COMBO_CAP))
 	if shield_meter >= SHIELD_COST:
 		shield_armed = true
+		Sfx.play("shield_on")
 		FrameMeter.note("shield armed")
 
 
@@ -841,6 +842,7 @@ func _shield_takes(cause: Dictionary) -> bool:
 	shields_used += 1
 	_grace = SHIELD_GRACE_S
 	hud.shield_pop = 1.0
+	Sfx.play("shield_pop")
 	_shield_burst.global_position = player.position + Vector3(0.0, 1.2, 0.0)   # position already carries the jump (player.y)
 	_shield_burst.restart()
 	Input.vibrate_handheld(HAPTIC_COIN_MS)
@@ -882,17 +884,21 @@ func _input(event: InputEvent) -> void:
 			if _probe_in_app and _probe.done:
 				_leave_probe()
 			elif at != null and endless and bot == null and hud.pause_rect.has_point(at):   # (no pause button while a bot plays)
+				Sfx.play("tap")
 				pause_run()
 		State.PAUSED:
 			if at == null:
 				return
 			if hud.resume_rect.has_point(at):
+				Sfx.play("tap")
 				resume_run()
 			elif hud.restart_rect.has_point(at):
+				Sfx.play("tap")
 				BeatClock.stop()
 				retry_pending = true
 				get_tree().change_scene_to_file(RUN_SCENE)
 			elif hud.home_rect.has_point(at):
+				Sfx.play("tap")
 				_to_menu()
 		State.COUNTIN:
 			pass
@@ -916,10 +922,13 @@ func _input(event: InputEvent) -> void:
 					# back to the main menu. A key = retry.
 					var pos: Variant = event.position if (event is InputEventScreenTouch or event is InputEventMouseButton) else null
 					if pos != null and hud.join_rect.has_point(pos):
+						Sfx.play("tap")
 						account_panel.open()
 					elif pos != null and hud.menu_rect.has_point(pos):
+						Sfx.play("tap")
 						_to_menu()
 					elif pos == null or hud.retry_rect.has_point(pos):
+						Sfx.play("tap")
 						BeatClock.stop()
 						# The retried run starts BY ITSELF once it has loaded — that is
 						# what the 4 s run-up is for. Without this the tap is spent on
@@ -998,7 +1007,10 @@ func _tick_run(delta: float) -> void:
 	var z_front := z_back + depth
 
 	player.move_dir = bot.move_dir(self) if bot != null else _move_input()
+	var was_airborne: bool = not player.on_ground
 	player.tick(delta, z_back, z_front, field)
+	if was_airborne and player.on_ground:
+		Sfx.play("land")
 	rig.set_window(z_back)
 	motion.set_window(z_back)
 	_shadows.window_back = z_back
@@ -1034,6 +1046,7 @@ func _tick_run(delta: float) -> void:
 			n["taken"] = true
 			streak += 1
 			notes += 1
+			Sfx.pickup(streak)
 			combo_max = maxi(combo_max, mini(streak, COMBO_CAP))
 			if endless:
 				_charge_shield()
@@ -1056,6 +1069,7 @@ func _tick_run(delta: float) -> void:
 		motion.on_death(_killer_node(cause), cause["pos"], player.position)
 		return
 
+	_tick_near_miss(delta)
 	player.look_at_danger(_demo_target(ht) if _in_demo_bar(ht) else _nearest_danger(ht))
 
 	if player.position.z >= field.goal_z:
@@ -1149,6 +1163,39 @@ func _nearest_danger(ht: float) -> Variant:
 	return best
 
 
+# NEAR-MISS (2026-10-22, step 4): a box that kills right now came
+# within NEAR_MISS_PAD of the player's hit box (Rules.player_box) and the
+# player came out the other side alive: a whoosh. Sound only -- nothing
+# here touches the rules, and the shield's grace does not count. Gates
+# are left out: going through the opening always passes close to the
+# wall (22 of 37 "near-misses" in a bot lap were gates), and the rules
+# treat a gate as a plane you cross, not a box you dodge. Measured on a
+# human-bot lap (158 s): pad 0.15 gave 6, 0.3 gave 15 without gates.
+const NEAR_MISS_PAD := 0.2
+const NEAR_MISS_COOLDOWN_S := 1.0
+var _near := false
+var _near_cool := 0.0
+
+
+func _tick_near_miss(delta: float) -> void:
+	_near_cool = maxf(0.0, _near_cool - delta)
+	var close := false
+	var box := Rules.player_box(player.position).grow(NEAR_MISS_PAD)
+	for h in field.hazards:
+		if absf(h.position.z - player.position.z) > 10.0 or String(h.spec["kind"]) == "gate":
+			continue
+		for b in h.boxes():
+			if (b as AABB).intersects(box):
+				close = true
+				break
+		if close:
+			break
+	if _near and not close and _grace <= 0.0 and _near_cool <= 0.0:
+		Sfx.play("near_miss")
+		_near_cool = NEAR_MISS_COOLDOWN_S
+	_near = close
+
+
 # Joystick / keys -> (screen-right, forward). Past the deadzone the
 # normalised direction is used at full speed, the 2D game's rule.
 # Input is WORLD-relative by default (joystick up = down the field
@@ -1181,6 +1228,7 @@ func _on_jump() -> void:
 		return
 	if player.jump():
 		ui.confirm_jump()
+		Sfx.play("jump")
 
 
 # Permanent death log: one line per death, kept in every build.
@@ -1263,6 +1311,8 @@ func start_now() -> void:
 
 func _die() -> void:
 	state = State.DEAD
+	Sfx.play("death")
+	_near = false
 	if lives_enabled():
 		lives -= 1
 	deaths += 1

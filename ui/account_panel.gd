@@ -166,6 +166,7 @@ func _input(event: InputEvent) -> void:
 
 	for key in _rects:
 		if _rects[key].has_point(pos):
+			Sfx.play("tap")
 			_tap(str(key))
 			return
 
