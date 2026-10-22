@@ -270,6 +270,65 @@ static func glass_pill(c: CanvasItem, rect: Rect2, tint: Color, a: float) -> voi
 	c.draw_line(rect.position + Vector2(6, 1), rect.position + Vector2(rect.size.x - 6, 1), Color(1, 1, 1, 0.42 * a), 1.5)
 
 
+# THE CAPSULE BUTTON (2026-10-22, step 4: the menu after
+# docs/concept/UI/ref-menu.png). The layers of ref-button-layers.png,
+# bottom up: a soft glow in the tint, a drop shadow, a darker lip under
+# the body, the body (a vertical gradient), a gloss band over its top
+# half, and a thin light along the top edge. The references are neon on
+# black; on the canyon's light sky the drop shadow and the lip carry the
+# depth and the glow is only a breath. `top` / `bottom` are the body's
+# gradient; a square rect makes a round button.
+static func capsule_button(c: CanvasItem, rect: Rect2, top: Color, bottom: Color, a: float, glow := 0.0) -> void:
+	for i in 3:
+		var g := 4.0 + 5.0 * i
+		_capsule(c, rect.grow(g), Color(top, glow * (0.12 - 0.035 * i) * a))
+	_capsule(c, Rect2(rect.position + Vector2(0, 9), rect.size).grow(1.0), Color(PILL_BODY, 0.22 * a))
+	_capsule(c, Rect2(rect.position + Vector2(0, 5), rect.size), Color(bottom.darkened(0.35), a))
+	_capsule(c, rect, Color(top, a), Color(bottom, a))
+	var r := minf(rect.size.x, rect.size.y) * 0.5
+	var gloss := Rect2(rect.position + Vector2(r * 0.4, rect.size.y * 0.07), Vector2(rect.size.x - r * 0.8, rect.size.y * 0.42))
+	_capsule(c, gloss, Color(1, 1, 1, 0.35 * a), Color(1, 1, 1, 0.0))
+	var pts := _capsule_points(rect)
+	var edge := PackedVector2Array()
+	for p in pts:
+		if p.y < rect.get_center().y - r * 0.35:
+			edge.append(p)
+	if edge.size() > 1:
+		c.draw_polyline(edge, Color(1, 1, 1, 0.7 * a), 1.2, true)
+
+
+# A capsule (a stadium: two half circles and the straight between) filled
+# flat, or with a vertical gradient when `bottom` is given; its outline is
+# drawn antialiased in the same colours so the edge is not stair-stepped.
+static func _capsule(c: CanvasItem, rect: Rect2, top: Color, bottom = null) -> void:
+	var pts := _capsule_points(rect)
+	var cols := PackedColorArray()
+	var low: Color = top if bottom == null else bottom
+	for p in pts:
+		cols.append(top.lerp(low, clampf((p.y - rect.position.y) / maxf(rect.size.y, 1.0), 0.0, 1.0)))
+	c.draw_polygon(pts, cols)
+	var ring := pts.duplicate()
+	ring.append(pts[0])
+	var ring_cols := cols.duplicate()
+	ring_cols.append(cols[0])
+	c.draw_polyline_colors(ring, ring_cols, 1.0, true)
+
+
+static func _capsule_points(rect: Rect2, seg := 14) -> PackedVector2Array:
+	var r := minf(rect.size.x, rect.size.y) * 0.5
+	var cy := rect.position.y + rect.size.y * 0.5
+	var left := Vector2(rect.position.x + r, cy)
+	var right := Vector2(rect.end.x - r, cy)
+	var pts := PackedVector2Array()
+	for i in seg + 1:
+		var t := -PI * 0.5 + PI * float(i) / seg      # the right half circle, top to bottom
+		pts.append(right + Vector2(cos(t), sin(t)) * r)
+	for i in seg + 1:
+		var t := PI * 0.5 + PI * float(i) / seg       # the left half circle, bottom to top
+		pts.append(left + Vector2(cos(t), sin(t)) * r)
+	return pts
+
+
 # THE CLAY HEART (2026-10-22, step 4: "clay hearts for lives"). One life,
 # drawn as a puffy lump of clay: the heart outline as rings shrinking to
 # its middle, each ring shaded as a dome lit from the upper left (so it

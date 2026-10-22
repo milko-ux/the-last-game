@@ -10,12 +10,18 @@ extends Node3D
 # Everything on screen is built from what already exists:
 #   the strip       field.gd's tiles, the same size and the same
 #                   Mats.tile() material (flat_mats.gd)
-#   the buildings   props.gd's two models, the same Props.building()
 #   the fog         camera_rig.gd's backdrop gradient and its far
 #                   silhouettes — the rig is instanced whole
 #   the creature    creature.tscn, unchanged
-#   the buttons     hud.gd's glass pill (Hud.glass_pill), the same
-#                   button the end screen draws
+#   the buttons     hud.gd's capsule button (Hud.capsule_button), the
+#                   layered button of docs/concept/UI/ref-button-layers.png
+#   THE LAYOUT      docs/concept/UI/ref-menu.png (2026-10-22, roadmap
+#                   step 4): the title centred on top, the creature in
+#                   the middle, PLAY big at the bottom between two round
+#                   buttons (trophy = leaderboard, gear = settings), the
+#                   name top right, BEST bottom left. The mockup's neon
+#                   on black is the dropped synthwave look: its layout and
+#                   its buttons are kept, its colours are the canyon's.
 #   the colours     WorldPalette for the world, Palette for text
 # No new colour, no new font, no image texture.
 #
@@ -51,7 +57,6 @@ extends Node3D
 
 const Rules := preload("res://prototype/rules.gd")
 const Mats := preload("res://prototype/flat_mats.gd")
-const Props := preload("res://prototype/props/props.gd")
 const LapGen := preload("res://prototype/lap_gen.gd")
 const CameraRig := preload("res://prototype/camera_rig.gd")
 const Hud := preload("res://prototype/hud.gd")
@@ -66,18 +71,25 @@ const SELECT_SCENE := "res://prototype/level_select.tscn"
 # ------------------------------------------------------------
 # THE SHOT
 # ------------------------------------------------------------
-# The camera is the game's own (camera_rig.gd: yaw 24°, pitch 42°, FOV
-# 44), only closer: the rig works out its distance from the window
-# depth it is given, so the depth below is chosen to land on
-# MENU_DISTANCE and nothing else. 17 under the old 55-degree lens;
-# x 1.29 for the 44-degree one keeps the creature the same size.
+# The camera is the game's own rig (camera_rig.gd, FOV 44). Its window
+# depth -- what the distance fade in flat_mats.gd measures from -- is
+# solved from MENU_DISTANCE as before; the SHOT is the mockup's
+# (docs/concept/UI/ref-menu.png, 2026-10-22): straight down the strip,
+# low, and close enough that the creature is the hero of the screen
+# (MENU_YAW_DEG / MENU_PITCH_DEG / MENU_CAM_DISTANCE, the rig's
+# yaw_deg / pitch_deg / distance). The run's 24 / 42 / 32.5 is untouched.
+# MENU_DISTANCE was 17 under the old 55-degree lens; x 1.29 for the
+# 44-degree one.
 const MENU_DISTANCE := 22.0
+const MENU_YAW_DEG := 0.0
+const MENU_PITCH_DEG := 22.0
+const MENU_CAM_DISTANCE := 12.0
 # The rig always looks straight down the field's centre line (its x is
 # forced to 0), so the creature is moved off centre instead of the
-# camera: the whole stage sits this far along +x, which puts it to the
-# RIGHT of the screen (screen-right is world -x at this yaw). That
-# leaves the left of the frame for the title and the buttons.
-const STAGE_X := 3.6
+# camera: the whole stage sits this far along +x (screen-right is world
+# -x at this yaw). 3.6 put it right of the left-hand buttons; the
+# mockup's layout (2026-10-22) puts it in the middle, under the title.
+const STAGE_X := 0.0
 # The strip, in units either side of the creature. The fog does the
 # rest: flat_mats.gd fades anything more than 14 units ahead of the
 # window's back edge and more than 2 behind it, so the strip has no
@@ -94,24 +106,10 @@ const COL_FROM := (Rules.COLS - STRIP_COLS) / 2
 const COL_TO := COL_FROM + STRIP_COLS - 1
 const STRIP_HALF := STRIP_COLS * Rules.TILE * 0.5
 
-# The two buildings: [model, side (-1 left / +1 right), gap from the
-# field's edge, height, yaw]. Two, deliberately placed — not the run's
-# random field, which would put a different pair behind the menu every
-# time it opened.
-# The two buildings: [model, side (-1 left / +1 right), gap from the
-# strip's edge, height, yaw, z]. Two, deliberately placed — not the
-# run's random field, which would stand a different pair behind the
-# menu every time it opened. The heights matter: as in monoliths.gd the
-# foot is buried at BUILDING_BASE_Y, so a building shorter than 22
-# never reaches the slab and is seen lying below it.
-# The `_hi` meshes are the carved ones (6k triangles each): in the run
-# only the nearest monolith gets them, but the menu has exactly two
-# buildings and all the room in the frame, so both are carved.
-const BUILDINGS := [
-	["building_tall_hi", 1.0, 3.0, 44.0, 0.30, 20.0],
-	["building_stacked_hi", -1.0, 20.0, 40.0, -0.42, 30.0],
-]
-const BUILDING_BASE_Y := -22.0    # as monoliths.gd: the foot sits far below the slab
+# NO BUILDINGS (2026-10-22). Two grey carved buildings from the stone-
+# and-fog look stood either side of the strip; the canyon replaced that
+# look, and the mockup (docs/concept/UI/ref-menu.png) has open air there.
+# Gone from the menu with their 12k triangles.
 
 # The creature stands a little nearer the camera than the point the
 # camera looks at, which drops it below the centre line and makes it
@@ -240,6 +238,9 @@ func _ready() -> void:
 		/ CameraRig.CAMERA_DISTANCE_PER_BAR + 2.2)
 	rig.set_window_depth(depth)
 	rig.set_window(-depth * 0.5)        # so the rig looks at z = 0, where the creature stands
+	rig.yaw_deg = MENU_YAW_DEG
+	rig.pitch_deg = MENU_PITCH_DEG
+	rig.distance = MENU_CAM_DISTANCE
 
 	_overlay = Overlay.new()
 	_overlay.menu = self
@@ -284,14 +285,12 @@ func _build_next() -> void:
 		0:
 			_build_strip()
 		1:
-			_build_buildings()
-		2:
 			_build_creature()
-		3:
+		2:
 			_warm_dust()
-		4:
+		3:
 			_build_shadows()
-		5:
+		4:
 			FrameMeter.load_mark("menu", "", true)
 			FrameMeter.load_done()
 	_build_step += 1
@@ -316,46 +315,13 @@ func _build_strip() -> void:
 			_stage.add_child(mi)
 
 
-# The run's fog swallows everything more than 14 units ahead of the
-# window's back edge, because in a run that is two bars ahead and the
-# player must not read the course from there. The menu has no course to
-# hide and its buildings are 30-40 units tall, so with the run's fade
-# they are either a blank white wall (their near face) or gone. The menu
-# therefore gives them ITS OWN copy of the same material with the fade
-# pushed out — one duplicate, same shader, nothing to prewarm — and the
-# run's shared material is left exactly as it was.
-const MENU_FOG := Vector2(18.0, 48.0)
-
-func _building_material() -> Material:
-	var m: ShaderMaterial = Props.building(false).duplicate()
-	m.set_shader_parameter("fade", Quaternion(MENU_FOG.x, MENU_FOG.y,
-		Mats.FADE_BEHIND_START, Mats.FADE_BEHIND_END))
-	return m
-
-
-func _build_buildings() -> void:
-	var mat := _building_material()
-	for i in BUILDINGS.size():
-		var spec: Array = BUILDINGS[i]
-		var model := String(spec[0])
-		var side := float(spec[1])
-		var height := float(spec[3])
-		var msize: Vector3 = Props.size_of(model)
-		var k := height / msize.y
-		var reach: float = maxf(msize.x, msize.z) * k * 0.5
-		var node := Props.make(model, msize * k, "base", mat, rad_to_deg(float(spec[4])))
-		node.position = Vector3(side * (STRIP_HALF + float(spec[2]) + reach),
-			BUILDING_BASE_Y, float(spec[5]))
-		_stage.add_child(node)
-
-
 func _build_creature() -> void:
 	_stand = Stand.new()
 	# Square to the lens. The model's eye looks down +z — the way the
 	# player runs, which is AWAY from the camera — so the stand is turned
 	# half a turn plus the camera's own bearing (its yaw off the field
 	# axis), and the eye comes back down the lens.
-	_base_yaw = PI + deg_to_rad(CameraRig.CAMERA_YAW_DEG)
+	_base_yaw = PI + deg_to_rad(MENU_YAW_DEG)
 	_stand.rotation.y = _base_yaw
 	_stand.position.z = CREATURE_Z
 	_stage.add_child(_stand)
@@ -486,7 +452,7 @@ func _hop() -> void:
 func _process(delta: float) -> void:
 	if _painted >= 1:
 		FrameMeter.first_frame_painted()
-	if _build_step <= 5:
+	if _build_step <= 4:
 		_build_next()
 	_alpha = minf(1.0, _alpha + delta * 2.2)
 
@@ -698,7 +664,7 @@ func draw_overlay(c: CanvasItem) -> void:
 		return
 
 	var a := _alpha
-	_draw_title(c, font, a)
+	_draw_title(c, screen, font, a)
 	_draw_buttons(c, screen, font, a)
 	_draw_name_chip(c, screen, font, a)
 	_draw_scarf_teaser(c, font, a)
@@ -720,69 +686,122 @@ func draw_overlay(c: CanvasItem) -> void:
 		_draw_settings(c, screen, font)
 
 
-# THE LAST GAME, then a cyan hairline, then the best distance. The
-# title is drawn letter by letter so it can carry real tracking — a
-# title without it reads as a default label, which is the look this
-# game is not having.
-const TITLE_SIZE := 38
-const TITLE_TRACK := 6.0
+# THE LAST over GAME, centred, as the mockup stacks it; bottom left the
+# best distance in the goal's amber (or the game's question before there
+# is one) and the season under it. Drawn letter by letter so it can carry
+# real tracking -- a title without it reads as a default label, which is
+# the look this game is not having. GAME is the same font, emboldened
+# (a FontVariation, not a new font file).
+const TITLE_TOP := 64.0
+const TITLE_GAME := 128.0
 
-func _draw_title(c: CanvasItem, font: Font, a: float) -> void:
-	var x := MARGIN
-	var y := 108.0
-	var w := _tracked(c, font, "THE LAST GAME", Vector2(x, y), TITLE_SIZE, TITLE_TRACK,
-		Color(1, 1, 1, 0.95 * a))
-	c.draw_line(Vector2(x, y + 16.0), Vector2(x + w, y + 16.0),
-		Color(WorldPalette.SAFE.r, WorldPalette.SAFE.g, WorldPalette.SAFE.b, 0.55 * a), 1.0)
+func _draw_title(c: CanvasItem, screen: Vector2, font: Font, a: float) -> void:
+	var cx := screen.x * 0.5
+	_tracked_centre(c, font, "THE LAST", cx, TITLE_TOP, 24, 10.0, Color(1, 1, 1, 0.95 * a))
+	_tracked_centre(c, _bold(), "GAME", cx, TITLE_GAME, 66, 6.0, Color(1, 1, 1, 0.97 * a))
+	var y := screen.y - BOTTOM - 30.0
 	var best := Progress.best_distance_for(LapGen.SEASON_SEED)
 	if best > 0:
-		_tracked(c, font, "BEST " + Hud.metres(best), Vector2(x, y + 46.0), 17, 2.0,
-			Color(Palette.GOAL.r, Palette.GOAL.g, Palette.GOAL.b, 0.95 * a))
+		_tracked(c, _bold(), "BEST " + Hud.metres(best), Vector2(MARGIN, y), 19, 2.0,
+			Color(Palette.GOAL.r, Palette.GOAL.g, Palette.GOAL.b, 0.97 * a))
 	else:
-		_tracked(c, font, "HOW FAR CAN YOU GET", Vector2(x, y + 46.0), 15, 2.0,
-			Color(Palette.TEXT.r, Palette.TEXT.g, Palette.TEXT.b, 0.75 * a))
-	_tracked(c, font, "SEASON %d" % LapGen.SEASON_SEED, Vector2(x, y + 74.0), 11, 2.0,
-		Color(Palette.TEXT.r, Palette.TEXT.g, Palette.TEXT.b, 0.45 * a))
+		_tracked(c, font, "HOW FAR CAN YOU GET", Vector2(MARGIN, y), 15, 2.0, Color(1, 1, 1, 0.85 * a))
+	_tracked(c, font, "SEASON %d" % LapGen.SEASON_SEED, Vector2(MARGIN, y + 22.0), 11, 2.0, Color(1, 1, 1, 0.6 * a))
+
+
+static var _bold_font: FontVariation = null
+
+static func _bold() -> Font:
+	if _bold_font == null:
+		_bold_font = FontVariation.new()
+		_bold_font.base_font = ThemeDB.fallback_font
+		_bold_font.variation_embolden = 0.9
+	return _bold_font
 
 
 # Draws `text` with `track` extra pixels between letters; returns its
-# total width so a rule can be drawn under it. A soft dark shadow under
-# every letter keeps it readable on the canyon's light sky (2026-10-21).
+# total width so a rule can be drawn under it. A soft dark outline and
+# shadow under every letter keep it readable on the canyon's light sky.
 func _tracked(c: CanvasItem, font: Font, text: String, at: Vector2, size: int, track: float, col: Color) -> float:
 	var x := at.x
 	var shade := Color(Hud.PILL_BODY, 0.3 * col.a)
+	var rim := Color(Hud.PILL_BODY, 0.22 * col.a)
 	for i in text.length():
 		var ch := text[i]
+		c.draw_string_outline(font, Vector2(x, at.y), ch, HORIZONTAL_ALIGNMENT_LEFT, -1, size, maxi(3, size / 8), rim)
 		c.draw_string(font, Vector2(x, at.y + 1.5), ch, HORIZONTAL_ALIGNMENT_LEFT, -1, size, shade)
 		c.draw_string(font, Vector2(x, at.y), ch, HORIZONTAL_ALIGNMENT_LEFT, -1, size, col)
 		x += font.get_string_size(ch, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x + track
 	return maxf(0.0, x - at.x - track)
 
 
+func _tracked_width(font: Font, text: String, size: int, track: float) -> float:
+	var w := 0.0
+	for i in text.length():
+		w += font.get_string_size(text[i], HORIZONTAL_ALIGNMENT_LEFT, -1, size).x + track
+	return maxf(0.0, w - track)
+
+
+func _tracked_centre(c: CanvasItem, font: Font, text: String, cx: float, y: float, size: int, track: float, col: Color) -> void:
+	_tracked(c, font, text, Vector2(cx - _tracked_width(font, text, size, track) * 0.5, y), size, track, col)
+
+
+# PLAY, big and cyan (cyan = safe: go), centred at the bottom; the two
+# round dark-glass buttons either side of it, a trophy for the
+# leaderboard and a gear for settings. The glass is dark so the white
+# icons read on the light sky (the canyon's lesson, 2026-10-21).
+const PLAY_SIZE := Vector2(300.0, 84.0)
+const ROUND := 78.0
+const ROUND_GAP := 28.0
+const PLAY_INK := Color(0.05, 0.17, 0.2)                # the label on the cyan body
+const GLASS_TOP := Color(0.36, 0.32, 0.5)
+const GLASS_BOTTOM := Color(0.13, 0.11, 0.22)          # Hud.PILL_BODY
+
 func _draw_buttons(c: CanvasItem, screen: Vector2, font: Font, a: float) -> void:
-	var x := MARGIN
-	var row_y := screen.y - BOTTOM - TAP_MIN
-	var play := Rect2(Vector2(x, row_y - 110.0), Vector2(304.0, 96.0))
+	var play := Rect2(Vector2(screen.x * 0.5 - PLAY_SIZE.x * 0.5, screen.y - BOTTOM - PLAY_SIZE.y - 8.0), PLAY_SIZE)
 	_rects["play"] = play
-	Hud.glass_pill(c, play, WorldPalette.SAFE, a)
-	Hud.centre_text(c, font, "PLAY", play.get_center() + Vector2(0, 2), 36, Color(1, 1, 1, 0.96 * a))
+	Hud.capsule_button(c, play, WorldPalette.SAFE.lightened(0.45), WorldPalette.SAFE.darkened(0.2), a, 1.0)
+	var label_w: float = _bold().get_string_size("PLAY", HORIZONTAL_ALIGNMENT_LEFT, -1, 34).x
+	var group := 22.0 + 14.0 + label_w
+	var left := play.get_center().x - group * 0.5
+	var mid_y := play.get_center().y
+	c.draw_colored_polygon(PackedVector2Array([Vector2(left, mid_y - 12.0), Vector2(left + 22.0, mid_y),
+		Vector2(left, mid_y + 12.0)]), Color(PLAY_INK, a))
+	c.draw_string(_bold(), Vector2(left + 36.0, mid_y + 12.0), "PLAY", HORIZONTAL_ALIGNMENT_LEFT, -1, 34, Color(PLAY_INK, a))
 
-	var lb := Rect2(Vector2(x, row_y), Vector2(190.0, TAP_MIN))
+	# No Talo key in this build: the trophy is honestly dim.
+	var lb := Rect2(Vector2(play.position.x - ROUND_GAP - ROUND, mid_y - ROUND * 0.5), Vector2(ROUND, ROUND))
 	_rects["leaderboard"] = lb
-	if Talo.configured():
-		Hud.glass_pill(c, lb, Palette.GOAL, 0.9 * a)
-		Hud.centre_text(c, font, "LEADERBOARD", lb.get_center() + Vector2(0, -1), 14, Color(1, 1, 1, 0.92 * a))
-	else:
-		# No Talo key in this build: honestly dim, and it says why.
-		Hud.glass_pill(c, lb, Palette.TEXT, 0.45 * a)
-		Hud.centre_text(c, font, "LEADERBOARD", lb.get_center() + Vector2(0, -4), 14, Color(1, 1, 1, 0.45 * a))
-		Hud.centre_text(c, font, "not set up in this build", lb.get_center() + Vector2(0, 14), 10,
-			Color(Palette.TEXT.r, Palette.TEXT.g, Palette.TEXT.b, 0.5 * a))
+	var lb_a := a if Talo.configured() else 0.45 * a
+	Hud.capsule_button(c, lb, GLASS_TOP, GLASS_BOTTOM, 0.95 * lb_a)
+	_draw_trophy(c, lb.get_center(), Color(1, 1, 1, 0.95 * lb_a))
 
-	var st := Rect2(Vector2(x + 202.0, row_y), Vector2(114.0, TAP_MIN))
+	var st := Rect2(Vector2(play.end.x + ROUND_GAP, mid_y - ROUND * 0.5), Vector2(ROUND, ROUND))
 	_rects["settings"] = st
-	Hud.glass_pill(c, st, Palette.TEXT, 0.8 * a)
-	Hud.centre_text(c, font, "SETTINGS", st.get_center() + Vector2(0, -1), 13, Color(1, 1, 1, 0.85 * a))
+	Hud.capsule_button(c, st, GLASS_TOP, GLASS_BOTTOM, 0.95 * a)
+	_draw_gear(c, st.get_center(), Color(1, 1, 1, 0.95 * a), Color(GLASS_TOP.lerp(GLASS_BOTTOM, 0.5), a))
+
+
+# The trophy: a cup with two handles on a stem and a base, ~30 across.
+func _draw_trophy(c: CanvasItem, at: Vector2, col: Color) -> void:
+	c.draw_colored_polygon(PackedVector2Array([at + Vector2(-11, -14), at + Vector2(11, -14), at + Vector2(10, -5),
+		at + Vector2(6, 1), at + Vector2(2, 3), at + Vector2(-2, 3), at + Vector2(-6, 1), at + Vector2(-10, -5)]), col)
+	c.draw_arc(at + Vector2(-11, -8), 5.0, PI * 0.5, PI * 1.5, 12, col, 2.6, true)
+	c.draw_arc(at + Vector2(11, -8), 5.0, -PI * 0.5, PI * 0.5, 12, col, 2.6, true)
+	c.draw_rect(Rect2(at + Vector2(-2.5, 3), Vector2(5, 7)), col, true)
+	c.draw_rect(Rect2(at + Vector2(-9, 10), Vector2(18, 4.5)), col, true)
+
+
+# The gear: a disc, eight teeth, a hole in the middle in the glass colour.
+func _draw_gear(c: CanvasItem, at: Vector2, col: Color, hole: Color) -> void:
+	for i in 8:
+		var t := TAU * i / 8.0
+		var d := Vector2(cos(t), sin(t))
+		var s := Vector2(-d.y, d.x)
+		c.draw_colored_polygon(PackedVector2Array([at + d * 9.0 - s * 3.6, at + d * 15.0 - s * 2.6,
+			at + d * 15.0 + s * 2.6, at + d * 9.0 + s * 3.6]), col)
+	c.draw_circle(at, 11.0, col)
+	c.draw_circle(at, 4.6, hole)
 
 
 # Over the creature's head until the scarf is earned: what it takes.
@@ -792,12 +811,12 @@ func _draw_scarf_teaser(c: CanvasItem, font: Font, a: float) -> void:
 	var cam := get_viewport().get_camera_3d()
 	if cam == null:
 		return
-	var at := cam.unproject_position(_creature.global_position + Vector3(0.0, 3.1, 0.0))
+	var at := cam.unproject_position(_creature.global_position + Vector3(0.0, 2.75, 0.0))   # just over its head
 	var label := "REACH %s TO UNLOCK THE SCARF" % Hud.metres(Scarf.UNLOCK_M).replace(" 000 m", " KM")
 	var w: float = font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x + 36.0
 	var pill := Rect2(at - Vector2(w * 0.5, 18.0), Vector2(w, 36.0))
-	Hud.glass_pill(c, pill, WorldPalette.SCARF, 0.9 * a)
-	Hud.centre_text(c, font, label, pill.get_center() + Vector2(0, -1), 13, Color(1, 1, 1, 0.92 * a))
+	Hud.capsule_button(c, pill, WorldPalette.SCARF.darkened(0.15), WorldPalette.SCARF.darkened(0.5), 0.92 * a)
+	Hud.centre_text(c, font, label, pill.get_center() + Vector2(0, -1), 13, Color(1, 1, 1, 0.95 * a))
 
 
 # Top right: who is playing. A tap goes to the same place SETTINGS does,
@@ -808,7 +827,7 @@ func _draw_name_chip(c: CanvasItem, screen: Vector2, font: Font, a: float) -> vo
 	var chip := Rect2(Vector2(screen.x - MARGIN - w, 72.0), Vector2(w, TAP_MIN))
 	_rects["name_chip"] = chip
 	var tint: Color = WorldPalette.SAFE if Talo.logged_in() else Palette.TEXT
-	Hud.glass_pill(c, chip, tint, 0.85 * a)
+	Hud.capsule_button(c, chip, GLASS_TOP, GLASS_BOTTOM, 0.9 * a)
 	c.draw_circle(chip.position + Vector2(24.0, chip.size.y * 0.5), 4.5,
 		Color(tint.r, tint.g, tint.b, 0.95 * a))
 	c.draw_string(font, chip.position + Vector2(40.0, chip.size.y * 0.5 + 6.0), label,

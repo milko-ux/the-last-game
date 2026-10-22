@@ -299,12 +299,23 @@ func set_window(z_back: float) -> void:
 	RenderingServer.global_shader_parameter_set("pr_window_back", z_back)
 
 
-# The camera's offset from the look-at point for the reference angle.
-static func camera_offset() -> Vector3:
-	var yaw := deg_to_rad(CAMERA_YAW_DEG)
-	var pitch := deg_to_rad(CAMERA_PITCH_DEG)
-	var flat := CAMERA_DISTANCE * cos(pitch)
-	return Vector3(-flat * sin(yaw), CAMERA_DISTANCE * sin(pitch), -flat * cos(yaw))
+# The camera's offset from the look-at point: the reference angle, or
+# another one (the menu's).
+static func camera_offset(yaw_deg := CAMERA_YAW_DEG, pitch_deg := CAMERA_PITCH_DEG, dist := -1.0) -> Vector3:
+	var d := CAMERA_DISTANCE if dist <= 0.0 else dist
+	var yaw := deg_to_rad(yaw_deg)
+	var pitch := deg_to_rad(pitch_deg)
+	var flat := d * cos(pitch)
+	return Vector3(-flat * sin(yaw), d * sin(pitch), -flat * cos(yaw))
+
+
+# THE MENU'S SHOT (2026-10-22, the mockup docs/concept/UI/ref-menu.png):
+# the menu frames its creature straight down the strip, lower and closer
+# than the run's camera. The run never sets these, so its camera is the
+# reference angle above, unchanged.
+var yaw_deg := CAMERA_YAW_DEG
+var pitch_deg := CAMERA_PITCH_DEG
+var distance := -1.0          # > 0: this distance instead of the window's
 
 
 # (screen-right, forward) as the joystick gives it -> the same pair in
@@ -336,7 +347,7 @@ func _process(delta: float) -> void:
 	if kick_u > 0.0:
 		var k := _kick_amount * kick_u
 		off += _kick_dir * k * 0.6 + Vector3(randf_range(-k, k), randf_range(-k, k) * 0.5, randf_range(-k, k)) * 0.6
-	cam.position = camera_offset() + off
+	cam.position = camera_offset(yaw_deg, pitch_deg, distance) + off
 	cam.look_at(global_position, Vector3.UP)
 	if motion != null:
 		# The nod: a forward tilt on the downbeat, decaying over the bar.
