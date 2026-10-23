@@ -1,14 +1,45 @@
 # Phase R prototype — "an album you survive"
 
-## Where we are (2026-10-22) — start here
+## Where we are (2026-10-23) — start here
 
-### START HERE (2026-10-23, late afternoon): STEP 4 DONE — NEXT IS STEP 5, THE SHARE / FAIL SCREEN
+### START HERE: STEPS 1–4 DONE — NEXT IS STEP 5, THE SHARE / FAIL SCREEN
 
-Milko's last note: the season card top left and smaller, so PLAY stands alone and is the biggest thing on the menu (`0954f41`) — "Then we can close step 4." **Step 4 is ticked DONE in `docs/ROADMAP.md`.** Cable app exported with it.
+**The plan is `docs/ROADMAP.md`. Read it first; finish a step's "done when" before the next step.**
 
-**Pushed by Milko up to `3d70d57` (2026-10-23).**
+| Step | | Status |
+|---|---|---|
+| 1 | Stable and fast | DONE 2026-09-29 |
+| 2 | Native iPhone build (TestFlight) | DONE 2026-10-15 |
+| 3 | Look, round 3 (canyon, time of day, hero, scarf) | DONE 2026-10-22 |
+| 4 | Feel and UI (sounds, hearts, menu, UI kit, motion, season card) | DONE 2026-10-23 |
+| **5** | **The share screen — NEXT** | not started |
+| 6 | Soft launch (20–50 testers; seasons with an end date; colour-blind check) | — |
+| 7 | Launch, then money (prizes after the legal / tax / Apple checklist; the golden top hat) | — |
 
-**Next: step 5, the share screen** (`docs/ROADMAP.md`): the run-over screen people want to post — distance, best, a roast line, a screenshot moment, a share button on the phone's own share sheet; from the research pass: RETRY stays the biggest element with share beside it, "38 m to beat #12" / "62 m to your best". Open questions for Milko: the song's real key (the sounds assume Bb); delete the unused grey building models?
+**Step 5, the share screen** — the run-over screen people want to post; it is how the game spreads for free (ROADMAP §5):
+- distance, best, a roast line, a screenshot moment;
+- a share button that opens the phone's own share sheet (image + link);
+- from the research pass: **RETRY stays the biggest element**, the share button beside it; **"38 m to beat #12" / "62 m to your best"** on the screen; **no ads here, ever**.
+- **Done when:** a friend who has never seen the game shares their result without being asked.
+- Today's end screen (`hud.gd` `_draw_end_screen`): the distance counting up, NEW BEST with a burst and `best.wav`, the rank line, RETRY (green, biggest), MENU, JOIN. Step 5 builds on it.
+
+**State of the repo:** everything is **pushed by Milko up to `3d70d57`** (2026-10-23); after it only README notes. The cable app in `../the-last-game-build/ios/` is exported from the latest code (14:11).
+
+**Open questions for Milko (not blocking):**
+- The song's real key — the sounds are tuned to Bb C D E A from a chroma count (`tools/make_sfx.py` `ROOT_HZ`, one line).
+- Delete the two grey building models (`assets/models/building_tall*`, `building_stacked*`)? Nothing uses them since the menu dropped them.
+
+**Where things are (step 4's work):**
+- `prototype/hud.gd` — the UI kit: `capsule_button` (NORMAL / PRESSED / DISABLED), `button()` with styles (**go = the main action, `WorldPalette.ACTION` dark sage — one per screen**; chosen; glass; goal amber = the prize colour; danger; scarf = cyan), `card()`, the lettering (`bold` / `tracked` / `title`), the motion (`intro_k`, `zoom`, `push`), the clay hearts, the end screen.
+- `prototype/press.gd` — buttons act on the finger's LIFT, squash and spring, haptic tick, click.
+- `prototype/menu.gd` — PLAY alone and biggest; the season card top left (rank / gap, or #1 to beat, red dot when passed — `Progress.lb_seen_rank`); the profile button top right; the first launch goes straight into a run (`Progress.played`).
+- `prototype/sfx.gd` + `tools/make_sfx.py` — the synthesised sounds; EFFECTS / MUSIC are two buses (`Progress`).
+
+**How we work (learned this week):**
+- **Milko quits Xcode (⌘Q) BEFORE Code exports a new cable build** — the export replaces the project folder; with Xcode open it asks to "re-save" (answer Close, never Re-save).
+- After Xcode stops the app on screen, the next launch shows **one small red line** ("last session did not close… Xcode stopped it") — expected; the detail is in `blackbox.log` (`xcrun devicectl device copy from --device … --domain-type appDataContainer --domain-identifier se.karrot.thelastgame --source Documents/blackbox.log`).
+- Code's windowed screenshots draw nothing while the Mac's screen is asleep/locked (Milko away) — then only headless checks; the phone is the visual check.
+- Milko pushes himself: `! git push origin phase-r-prototype` — the `!` must be the very first character.
 
 ### (2026-10-23, afternoon) THE RESEARCH PASS BUILT — MOTION, THE NEW MENU, THE FIRST LAUNCH; MILKO'S PHONE VERDICT CLOSES STEP 4
 
