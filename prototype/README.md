@@ -33,7 +33,7 @@
 - **NEXT (Milko, phone — quit Xcode first if open, then `! open /Users/benim/the-last-game-build/ios/TheLastGame.xcodeproj`, ⌘R):** lose a run → read the roast line and the "TO BEAT" line → tap SHARE → the share sheet opens? → "Save Image" and look at it in Photos, and send one to yourself in Messages. Also: any hitch the moment the run ends (the frame grab)? Then edit the roast lines (tell Code which to change). **Done when** (roadmap): a friend who has never seen the game shares their result without being asked.
 - **Open for Milko:** the share text has **no link** yet (`ShareCard.LINK`, one line) — a TestFlight public link (needs external testing, step 6) or a website? Android gets its own share code later (before step 6).
 
-**State of the repo:** **pushed by Milko up to `357cfa7`** (2026-10-23); `bdd3690`..`2a60757` and this note are local. The cable app in `../the-last-game-build/ios/` is exported from the latest code (22:24).
+**State of the repo:** **pushed by Milko up to `2678d0e`** (2026-10-23, all of step 5's code); after it only README notes. The cable app in `../the-last-game-build/ios/` is exported from the latest code (22:24).
 
 **Open questions for Milko (not blocking):**
 - The song's real key — the sounds are tuned to Bb C D E A from a chroma count (`tools/make_sfx.py` `ROOT_HZ`, one line).
