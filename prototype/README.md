@@ -6,6 +6,8 @@
 
 Milko's last note: the season card top left and smaller, so PLAY stands alone and is the biggest thing on the menu (`0954f41`) — "Then we can close step 4." **Step 4 is ticked DONE in `docs/ROADMAP.md`.** Cable app exported with it.
 
+**Pushed by Milko up to `3d70d57` (2026-10-23).**
+
 **Next: step 5, the share screen** (`docs/ROADMAP.md`): the run-over screen people want to post — distance, best, a roast line, a screenshot moment, a share button on the phone's own share sheet; from the research pass: RETRY stays the biggest element with share beside it, "38 m to beat #12" / "62 m to your best". Open questions for Milko: the song's real key (the sounds assume Bb); delete the unused grey building models?
 
 ### (2026-10-23, afternoon) THE RESEARCH PASS BUILT — MOTION, THE NEW MENU, THE FIRST LAUNCH; MILKO'S PHONE VERDICT CLOSES STEP 4
