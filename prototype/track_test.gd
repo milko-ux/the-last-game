@@ -19,6 +19,7 @@ const Mats := preload("res://prototype/flat_mats.gd")
 const HazardMath := preload("res://prototype/hazard_math.gd")
 const LapGen := preload("res://prototype/lap_gen.gd")
 const Hud := preload("res://prototype/hud.gd")
+const Press := preload("res://prototype/press.gd")
 const Looks := preload("res://prototype/looks.gd")
 const Scarf := preload("res://prototype/scarf.gd")
 const TimeOfDay := preload("res://prototype/time_of_day.gd")
@@ -102,6 +103,7 @@ var _reveal: Array = []
 const REVEAL_COUNT := 5              # what _reveal holds: rig, player, edge line, field, shadows
 var _load_frames := 0
 var _settle := 0
+var _press := Press.new()     # the pause panel's and the end screen's buttons (press.gd)
 var _tap_queued := false    # a tap during LOADING is kept: the run starts the moment loading ends
 var _label_wait_from := 0   # msec: when the wait for a painted LOADING label began
 var _bar_back: ColorRect
@@ -873,6 +875,16 @@ func _input(event: InputEvent) -> void:
 		elif state != State.COUNTIN:
 			_to_menu()
 		return
+	# The pause panel and the end screen (2026-10-23): their buttons act
+	# when the finger lifts on them and show PRESSED while it is held
+	# (press.gd, hud.pressed), as the menu's do. A key still means RETRY
+	# on the end screen, below.
+	if (state == State.PAUSED or (state == State.GAMEOVER and endless)) and not event is InputEventKey:
+		var tapped := _press.feed(event, hud.button_rects())
+		hud.pressed = _press.key if _press.inside else ""
+		if tapped != "":
+			_hud_button(tapped)
+		return
 	var pressed: bool = (event is InputEventScreenTouch and event.pressed) \
 		or (event is InputEventMouseButton and event.pressed) \
 		or (event is InputEventKey and event.pressed and not event.echo)
@@ -887,19 +899,7 @@ func _input(event: InputEvent) -> void:
 				Sfx.play("tap")
 				pause_run()
 		State.PAUSED:
-			if at == null:
-				return
-			if hud.resume_rect.has_point(at):
-				Sfx.play("tap")
-				resume_run()
-			elif hud.restart_rect.has_point(at):
-				Sfx.play("tap")
-				BeatClock.stop()
-				retry_pending = true
-				get_tree().change_scene_to_file(RUN_SCENE)
-			elif hud.home_rect.has_point(at):
-				Sfx.play("tap")
-				_to_menu()
+			pass                         # its buttons: above (press.gd); ESC resumes
 		State.COUNTIN:
 			pass
 		State.LOADING:
@@ -918,29 +918,41 @@ func _input(event: InputEvent) -> void:
 			# original rule). The endless run: a new run, short run-up.
 			if _end_shown > 0.6:
 				if endless:
-					# RETRY (big) starts a new run with the short run-up; MENU goes
-					# back to the main menu. A key = retry.
-					var pos: Variant = event.position if (event is InputEventScreenTouch or event is InputEventMouseButton) else null
-					if pos != null and hud.join_rect.has_point(pos):
-						Sfx.play("tap")
-						account_panel.open()
-					elif pos != null and hud.menu_rect.has_point(pos):
-						Sfx.play("tap")
-						_to_menu()
-					elif pos == null or hud.retry_rect.has_point(pos):
-						Sfx.play("tap")
-						BeatClock.stop()
-						# The retried run starts BY ITSELF once it has loaded — that is
-						# what the 4 s run-up is for. Without this the tap is spent on
-						# the scene change, the new run comes up on TAP TO START, and
-						# RETRY reads as having done nothing.
-						retry_pending = true
-						# The same call MENU makes. reload_current_scene() was the only
-						# thing RETRY did differently from the button that works.
-						get_tree().change_scene_to_file(RUN_SCENE)
+					# A key = RETRY (the buttons are handled above, on the lift).
+					_retry()
 					return
 				Rules.LEVEL = 1
 				get_tree().reload_current_scene()
+
+
+# A button of the pause panel or the end screen, released on (press.gd).
+# The end screen ignores its buttons for its first 0.6 s, as it always has:
+# a tap meant for the run must not retry it by accident.
+func _hud_button(what: String) -> void:
+	if state == State.GAMEOVER and _end_shown <= 0.6:
+		return
+	match what:
+		"resume":
+			resume_run()
+		"restart", "retry":
+			_retry()
+		"home", "menu":
+			_to_menu()
+		"join":
+			account_panel.open()
+
+
+# RETRY / RESTART: a new run with the short run-up.
+func _retry() -> void:
+	BeatClock.stop()
+	# The retried run starts BY ITSELF once it has loaded — that is
+	# what the 4 s run-up is for. Without this the tap is spent on
+	# the scene change, the new run comes up on TAP TO START, and
+	# RETRY reads as having done nothing.
+	retry_pending = true
+	# The same call MENU makes. reload_current_scene() was the only
+	# thing RETRY did differently from the button that works.
+	get_tree().change_scene_to_file(RUN_SCENE)
 
 
 # MENU: the endless run goes to the real main menu (Phase E section 7);

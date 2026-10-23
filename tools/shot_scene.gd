@@ -32,6 +32,7 @@ extends SceneTree
 #                     panel that only exists after a tap can be shot.
 #                     Several taps are walked through TAP_GAP apart.
 #   tap_at=SEC        when the first tap happens (default 1.0)
+#   hold=1            the last tap's finger stays down (shoots a PRESSED button)
 #
 # Nothing here writes the save file (Milko's rule 6).
 # ============================================================
@@ -45,6 +46,7 @@ var step := 0.1
 var _shots := 0
 var taps: Array[Vector2] = []
 var tap_at := 1.0
+var hold := false
 const TAP_GAP := 0.5
 var _taps_done := 0
 
@@ -66,6 +68,7 @@ func _initialize() -> void:
 			"frames": frames = maxi(1, int(kv[1]))
 			"step": step = float(kv[1])
 			"tap_at": tap_at = float(kv[1])
+			"hold": hold = kv[1] == "1"
 			"tap":
 				for one in kv[1].split(";"):
 					var xy: PackedStringArray = one.split(",")
@@ -103,7 +106,15 @@ func _process(delta: float) -> bool:
 		ev.pressed = true
 		ev.position = where
 		Input.parse_input_event(ev)
-		print("SHOT SCENE tapped %.0f,%.0f at %.2f s" % [where.x, where.y, _t])
+		# A button acts when the finger lifts (prototype/press.gd), so a tap
+		# is a press and a release; hold=1 keeps the finger down, to shoot
+		# the PRESSED state.
+		if not (hold and _taps_done == taps.size()):
+			var up := InputEventScreenTouch.new()
+			up.pressed = false
+			up.position = where
+			Input.parse_input_event(up)
+		print("SHOT SCENE %s %.0f,%.0f at %.2f s" % ["held" if hold and _taps_done == taps.size() else "tapped", where.x, where.y, _t])
 	if _frames >= MAX_FRAMES:
 		return true
 	if _shots < frames and _t >= at + _shots * step and not _pending:

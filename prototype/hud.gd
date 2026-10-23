@@ -60,6 +60,7 @@ var show_pause := false
 var paused := false
 var countin := 0.0          # seconds left of the count-in, 0 = none
 var pause_rect := Rect2()
+var pressed := ""           # the pause panel's / end screen's button held down (press.gd), "" = none
 var resume_rect := Rect2()
 var restart_rect := Rect2()
 var home_rect := Rect2()
@@ -87,7 +88,7 @@ func _process(delta: float) -> void:
 	# ui/ui.gd's header). Steady play repaints nothing.
 	var key := [endless, end_shown, end_alpha, paused, countin, fill, best, ticks, lit, word, word_alpha,
 		lives, lives_max, _heart_pop.duplicate(), shield, shield_armed, shield_pop, show_pause, end_distance, end_best, end_new_best,
-		end_rank, end_join, get_viewport_rect().size]
+		end_rank, end_join, pressed, get_viewport_rect().size]
 	if key != _drawn_key:
 		_drawn_key = key
 		queue_redraw()
@@ -147,20 +148,16 @@ func _draw() -> void:
 			var bx := x0 + w * clampf(best, 0.0, 1.0)
 			draw_line(Vector2(bx, BAR_Y - 4), Vector2(bx, BAR_Y + BAR_H + 4), Color(1, 1, 1, 0.9), 2.0)
 
-	# demo word: a glass pill below the bar
+	# demo word: a dark-glass capsule below the bar (the kit's, so it
+	# reads on the canyon's light sky like every other label)
 	if word_alpha > 0.0 and (word != "" or word_alpha > 0.0):
 		var label := word if word != "" else _last_word
 		if label != "":
-			var size := 26
-			var tw: float = font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
-			var pw := tw + 56.0
-			var ph := 44.0
+			var size := 24
+			var pw: float = bold().get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x + 64.0
+			var ph := 48.0
 			var c := Vector2(screen.x * 0.5, (HUD_Y + 72.0) if endless else (BAR_Y + BAR_H + 46.0))
-			var prect := Rect2(c - Vector2(pw * 0.5, ph * 0.5), Vector2(pw, ph))
-			var a := word_alpha
-			glass_pill(self, prect, Palette.HAZ, a)   # dark glass: readable on the canyon's light sky
-			draw_string(font, c + Vector2(-tw * 0.5, size * 0.36), label, HORIZONTAL_ALIGNMENT_LEFT, -1, size,
-				Color(1, 1, 1, 0.92 * a))
+			button(self, Rect2(c - Vector2(pw * 0.5, ph * 0.5), Vector2(pw, ph)), label, "glass", Btn.NORMAL, size, word_alpha)
 	if word != "":
 		_last_word = word
 
@@ -194,33 +191,51 @@ func _draw_run_hud(screen: Vector2) -> void:
 		draw_circle(rc, 4.0, Color(col.r, col.g, col.b, 0.9))
 
 
-# The pause pill: two bars in a glass square, top-left.
+# The pause button: two bars on a round glass button, top-left (the
+# menu's round buttons). It acts on the touch, not the lift: in a run a
+# pause must be instant.
 func _draw_pause_button() -> void:
 	pause_rect = Rect2(PAUSE_AT, Vector2(PAUSE_SIZE, PAUSE_SIZE))
 	if not show_pause:
 		return
-	_pill(pause_rect, Color(1, 1, 1), 0.7)
+	capsule_button(self, pause_rect, GLASS_TOP, GLASS_BOTTOM, 0.85)
 	var c := pause_rect.get_center()
 	for dx in [-6.0, 6.0]:
-		draw_rect(Rect2(c + Vector2(dx - 2.5, -11.0), Vector2(5.0, 22.0)), Color(1, 1, 1, 0.85), true)
+		draw_rect(Rect2(c + Vector2(dx - 3.0, -11.0), Vector2(6.0, 22.0)), Color(1, 1, 1, 0.95), true)
+
+
+# The buttons on screen now, by name, for press.gd: the pause panel's or
+# the end screen's.
+func button_rects() -> Dictionary:
+	if paused:
+		return {"resume": resume_rect, "restart": restart_rect, "home": home_rect}
+	if end_shown:
+		var r := {"retry": retry_rect, "menu": menu_rect}
+		if end_join:
+			r["join"] = join_rect
+		return r
+	return {}
+
+
+func _state(name: String) -> int:
+	return Btn.PRESSED if pressed == name else Btn.NORMAL
 
 
 # Near-opaque on purpose: a paused screen must not be a way to study the
 # hazards at leisure (the end screen's dim is lighter; there is nothing
 # left to study there).
+# The menu's look (2026-10-23): a glass card, RESUME cyan, the rest glass.
 func _draw_pause_panel(screen: Vector2, font: Font) -> void:
 	draw_rect(Rect2(Vector2.ZERO, screen), Color(0.04, 0.05, 0.08, 0.93), true)
 	var c := screen * 0.5
-	_text(font, "PAUSED", c + Vector2(0, -110), 30, Color(1, 1, 1, 0.92))
-	resume_rect = Rect2(c + Vector2(-150, -60), Vector2(300, 72))
-	_pill(resume_rect, Palette.EDGE, 1.0)
-	_text(font, "RESUME", resume_rect.get_center(), 28, Color(1, 1, 1, 0.95))
-	restart_rect = Rect2(c + Vector2(-150, 26), Vector2(300, 66))
-	_pill(restart_rect, Color(1, 1, 1), 0.8)
-	_text(font, "RESTART", restart_rect.get_center(), 18, Color(1, 1, 1, 0.85))
-	home_rect = Rect2(c + Vector2(-150, 106), Vector2(300, 66))
-	_pill(home_rect, Color(1, 1, 1), 0.8)
-	_text(font, "HOME", home_rect.get_center(), 18, Color(1, 1, 1, 0.85))
+	card(self, Rect2(c + Vector2(-200, -176), Vector2(400, 362)))
+	title(self, bold(), "PAUSED", c.x, c.y - 112.0, 30, 6.0, Color.WHITE)
+	resume_rect = Rect2(c + Vector2(-150, -84), Vector2(300, 72))
+	button(self, resume_rect, "RESUME", "go", _state("resume"), 26)
+	restart_rect = Rect2(c + Vector2(-150, 6), Vector2(300, 66))
+	button(self, restart_rect, "RESTART", "glass", _state("restart"), 18)
+	home_rect = Rect2(c + Vector2(-150, 86), Vector2(300, 66))
+	button(self, home_rect, "HOME", "glass", _state("home"), 18)
 
 
 # 3 · 2 · 1, big, with the world visible behind it so what is coming can
@@ -249,59 +264,120 @@ func show_end(distance: String, best: String, new_best: bool) -> void:
 	end_new_best = new_best
 
 
-# THE GLASS PILL — the one copy. The end screen's buttons below and the
-# main menu's (prototype/menu.gd) are the same button, so they are drawn
-# by the same six lines: a soft outer glow, a white and a tinted fill, a
-# white and a tinted outline, and the highlight along the top edge.
-# `c` is whatever is drawing (any Node2D): a static so menu.gd can call
-# it without owning a Hud.
-# The canyon (2026-10-21, Milko: "all the buttons are barely visible"):
-# the body is DARK glass now -- a deep plum fill under the tint -- so the
-# white label reads on the light sky; the grey world's pill was 7 % white
-# and 8 % tint, made for a near-black background. Outlines up with it.
+# The dark glass every button and card is made of (the canyon's lesson,
+# 2026-10-21, Milko: "all the buttons are barely visible": on the light
+# sky a label needs a dark body under it). The square glass pill that was
+# drawn with it is gone (2026-10-23): every button is the kit's capsule.
 const PILL_BODY := Color(0.13, 0.11, 0.22)
 
-static func glass_pill(c: CanvasItem, rect: Rect2, tint: Color, a: float) -> void:
-	c.draw_rect(Rect2(rect.position - Vector2(3, 3), rect.size + Vector2(6, 6)), Color(tint.r, tint.g, tint.b, 0.1 * a), true)
-	c.draw_rect(rect, Color(PILL_BODY, 0.55 * a), true)
-	c.draw_rect(rect, Color(tint.r, tint.g, tint.b, 0.2 * a), true)
-	c.draw_rect(rect, Color(1, 1, 1, 0.4 * a), false, 1.5)
-	c.draw_rect(rect, Color(tint.r, tint.g, tint.b, 0.7 * a), false, 1.0)
-	c.draw_line(rect.position + Vector2(6, 1), rect.position + Vector2(rect.size.x - 6, 1), Color(1, 1, 1, 0.42 * a), 1.5)
+
+# ============================================================
+# THE UI KIT (2026-10-22/23, roadmap step 4: "every screen looks
+# designed"). One set of parts every screen draws with -- the menu, its
+# settings sheet, the leaderboard, the account panel, the pause panel and
+# the end screen -- so they read as one game:
+#   capsule_button  the layered button (below), in three states
+#   button          a capsule_button with its label, in a named STYLE
+#   card            the rounded dark-glass panel a sheet sits on
+#   title / tracked the white, tracked, outlined lettering of the menu
+# The layout and buttons follow docs/concept/UI/ref-menu.png and
+# ref-button-layers.png; the states follow ref-button-states.png. A
+# button acts when the finger LIFTS on it (prototype/press.gd), so the
+# pressed state is what the finger is holding down.
+# ============================================================
+enum Btn { NORMAL, PRESSED, DISABLED }
+const PRESS_SINK := 4.0              # how far a pressed body sinks onto its lip
+const GLASS_TOP := Color(0.36, 0.32, 0.5)
+const GLASS_BOTTOM := Color(0.13, 0.11, 0.22)       # PILL_BODY
+const INK := Color(0.05, 0.17, 0.2)                 # the label on a light body
+# A STYLE is [body top, body bottom, label colour, glow].
+#   go     cyan: the way forward (PLAY, RESUME, RETRY, a chosen option)
+#   glass  dark glass, white label: everything else
+#   goal   amber: joining the leaderboard
+#   danger the lethal magenta: deleting the account
+#   scarf  the scarf's sage: its teaser
+static func style(name: String) -> Array:
+	match name:
+		"go":
+			return [WorldPalette.SAFE.lightened(0.45), WorldPalette.SAFE.darkened(0.2), INK, 1.0]
+		"goal":
+			return [WorldPalette.GOAL.lightened(0.35), WorldPalette.GOAL.darkened(0.15), Color(0.2, 0.11, 0.0), 0.5]
+		"danger":
+			return [WorldPalette.LETHAL_LIVE.lightened(0.2), WorldPalette.LETHAL_LIVE.darkened(0.3), Color.WHITE, 0.0]
+		"scarf":
+			return [WorldPalette.SCARF.darkened(0.15), WorldPalette.SCARF.darkened(0.5), Color.WHITE, 0.0]
+	return [GLASS_TOP, GLASS_BOTTOM, Color.WHITE, 0.0]
 
 
-# THE CAPSULE BUTTON (2026-10-22, step 4: the menu after
-# docs/concept/UI/ref-menu.png). The layers of ref-button-layers.png,
+# THE CAPSULE BUTTON (2026-10-22). The layers of ref-button-layers.png,
 # bottom up: a soft glow in the tint, a drop shadow, a darker lip under
 # the body, the body (a vertical gradient), a gloss band over its top
 # half, and a thin light along the top edge. The references are neon on
 # black; on the canyon's light sky the drop shadow and the lip carry the
-# depth and the glow is only a breath. `top` / `bottom` are the body's
-# gradient; a square rect makes a round button.
-static func capsule_button(c: CanvasItem, rect: Rect2, top: Color, bottom: Color, a: float, glow := 0.0) -> void:
+# depth and the glow is only a breath. A square rect makes a round button.
+# PRESSED: the body sinks PRESS_SINK onto its lip, the glow and the gloss
+# go down, the body darkens a touch. DISABLED: the body goes grey and
+# half see-through, no glow.
+static func capsule_button(c: CanvasItem, rect: Rect2, top: Color, bottom: Color, a: float, glow := 0.0, state := Btn.NORMAL) -> void:
+	var gloss_a := 0.35
+	if state == Btn.DISABLED:
+		var grey := Color(0.55, 0.55, 0.6)
+		top = top.lerp(grey, 0.7)
+		bottom = bottom.lerp(grey.darkened(0.4), 0.7)
+		a *= 0.55
+		glow = 0.0
+		gloss_a = 0.2
 	for i in 3:
 		var g := 4.0 + 5.0 * i
-		_capsule(c, rect.grow(g), Color(top, glow * (0.12 - 0.035 * i) * a))
-	_capsule(c, Rect2(rect.position + Vector2(0, 9), rect.size).grow(1.0), Color(PILL_BODY, 0.22 * a))
-	_capsule(c, Rect2(rect.position + Vector2(0, 5), rect.size), Color(bottom.darkened(0.35), a))
-	_capsule(c, rect, Color(top, a), Color(bottom, a))
-	var r := minf(rect.size.x, rect.size.y) * 0.5
-	var gloss := Rect2(rect.position + Vector2(r * 0.4, rect.size.y * 0.07), Vector2(rect.size.x - r * 0.8, rect.size.y * 0.42))
-	_capsule(c, gloss, Color(1, 1, 1, 0.35 * a), Color(1, 1, 1, 0.0))
-	var pts := _capsule_points(rect)
-	var edge := PackedVector2Array()
-	for p in pts:
-		if p.y < rect.get_center().y - r * 0.35:
-			edge.append(p)
-	if edge.size() > 1:
-		c.draw_polyline(edge, Color(1, 1, 1, 0.7 * a), 1.2, true)
+		if glow > 0.0:
+			_round(c, rect.grow(g), -1.0, Color(top, glow * (0.12 - 0.035 * i) * a * (0.35 if state == Btn.PRESSED else 1.0)))
+	_round(c, Rect2(rect.position + Vector2(0, 9), rect.size).grow(1.0), -1.0, Color(PILL_BODY, 0.22 * a))
+	_round(c, Rect2(rect.position + Vector2(0, 5), rect.size), -1.0, Color(bottom.darkened(0.35), a))
+	var body := rect
+	if state == Btn.PRESSED:
+		body.position.y += PRESS_SINK
+		top = top.darkened(0.08)
+		bottom = bottom.darkened(0.08)
+		gloss_a = 0.18
+	_round(c, body, -1.0, Color(top, a), Color(bottom, a))
+	var r := minf(body.size.x, body.size.y) * 0.5
+	var gloss := Rect2(body.position + Vector2(r * 0.4, body.size.y * 0.07), Vector2(body.size.x - r * 0.8, body.size.y * 0.42))
+	_round(c, gloss, -1.0, Color(1, 1, 1, gloss_a * a), Color(1, 1, 1, 0.0))
+	_top_light(c, body, -1.0, 0.7 * a)
 
 
-# A capsule (a stadium: two half circles and the straight between) filled
-# flat, or with a vertical gradient when `bottom` is given; its outline is
-# drawn antialiased in the same colours so the edge is not stair-stepped.
-static func _capsule(c: CanvasItem, rect: Rect2, top: Color, bottom = null) -> void:
-	var pts := _capsule_points(rect)
+# How far a button's face has moved (labels and icons move with it).
+static func sink(state: int) -> Vector2:
+	return Vector2(0, PRESS_SINK) if state == Btn.PRESSED else Vector2.ZERO
+
+
+# A capsule_button in a STYLE with its label centred on it (bold).
+static func button(c: CanvasItem, rect: Rect2, label: String, style_name := "glass", state := Btn.NORMAL, size := 16, a := 1.0) -> void:
+	var st := style(style_name)
+	capsule_button(c, rect, st[0], st[1], a, st[3], state)
+	var ink: Color = st[2]
+	var ia := a * (0.5 if state == Btn.DISABLED else 1.0)
+	centre_text(c, bold(), label, rect.get_center() + sink(state) + Vector2(0, -1), size, Color(ink, ia))
+
+
+# THE CARD: a sheet's rounded dark-glass panel -- a drop shadow, the
+# glass body (the buttons' glass, a gradient), a faint rim and the light
+# along its top edge.
+const CARD_RADIUS := 26.0
+
+static func card(c: CanvasItem, rect: Rect2, a := 1.0) -> void:
+	_round(c, Rect2(rect.position + Vector2(0, 12), rect.size).grow(2.0), CARD_RADIUS, Color(PILL_BODY, 0.3 * a))
+	_round(c, rect, CARD_RADIUS, Color(GLASS_TOP.darkened(0.25), 0.96 * a), Color(GLASS_BOTTOM.darkened(0.15), 0.97 * a))
+	_outline(c, rect, CARD_RADIUS, Color(1, 1, 1, 0.12 * a))
+	_top_light(c, rect, CARD_RADIUS, 0.45 * a)
+
+
+# A filled rounded shape: radius -1 = a capsule (a stadium: half circles
+# at the ends). Flat, or a vertical gradient when `bottom` is given; its
+# outline is drawn antialiased in the same colours so the edge is not
+# stair-stepped.
+static func _round(c: CanvasItem, rect: Rect2, radius: float, top: Color, bottom = null) -> void:
+	var pts := _round_points(rect, radius)
 	var cols := PackedColorArray()
 	var low: Color = top if bottom == null else bottom
 	for p in pts:
@@ -314,19 +390,81 @@ static func _capsule(c: CanvasItem, rect: Rect2, top: Color, bottom = null) -> v
 	c.draw_polyline_colors(ring, ring_cols, 1.0, true)
 
 
-static func _capsule_points(rect: Rect2, seg := 14) -> PackedVector2Array:
-	var r := minf(rect.size.x, rect.size.y) * 0.5
-	var cy := rect.position.y + rect.size.y * 0.5
-	var left := Vector2(rect.position.x + r, cy)
-	var right := Vector2(rect.end.x - r, cy)
+static func _outline(c: CanvasItem, rect: Rect2, radius: float, col: Color) -> void:
+	var ring := _round_points(rect, radius)
+	ring.append(ring[0])
+	c.draw_polyline(ring, col, 1.0, true)
+
+
+# The thin light along a shape's top edge.
+static func _top_light(c: CanvasItem, rect: Rect2, radius: float, a: float) -> void:
+	var r := minf(rect.size.x, rect.size.y) * 0.5 if radius < 0.0 else radius
+	var edge := PackedVector2Array()
+	for p in _round_points(rect, radius):
+		if p.y < rect.position.y + r * 0.65:
+			edge.append(p)
+	# The points run clockwise from the top-right corner, so the top edge
+	# can arrive in two pieces (the top-left corner last): put it in order.
+	var sorted := Array(edge)
+	sorted.sort_custom(func(u, v): return u.x < v.x)
+	if sorted.size() > 1:
+		c.draw_polyline(PackedVector2Array(sorted), Color(1, 1, 1, a), 1.2, true)
+
+
+# The outline of a rounded rectangle, clockwise from the top-right
+# corner; radius -1 (or anything past half the short side) = a capsule.
+static func _round_points(rect: Rect2, radius: float, seg := 7) -> PackedVector2Array:
+	var half := minf(rect.size.x, rect.size.y) * 0.5
+	var r := half if radius < 0.0 else minf(radius, half)
 	var pts := PackedVector2Array()
-	for i in seg + 1:
-		var t := -PI * 0.5 + PI * float(i) / seg      # the right half circle, top to bottom
-		pts.append(right + Vector2(cos(t), sin(t)) * r)
-	for i in seg + 1:
-		var t := PI * 0.5 + PI * float(i) / seg       # the left half circle, bottom to top
-		pts.append(left + Vector2(cos(t), sin(t)) * r)
+	var corners := [
+		[Vector2(rect.end.x - r, rect.position.y + r), -PI * 0.5],    # top-right
+		[Vector2(rect.end.x - r, rect.end.y - r), 0.0],               # bottom-right
+		[Vector2(rect.position.x + r, rect.end.y - r), PI * 0.5],     # bottom-left
+		[Vector2(rect.position.x + r, rect.position.y + r), PI],      # top-left
+	]
+	for cn in corners:
+		for i in seg + 1:
+			var t: float = float(cn[1]) + PI * 0.5 * float(i) / seg
+			pts.append(cn[0] + Vector2(cos(t), sin(t)) * r)
 	return pts
+
+
+# THE LETTERING. Titles and labels are the default font emboldened (a
+# FontVariation, not a new font file), tracked letter by letter, with a
+# soft dark outline and shadow so white reads on the canyon's light sky.
+static var _bold_font: FontVariation = null
+
+static func bold() -> Font:
+	if _bold_font == null:
+		_bold_font = FontVariation.new()
+		_bold_font.base_font = ThemeDB.fallback_font
+		_bold_font.variation_embolden = 0.9
+	return _bold_font
+
+
+static func tracked(c: CanvasItem, font: Font, text: String, at: Vector2, size: int, track: float, col: Color) -> float:
+	var x := at.x
+	var shade := Color(PILL_BODY, 0.3 * col.a)
+	var rim := Color(PILL_BODY, 0.22 * col.a)
+	for i in text.length():
+		var ch := text[i]
+		c.draw_string_outline(font, Vector2(x, at.y), ch, HORIZONTAL_ALIGNMENT_LEFT, -1, size, maxi(3, size / 8), rim)
+		c.draw_string(font, Vector2(x, at.y + 1.5), ch, HORIZONTAL_ALIGNMENT_LEFT, -1, size, shade)
+		c.draw_string(font, Vector2(x, at.y), ch, HORIZONTAL_ALIGNMENT_LEFT, -1, size, col)
+		x += font.get_string_size(ch, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x + track
+	return maxf(0.0, x - at.x - track)
+
+
+static func tracked_width(font: Font, text: String, size: int, track: float) -> float:
+	var w := 0.0
+	for i in text.length():
+		w += font.get_string_size(text[i], HORIZONTAL_ALIGNMENT_LEFT, -1, size).x + track
+	return maxf(0.0, w - track)
+
+
+static func title(c: CanvasItem, font: Font, text: String, cx: float, y: float, size: int, track: float, col: Color) -> void:
+	tracked(c, font, text, Vector2(cx - tracked_width(font, text, size, track) * 0.5, y), size, track, col)
 
 
 # THE CLAY HEART (2026-10-22, step 4: "clay hearts for lives"). One life,
@@ -426,10 +564,6 @@ static func centre_text(c: CanvasItem, font: Font, text: String, at: Vector2, si
 	c.draw_string(font, at - Vector2(w * 0.5, -size * 0.35), text, HORIZONTAL_ALIGNMENT_LEFT, -1, size, col)
 
 
-func _pill(rect: Rect2, tint: Color, a: float) -> void:
-	glass_pill(self, rect, tint, a)
-
-
 func _text(font: Font, text: String, c: Vector2, size: int, col: Color) -> void:
 	centre_text(self, font, text, c, size, col)
 
@@ -441,22 +575,21 @@ func _draw_end_screen(screen: Vector2, font: Font) -> void:
 	var a := end_alpha
 	draw_rect(Rect2(Vector2.ZERO, screen), Color(0.04, 0.05, 0.08, 0.74 * a), true)
 	var c := screen * 0.5
-	_text(font, end_distance, c + Vector2(0, -104), 72, Color(1, 1, 1, 0.96 * a))
+	# The menu's look (2026-10-23): the menu's lettering, RETRY cyan, MENU
+	# glass, JOIN amber. The share screen (roadmap step 5) replaces this.
+	title(self, bold(), end_distance, c.x, c.y - 80.0, 72, 3.0, Color(1, 1, 1, 0.97 * a))
+	var gold := Color(Palette.GOAL.r, Palette.GOAL.g, Palette.GOAL.b, a)
 	if end_new_best:
-		_text(font, "NEW BEST", c + Vector2(0, -48), 20, Color(Palette.GOAL.r, Palette.GOAL.g, Palette.GOAL.b, a))
+		title(self, bold(), "NEW BEST", c.x, c.y - 40.0, 22, 4.0, gold)
 	else:
-		_text(font, end_best, c + Vector2(0, -48), 18, Color(Palette.GOAL.r, Palette.GOAL.g, Palette.GOAL.b, 0.9 * a))
+		title(self, bold(), end_best, c.x, c.y - 40.0, 18, 2.0, gold)
 	if end_rank != "":
-		_text(font, end_rank, c + Vector2(0, -20), 15, Color(Palette.EDGE.r, Palette.EDGE.g, Palette.EDGE.b, 0.95 * a))
+		title(self, bold(), end_rank, c.x, c.y - 14.0, 15, 1.0, Color(WorldPalette.SAFE.lightened(0.4), a))
 	retry_rect = Rect2(c + Vector2(-150, 4), Vector2(300, 72))
-	_pill(retry_rect, Palette.EDGE, a)
-	_text(font, "RETRY", retry_rect.position + retry_rect.size * 0.5, 30, Color(1, 1, 1, 0.95 * a))
+	button(self, retry_rect, "RETRY", "go", _state("retry"), 28, a)
 	menu_rect = Rect2(c + Vector2(-90, 90), Vector2(180, 66))
-	_pill(menu_rect, Color(1, 1, 1), a * 0.8)
-	_text(font, "MENU", menu_rect.position + menu_rect.size * 0.5, 18, Color(1, 1, 1, 0.8 * a))
+	button(self, menu_rect, "MENU", "glass", _state("menu"), 18, a)
 	join_rect = Rect2()
 	if end_join:
-		join_rect = Rect2(c + Vector2(-170, 160), Vector2(340, 66))
-		_pill(join_rect, Palette.GOAL, a * 0.9)
-		_text(font, "JOIN TO POST YOUR DISTANCE", join_rect.position + join_rect.size * 0.5, 15,
-			Color(Palette.GOAL.r, Palette.GOAL.g, Palette.GOAL.b, 0.95 * a))
+		join_rect = Rect2(c + Vector2(-180, 166), Vector2(360, 66))
+		button(self, join_rect, "JOIN TO POST YOUR DISTANCE", "goal", _state("join"), 16, a)

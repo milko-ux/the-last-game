@@ -63,6 +63,7 @@ const Hud := preload("res://prototype/hud.gd")
 const Field := preload("res://prototype/field.gd")
 const Looks := preload("res://prototype/looks.gd")
 const Scarf := preload("res://prototype/scarf.gd")
+const Press := preload("res://prototype/press.gd")
 const TimeOfDay := preload("res://prototype/time_of_day.gd")
 
 const RUN_SCENE := "res://prototype/track_test.tscn"
@@ -180,6 +181,7 @@ var _editing_name := false
 
 # Tap targets, recorded while drawing (the same pattern as ui.gd).
 var _rects := {}
+var _press := Press.new()
 
 # LOADING: the tap is taken, the label goes up, and the scene changes
 # only once the label has really been painted.
@@ -525,23 +527,15 @@ func _input(event: InputEvent) -> void:
 		if _panel != Sheet.NONE:
 			_close_panel()
 		return
-	var pos: Variant = null
-	if event is InputEventScreenTouch and event.pressed:
-		pos = event.position
-	elif event is InputEventMouseButton and event.pressed \
-			and event.button_index == MOUSE_BUTTON_LEFT \
-			and event.device != InputEvent.DEVICE_ID_EMULATION:
-		pos = event.position
-	if pos == null:
-		return
-	if _editing_name:
+	# A button acts when the finger lifts on it (press.gd); a tap that
+	# lands on no button closes the settings sheet, as before.
+	var down := Press.is_down(event)
+	if down and _editing_name:
 		_finish_name_edit()
-	for key in _rects:
-		if _rects[key].has_point(pos):
-			Sfx.play("tap")
-			_tap(String(key))
-			return
-	if _panel == Sheet.SETTINGS:
+	var tapped := _press.feed(event, _rects)
+	if tapped != "":
+		_tap(tapped)
+	elif down and _press.key == "" and _panel == Sheet.SETTINGS:
 		_close_panel()
 
 
@@ -566,8 +560,9 @@ func _tap(what: String) -> void:
 			Progress.set_music(false)
 		"random":
 			Profile.reroll()
-		"edit":
-			_begin_name_edit()
+		"edit", "name_field":
+			if not Profile.claimed:
+				_begin_name_edit()
 		"account":
 			account_panel.open()
 		"dev":
@@ -660,7 +655,9 @@ func draw_overlay(c: CanvasItem) -> void:
 	# Not even the dim: this Overlay is added after the leaderboard, so it
 	# draws OVER it, and a dim here was a 60 % dark sheet over every row
 	# (2026-09-29, "barely visible" on the phone). The screen dims itself.
-	if lb_screen.visible:
+	# The account panel the same (2026-10-23): with the menu centred, its
+	# title and PLAY were drawn straight over the panel's card.
+	if lb_screen.visible or account_panel.visible:
 		return
 
 	var a := _alpha
@@ -669,17 +666,12 @@ func draw_overlay(c: CanvasItem) -> void:
 	_draw_name_chip(c, screen, font, a)
 	_draw_scarf_teaser(c, font, a)
 	if Progress.UNLOCK_ALL:
-		var dev := Rect2(Vector2(screen.x - MARGIN - 78.0, screen.y - BOTTOM - 44.0), Vector2(78.0, 44.0))
+		var dev := Rect2(Vector2(screen.x - MARGIN - 86.0, screen.y - BOTTOM - TAP_MIN), Vector2(86.0, TAP_MIN))
 		_rects["dev"] = dev
-		Hud.glass_pill(c, dev, Palette.TEXT, 0.5 * a)
-		Hud.centre_text(c, font, "DEV", dev.get_center() + Vector2(0, -1), 13, Color(1, 1, 1, 0.5 * a))
-	# Anything open dims the menu behind it. The account panel is the
-	# settings sheet's own next screen, so while it is up the sheet
-	# stands down: it is a Node2D of its own and would otherwise be
-	# drawn over (this node's Overlay is added last, so it draws last).
-	if _panel == Sheet.SETTINGS or account_panel.visible:
+		Hud.button(c, dev, "DEV", "glass", _press.state("dev"), 13, 0.6 * a)
+	# The settings sheet dims the menu behind it.
+	if _panel == Sheet.SETTINGS:
 		c.draw_rect(Rect2(Vector2.ZERO, screen), Color(0.04, 0.05, 0.08, 0.72), true)
-	if _panel == Sheet.SETTINGS and not account_panel.visible:
 		# The sheet is modal: the menu's own buttons are behind it, so
 		# their tap targets are dropped and only the sheet's are live.
 		_rects = {}
@@ -688,98 +680,63 @@ func draw_overlay(c: CanvasItem) -> void:
 
 # THE LAST over GAME, centred, as the mockup stacks it; bottom left the
 # best distance in the goal's amber (or the game's question before there
-# is one) and the season under it. Drawn letter by letter so it can carry
-# real tracking -- a title without it reads as a default label, which is
-# the look this game is not having. GAME is the same font, emboldened
-# (a FontVariation, not a new font file).
+# is one) and the season under it. The lettering is Hud's (tracked,
+# outlined, GAME emboldened): the screens share it.
 const TITLE_TOP := 64.0
 const TITLE_GAME := 128.0
 
 func _draw_title(c: CanvasItem, screen: Vector2, font: Font, a: float) -> void:
 	var cx := screen.x * 0.5
-	_tracked_centre(c, font, "THE LAST", cx, TITLE_TOP, 24, 10.0, Color(1, 1, 1, 0.95 * a))
-	_tracked_centre(c, _bold(), "GAME", cx, TITLE_GAME, 66, 6.0, Color(1, 1, 1, 0.97 * a))
+	Hud.title(c, font, "THE LAST", cx, TITLE_TOP, 24, 10.0, Color(1, 1, 1, 0.95 * a))
+	Hud.title(c, Hud.bold(), "GAME", cx, TITLE_GAME, 66, 6.0, Color(1, 1, 1, 0.97 * a))
 	var y := screen.y - BOTTOM - 30.0
 	var best := Progress.best_distance_for(LapGen.SEASON_SEED)
 	if best > 0:
-		_tracked(c, _bold(), "BEST " + Hud.metres(best), Vector2(MARGIN, y), 19, 2.0,
+		Hud.tracked(c, Hud.bold(), "BEST " + Hud.metres(best), Vector2(MARGIN, y), 19, 2.0,
 			Color(Palette.GOAL.r, Palette.GOAL.g, Palette.GOAL.b, 0.97 * a))
 	else:
-		_tracked(c, font, "HOW FAR CAN YOU GET", Vector2(MARGIN, y), 15, 2.0, Color(1, 1, 1, 0.85 * a))
-	_tracked(c, font, "SEASON %d" % LapGen.SEASON_SEED, Vector2(MARGIN, y + 22.0), 11, 2.0, Color(1, 1, 1, 0.6 * a))
-
-
-static var _bold_font: FontVariation = null
-
-static func _bold() -> Font:
-	if _bold_font == null:
-		_bold_font = FontVariation.new()
-		_bold_font.base_font = ThemeDB.fallback_font
-		_bold_font.variation_embolden = 0.9
-	return _bold_font
-
-
-# Draws `text` with `track` extra pixels between letters; returns its
-# total width so a rule can be drawn under it. A soft dark outline and
-# shadow under every letter keep it readable on the canyon's light sky.
-func _tracked(c: CanvasItem, font: Font, text: String, at: Vector2, size: int, track: float, col: Color) -> float:
-	var x := at.x
-	var shade := Color(Hud.PILL_BODY, 0.3 * col.a)
-	var rim := Color(Hud.PILL_BODY, 0.22 * col.a)
-	for i in text.length():
-		var ch := text[i]
-		c.draw_string_outline(font, Vector2(x, at.y), ch, HORIZONTAL_ALIGNMENT_LEFT, -1, size, maxi(3, size / 8), rim)
-		c.draw_string(font, Vector2(x, at.y + 1.5), ch, HORIZONTAL_ALIGNMENT_LEFT, -1, size, shade)
-		c.draw_string(font, Vector2(x, at.y), ch, HORIZONTAL_ALIGNMENT_LEFT, -1, size, col)
-		x += font.get_string_size(ch, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x + track
-	return maxf(0.0, x - at.x - track)
-
-
-func _tracked_width(font: Font, text: String, size: int, track: float) -> float:
-	var w := 0.0
-	for i in text.length():
-		w += font.get_string_size(text[i], HORIZONTAL_ALIGNMENT_LEFT, -1, size).x + track
-	return maxf(0.0, w - track)
-
-
-func _tracked_centre(c: CanvasItem, font: Font, text: String, cx: float, y: float, size: int, track: float, col: Color) -> void:
-	_tracked(c, font, text, Vector2(cx - _tracked_width(font, text, size, track) * 0.5, y), size, track, col)
+		Hud.tracked(c, font, "HOW FAR CAN YOU GET", Vector2(MARGIN, y), 15, 2.0, Color(1, 1, 1, 0.85 * a))
+	Hud.tracked(c, font, "SEASON %d" % LapGen.SEASON_SEED, Vector2(MARGIN, y + 22.0), 11, 2.0, Color(1, 1, 1, 0.6 * a))
 
 
 # PLAY, big and cyan (cyan = safe: go), centred at the bottom; the two
 # round dark-glass buttons either side of it, a trophy for the
 # leaderboard and a gear for settings. The glass is dark so the white
-# icons read on the light sky (the canyon's lesson, 2026-10-21).
+# icons read on the light sky (the canyon's lesson, 2026-10-21). Every
+# button shows the state the finger gives it (press.gd); the trophy is
+# DISABLED when this build has no Talo key.
 const PLAY_SIZE := Vector2(300.0, 84.0)
 const ROUND := 78.0
 const ROUND_GAP := 28.0
-const PLAY_INK := Color(0.05, 0.17, 0.2)                # the label on the cyan body
-const GLASS_TOP := Color(0.36, 0.32, 0.5)
-const GLASS_BOTTOM := Color(0.13, 0.11, 0.22)          # Hud.PILL_BODY
 
 func _draw_buttons(c: CanvasItem, screen: Vector2, font: Font, a: float) -> void:
 	var play := Rect2(Vector2(screen.x * 0.5 - PLAY_SIZE.x * 0.5, screen.y - BOTTOM - PLAY_SIZE.y - 8.0), PLAY_SIZE)
 	_rects["play"] = play
-	Hud.capsule_button(c, play, WorldPalette.SAFE.lightened(0.45), WorldPalette.SAFE.darkened(0.2), a, 1.0)
-	var label_w: float = _bold().get_string_size("PLAY", HORIZONTAL_ALIGNMENT_LEFT, -1, 34).x
+	var ps := _press.state("play")
+	var go := Hud.style("go")
+	Hud.capsule_button(c, play, go[0], go[1], a, go[3], ps)
+	var label_w: float = Hud.bold().get_string_size("PLAY", HORIZONTAL_ALIGNMENT_LEFT, -1, 34).x
 	var group := 22.0 + 14.0 + label_w
 	var left := play.get_center().x - group * 0.5
-	var mid_y := play.get_center().y
+	var mid_y := play.get_center().y + Hud.sink(ps).y
 	c.draw_colored_polygon(PackedVector2Array([Vector2(left, mid_y - 12.0), Vector2(left + 22.0, mid_y),
-		Vector2(left, mid_y + 12.0)]), Color(PLAY_INK, a))
-	c.draw_string(_bold(), Vector2(left + 36.0, mid_y + 12.0), "PLAY", HORIZONTAL_ALIGNMENT_LEFT, -1, 34, Color(PLAY_INK, a))
+		Vector2(left, mid_y + 12.0)]), Color(Hud.INK, a))
+	c.draw_string(Hud.bold(), Vector2(left + 36.0, mid_y + 12.0), "PLAY", HORIZONTAL_ALIGNMENT_LEFT, -1, 34, Color(Hud.INK, a))
 
-	# No Talo key in this build: the trophy is honestly dim.
-	var lb := Rect2(Vector2(play.position.x - ROUND_GAP - ROUND, mid_y - ROUND * 0.5), Vector2(ROUND, ROUND))
-	_rects["leaderboard"] = lb
-	var lb_a := a if Talo.configured() else 0.45 * a
-	Hud.capsule_button(c, lb, GLASS_TOP, GLASS_BOTTOM, 0.95 * lb_a)
-	_draw_trophy(c, lb.get_center(), Color(1, 1, 1, 0.95 * lb_a))
+	var row_mid := play.get_center().y
+	var lb := Rect2(Vector2(play.position.x - ROUND_GAP - ROUND, row_mid - ROUND * 0.5), Vector2(ROUND, ROUND))
+	var lb_state := _press.state("leaderboard", Talo.configured())
+	if Talo.configured():
+		_rects["leaderboard"] = lb
+	Hud.capsule_button(c, lb, Hud.GLASS_TOP, Hud.GLASS_BOTTOM, 0.95 * a, 0.0, lb_state)
+	_draw_trophy(c, lb.get_center() + Hud.sink(lb_state), Color(1, 1, 1, (0.5 if lb_state == Hud.Btn.DISABLED else 0.95) * a))
 
-	var st := Rect2(Vector2(play.end.x + ROUND_GAP, mid_y - ROUND * 0.5), Vector2(ROUND, ROUND))
+	var st := Rect2(Vector2(play.end.x + ROUND_GAP, row_mid - ROUND * 0.5), Vector2(ROUND, ROUND))
 	_rects["settings"] = st
-	Hud.capsule_button(c, st, GLASS_TOP, GLASS_BOTTOM, 0.95 * a)
-	_draw_gear(c, st.get_center(), Color(1, 1, 1, 0.95 * a), Color(GLASS_TOP.lerp(GLASS_BOTTOM, 0.5), a))
+	var st_state := _press.state("settings")
+	Hud.capsule_button(c, st, Hud.GLASS_TOP, Hud.GLASS_BOTTOM, 0.95 * a, 0.0, st_state)
+	_draw_gear(c, st.get_center() + Hud.sink(st_state), Color(1, 1, 1, 0.95 * a),
+		Color(Hud.GLASS_TOP.lerp(Hud.GLASS_BOTTOM, 0.5), a))
 
 
 # The trophy: a cup with two handles on a stem and a base, ~30 across.
@@ -813,99 +770,93 @@ func _draw_scarf_teaser(c: CanvasItem, font: Font, a: float) -> void:
 		return
 	var at := cam.unproject_position(_creature.global_position + Vector3(0.0, 2.75, 0.0))   # just over its head
 	var label := "REACH %s TO UNLOCK THE SCARF" % Hud.metres(Scarf.UNLOCK_M).replace(" 000 m", " KM")
-	var w: float = font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x + 36.0
+	var w: float = Hud.bold().get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x + 40.0
 	var pill := Rect2(at - Vector2(w * 0.5, 18.0), Vector2(w, 36.0))
-	Hud.capsule_button(c, pill, WorldPalette.SCARF.darkened(0.15), WorldPalette.SCARF.darkened(0.5), 0.92 * a)
-	Hud.centre_text(c, font, label, pill.get_center() + Vector2(0, -1), 13, Color(1, 1, 1, 0.95 * a))
+	Hud.button(c, pill, label, "scarf", Hud.Btn.NORMAL, 13, 0.92 * a)
 
 
 # Top right: who is playing. A tap goes to the same place SETTINGS does,
-# because that is where the nickname and the account live.
+# because that is where the nickname and the account live. The dot is
+# cyan when signed in.
 func _draw_name_chip(c: CanvasItem, screen: Vector2, font: Font, a: float) -> void:
 	var label := Profile.username
-	var w: float = font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, 17).x + 76.0
+	var w: float = Hud.bold().get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, 17).x + 76.0
 	var chip := Rect2(Vector2(screen.x - MARGIN - w, 72.0), Vector2(w, TAP_MIN))
 	_rects["name_chip"] = chip
+	var cs := _press.state("name_chip")
 	var tint: Color = WorldPalette.SAFE if Talo.logged_in() else Palette.TEXT
-	Hud.capsule_button(c, chip, GLASS_TOP, GLASS_BOTTOM, 0.9 * a)
-	c.draw_circle(chip.position + Vector2(24.0, chip.size.y * 0.5), 4.5,
-		Color(tint.r, tint.g, tint.b, 0.95 * a))
-	c.draw_string(font, chip.position + Vector2(40.0, chip.size.y * 0.5 + 6.0), label,
-		HORIZONTAL_ALIGNMENT_LEFT, -1, 17, Color(1, 1, 1, 0.9 * a))
+	Hud.capsule_button(c, chip, Hud.GLASS_TOP, Hud.GLASS_BOTTOM, 0.9 * a, 0.0, cs)
+	var o := chip.position + Hud.sink(cs)
+	c.draw_circle(o + Vector2(26.0, chip.size.y * 0.5), 4.5, Color(tint.r, tint.g, tint.b, 0.95 * a))
+	c.draw_string(Hud.bold(), o + Vector2(42.0, chip.size.y * 0.5 + 6.0), label,
+		HORIZONTAL_ALIGNMENT_LEFT, -1, 17, Color(1, 1, 1, 0.92 * a))
 
 
 # ------------------------------------------------------------
-# SETTINGS — sound, the nickname, and the door to the account panel
+# SETTINGS — sound, the nickname, and the door to the account panel.
+# A Hud card with Hud buttons (2026-10-23: it matches the menu now): the
+# chosen side of a switch is cyan, the other dark glass; ACCOUNT is the
+# leaderboard's amber, DISABLED when this build has no Talo key.
 # ------------------------------------------------------------
+const SHEET := Vector2(540.0, 480.0)
+
 func _draw_settings(c: CanvasItem, screen: Vector2, font: Font) -> void:
-	var pw := 520.0
-	var ph := 480.0
-	var panel := Rect2(screen * 0.5 - Vector2(pw, ph) * 0.5, Vector2(pw, ph))
-	# A panel this big cannot be a tinted pane — the tint becomes a wash.
-	# It is the background colour first, then the glass edge on top.
-	c.draw_rect(panel, Color(0.04, 0.05, 0.08, 0.93), true)
-	Hud.glass_pill(c, panel, WorldPalette.SAFE, 0.45)
+	var panel := Rect2(screen * 0.5 - SHEET * 0.5, SHEET)
+	Hud.card(c, panel)
 	var px := panel.position.x
 	var py := panel.position.y
-	var cx := panel.get_center().x
-	Hud.centre_text(c, font, "SETTINGS", Vector2(cx, py + 44.0), 21, Color(1, 1, 1, 0.92))
+	var pw := panel.size.x
+	Hud.title(c, Hud.bold(), "SETTINGS", panel.get_center().x, py + 52.0, 24, 4.0, Color.WHITE)
+
+	var close := Rect2(Vector2(px + pw - 22.0 - TAP_MIN, py + 18.0), Vector2(TAP_MIN, TAP_MIN))
+	_rects["close"] = close
+	var cs := _press.state("close")
+	Hud.capsule_button(c, close, Hud.GLASS_TOP, Hud.GLASS_BOTTOM, 1.0, 0.0, cs)
+	var xc := close.get_center() + Hud.sink(cs)
+	c.draw_line(xc + Vector2(-8, -8), xc + Vector2(8, 8), Color.WHITE, 3.0, true)
+	c.draw_line(xc + Vector2(-8, 8), xc + Vector2(8, -8), Color.WHITE, 3.0, true)
 
 	# Sound: the effects and the music, each on its own (Progress).
-	for row in [["EFFECTS", "effects", Progress.effects_on, 84.0], ["MUSIC", "music", Progress.music_on, 158.0]]:
+	for row in [["EFFECTS", "effects", Progress.effects_on, 92.0], ["MUSIC", "music", Progress.music_on, 170.0]]:
 		var top: float = py + float(row[3])
 		var on: bool = row[2]
-		c.draw_string(font, Vector2(px + 34.0, top + 40.0), String(row[0]),
-			HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color(Palette.TEXT.r, Palette.TEXT.g, Palette.TEXT.b, 0.9))
-		var on_rect := Rect2(Vector2(cx + 16.0, top), Vector2(92.0, TAP_MIN))
-		var off_rect := Rect2(Vector2(cx + 118.0, top), Vector2(92.0, TAP_MIN))
-		_rects[String(row[1]) + "_on"] = on_rect
-		_rects[String(row[1]) + "_off"] = off_rect
-		_toggle(c, font, on_rect, "ON", on)
-		_toggle(c, font, off_rect, "OFF", not on)
+		Hud.tracked(c, Hud.bold(), String(row[0]), Vector2(px + 40.0, top + 40.0), 16, 2.0, Color(1, 1, 1, 0.9))
+		var on_rect := Rect2(Vector2(px + pw - 40.0 - 214.0, top), Vector2(104.0, TAP_MIN))
+		var off_rect := Rect2(Vector2(px + pw - 40.0 - 104.0, top), Vector2(104.0, TAP_MIN))
+		var key := String(row[1])
+		_rects[key + "_on"] = on_rect
+		_rects[key + "_off"] = off_rect
+		Hud.button(c, on_rect, "ON", "go" if on else "glass", _press.state(key + "_on"), 16)
+		Hud.button(c, off_rect, "OFF", "go" if not on else "glass", _press.state(key + "_off"), 16)
 
-	# Nickname
-	c.draw_string(font, Vector2(px + 34.0, py + 274.0), "NAME",
-		HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color(Palette.TEXT.r, Palette.TEXT.g, Palette.TEXT.b, 0.9))
-	var field := Rect2(Vector2(px + 34.0, py + 288.0), Vector2(230.0, TAP_MIN))
+	# Nickname: the name in a glass field (tap it, or EDIT, to type one).
+	Hud.tracked(c, Hud.bold(), "NAME", Vector2(px + 40.0, py + 272.0), 16, 2.0, Color(1, 1, 1, 0.9))
+	var field := Rect2(Vector2(px + 40.0, py + 286.0), Vector2(236.0, TAP_MIN))
 	_rects["name_field"] = field
 	if not _editing_name:
-		Hud.glass_pill(c, field, WorldPalette.SAFE, 0.6)
-		Hud.centre_text(c, font, Profile.username, field.get_center() + Vector2(0, -1), 19, Color(1, 1, 1, 0.92))
+		Hud.button(c, field, Profile.username, "glass", _press.state("name_field", not Profile.claimed), 18)
 	if Profile.claimed:
-		c.draw_string(font, Vector2(px + 280.0, py + 328.0), "your account name",
-			HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(Palette.TEXT.r, Palette.TEXT.g, Palette.TEXT.b, 0.6))
+		c.draw_string(font, Vector2(px + 292.0, py + 326.0), "your account name",
+			HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(1, 1, 1, 0.6))
 	else:
-		var rnd := Rect2(Vector2(px + 276.0, py + 288.0), Vector2(100.0, TAP_MIN))
-		var ed := Rect2(Vector2(px + 388.0, py + 288.0), Vector2(98.0, TAP_MIN))
+		var rnd := Rect2(Vector2(px + 288.0, py + 286.0), Vector2(116.0, TAP_MIN))
+		var ed := Rect2(Vector2(px + 412.0, py + 286.0), Vector2(88.0, TAP_MIN))
 		_rects["random"] = rnd
 		_rects["edit"] = ed
-		Hud.glass_pill(c, rnd, Palette.TEXT, 0.7)
-		Hud.centre_text(c, font, "RANDOM", rnd.get_center() + Vector2(0, -1), 13, Color(1, 1, 1, 0.85))
-		Hud.glass_pill(c, ed, Palette.TEXT, 0.7)
-		Hud.centre_text(c, font, "EDIT", ed.get_center() + Vector2(0, -1), 13, Color(1, 1, 1, 0.85))
+		Hud.button(c, rnd, "RANDOM", "glass", _press.state("random"), 14)
+		Hud.button(c, ed, "EDIT", "glass", _press.state("edit"), 14)
 
 	# The account: the existing panel, nothing new.
+	var acc := Rect2(Vector2(px + 40.0, py + 380.0), Vector2(pw - 80.0, 72.0))
 	if Talo.configured():
-		var acc := Rect2(Vector2(px + 34.0, py + 376.0), Vector2(pw - 68.0, 72.0))
 		_rects["account"] = acc
-		Hud.glass_pill(c, acc, Palette.GOAL, 0.9)
+		var as_ := _press.state("account")
 		var label := "ACCOUNT" if Talo.logged_in() else "REGISTER  ·  LOG IN"
-		Hud.centre_text(c, font, label, acc.get_center() + Vector2(0, -6), 17, Color(1, 1, 1, 0.92))
-		Hud.centre_text(c, font, "post your distance to the leaderboard",
-			acc.get_center() + Vector2(0, 16), 11,
-			Color(Palette.TEXT.r, Palette.TEXT.g, Palette.TEXT.b, 0.7))
+		var st := Hud.style("glass" if Talo.logged_in() else "goal")
+		Hud.capsule_button(c, acc, st[0], st[1], 1.0, st[3], as_)
+		var ink: Color = st[2]
+		var mid := acc.get_center() + Hud.sink(as_)
+		Hud.centre_text(c, Hud.bold(), label, mid + Vector2(0, -8), 18, ink)
+		Hud.centre_text(c, font, "post your distance to the leaderboard", mid + Vector2(0, 15), 12, Color(ink, 0.75))
 	else:
-		Hud.centre_text(c, font, "accounts are not set up in this build",
-			Vector2(cx, py + 414.0), 13,
-			Color(Palette.TEXT.r, Palette.TEXT.g, Palette.TEXT.b, 0.55))
-
-	var close := Rect2(Vector2(px + pw - 16.0 - TAP_MIN, py + 16.0), Vector2(TAP_MIN, TAP_MIN))
-	_rects["close"] = close
-	Hud.glass_pill(c, close, Palette.TEXT, 0.7)
-	Hud.centre_text(c, font, "X", close.get_center() + Vector2(0, -1), 16, Color(1, 1, 1, 0.85))
-
-
-func _toggle(c: CanvasItem, font: Font, rect: Rect2, label: String, on: bool) -> void:
-	Hud.glass_pill(c, rect, WorldPalette.SAFE if on else Palette.TEXT, 1.0 if on else 0.5)
-	Hud.centre_text(c, font, label, rect.get_center() + Vector2(0, -1), 14,
-		Color(1, 1, 1, 0.95 if on else 0.5))
+		Hud.button(c, acc, "ACCOUNTS ARE NOT SET UP IN THIS BUILD", "glass", Hud.Btn.DISABLED, 13)
