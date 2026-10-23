@@ -61,6 +61,8 @@ var paused := false
 var countin := 0.0          # seconds left of the count-in, 0 = none
 var pause_rect := Rect2()
 var pressed := ""           # the pause panel's / end screen's button held down (press.gd), "" = none
+var best_flag := ""         # "BEST 92 m" while the best line is ahead and on screen, "" = none
+var best_flag_at := Vector2.ZERO   # where the line meets the runway's rim, on screen
 var press: Object = null    # the run's press.gd: the buttons' squash and spring
 var end_metres := -1        # the distance as a number: the end screen counts up to it
 var _pause_t := 0.0         # seconds the pause panel has been up (its pop-in)
@@ -103,7 +105,7 @@ func _process(delta: float) -> void:
 	# ui/ui.gd's header). Steady play repaints nothing.
 	var key := [endless, end_shown, end_alpha, paused, countin, fill, best, ticks, lit, word, word_alpha,
 		lives, lives_max, _heart_pop.duplicate(), shield, shield_armed, shield_pop, show_pause, end_distance, end_best, end_new_best,
-		end_rank, end_join, pressed, get_viewport_rect().size]
+		end_rank, end_join, pressed, best_flag, best_flag_at.round(), get_viewport_rect().size]
 	if key != _drawn_key:
 		_drawn_key = key
 		queue_redraw()
@@ -182,6 +184,7 @@ var _last_word := ""
 # Lives (left of the distance) and the shield ring (right of it).
 func _draw_run_hud(screen: Vector2) -> void:
 	_draw_pause_button()
+	_draw_best_flag()
 	var cx := screen.x * 0.5
 	# The lives as clay hearts (2026-10-22): a lost one is a dent, and for
 	# HEART_POP_S after the loss the heart squashes flat over its dent.
@@ -204,6 +207,19 @@ func _draw_run_hud(screen: Vector2) -> void:
 		draw_arc(rc, r, -PI * 0.5, -PI * 0.5 + TAU * maxf(f, shield_pop), 32, Color(col.r, col.g, col.b, 0.95), 3.0, true)
 	if shield_armed:
 		draw_circle(rc, 4.0, Color(col.r, col.g, col.b, 0.9))
+
+
+# The best line's flag: an amber pill (the goal / prize colour) on a thin
+# stem down to where the line meets the rim, a dot on the spot.
+func _draw_best_flag() -> void:
+	if best_flag == "":
+		return
+	var gold := Palette.GOAL
+	var w: float = bold().get_string_size(best_flag, HORIZONTAL_ALIGNMENT_LEFT, -1, 12).x + 26.0
+	var pill := Rect2(best_flag_at + Vector2(-w * 0.5, -54.0), Vector2(w, 26.0))
+	draw_line(best_flag_at, Vector2(best_flag_at.x, pill.end.y), Color(gold, 0.9), 2.0, true)
+	draw_circle(best_flag_at, 3.5, gold)
+	button(self, pill, best_flag, "goal", Btn.NORMAL, 12)
 
 
 # The pause button: two bars on a round glass button, top-left (the

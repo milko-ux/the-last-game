@@ -185,6 +185,7 @@ var _scarf_word_s := 0.0             # how long "SCARF UNLOCKED" stays up
 var _best_m := 0                     # the best distance when this run began
 var _best_crossed := false
 var _best_line: MeshInstance3D
+var _z_front := 0.0          # the far end of the window on screen (the best flag shows only inside it)
 var _best_label: Label
 var _bubble: MeshInstance3D
 var _shield_burst: CPUParticles3D
@@ -803,6 +804,7 @@ func _tick_distance_and_shield(delta: float) -> void:
 	if _best_m > 0 and not _best_crossed and distance_m > _best_m:
 		_best_crossed = true
 		motion.on_best_crossed()
+		Sfx.play("best")              # the NEW BEST fanfare, the moment it happens (step 5)
 		FrameMeter.note("best line crossed")
 	# Armed: the bubble. In the grace second after it broke: it flickers out.
 	_bubble.visible = shield_armed or (_grace > 0.0 and fmod(_grace, 0.16) > 0.08)
@@ -1020,6 +1022,7 @@ func _tick_run(delta: float) -> void:
 	var depth := _window_depth_at(t)
 	rig.set_window_depth(depth)
 	var z_front := z_back + depth
+	_z_front = z_front
 
 	player.move_dir = bot.move_dir(self) if bot != null else _move_input()
 	var was_airborne: bool = not player.on_ground
@@ -1371,7 +1374,12 @@ func _game_over() -> void:
 		# The two lines that always draw on top would cut across the buttons.
 		_edge_line.visible = false
 		_best_line.visible = false
-		hud.show_end(Hud.metres(distance_m), "BEST " + Hud.metres(maxi(_best_m, distance_m)), new_best, distance_m)
+		# How close it was (step 5, the research pass): the gap to the best
+		# when this run fell short of it.
+		var best_line := "BEST " + Hud.metres(maxi(_best_m, distance_m))
+		if not new_best and _best_m > 0:
+			best_line = "EQUALLED YOUR BEST" if distance_m == _best_m else "%s TO YOUR BEST" % Hud.metres(_best_m - distance_m)
+		hud.show_end(Hud.metres(distance_m), best_line, new_best, distance_m)
 		_post_distance()
 		print("RUN OVER distance=%d m best=%d m new_best=%s laps=%d run_s=%.1f deaths=%d notes=%d shields_used=%d" % [
 			distance_m, maxi(_best_m, distance_m), new_best, BeatClock.current_lap(),
@@ -1546,6 +1554,19 @@ func _update_run_hud() -> void:
 	score_label.modulate.a = 1.0
 	var best := maxi(_best_m, distance_m)
 	_best_label.text = ("BEST " + Hud.metres(best)) if best > 0 else ""
+	# THE BEST LINE'S FLAG (step 5, Milko 2026-10-23: the bare amber line
+	# "seems pretty useless" -- "keep it and label it"): a small amber
+	# BEST pill standing where the line meets the runway's right-hand rim
+	# (screen-right is world -x at the camera's yaw), until it is passed.
+	hud.best_flag = ""
+	# Only while the line itself is on screen: beyond the window's far end
+	# the track fades into the haze and a flag would float over nothing.
+	if _best_m > 0 and not _best_crossed and _best_line.visible and (state == State.RUN or state == State.COUNTIN) \
+			and _best_line.position.z <= _z_front:
+		var at := Vector3(-Rules.FIELD_WIDTH * 0.5, 0.0, _best_line.position.z)
+		if not rig.cam.is_position_behind(at):
+			hud.best_flag = "BEST " + Hud.metres(_best_m)
+			hud.best_flag_at = rig.cam.unproject_position(at)
 	hud.lives = lives
 	hud.lives_max = RUN_LIVES if lives_enabled() else 0
 	hud.shield = float(shield_meter) / float(SHIELD_COST)
