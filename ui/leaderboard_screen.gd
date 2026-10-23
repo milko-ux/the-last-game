@@ -35,12 +35,24 @@ extends Node2D
 # behind it and dims it, so this mode paints no opaque background. Its
 # tap targets are 66 units tall — 48 pt on the phone (menu.gd TAP_MIN).
 # The 2D game's mode is untouched.
+#
+# THE MENU'S LOOK (2026-10-23, roadmap step 4: "the leaderboard and
+# settings pages need to resemble the main menu", Milko). Distance mode
+# is drawn with the menu's parts (prototype/hud.gd's kit): a round glass
+# BACK, the tracked title, GLOBAL / MY COUNTRY as capsules (the chosen
+# one cyan), the list on a rounded glass card, #1 on an amber badge,
+# #2 and #3 on glass ones, the player's own row cyan with a YOU tag,
+# round PREV / NEXT either side of the card (DISABLED when there is no
+# page that way) and the amber JOIN. Buttons act when the finger lifts
+# (prototype/press.gd). The 2D game's mode keeps its old look.
 # ============================================================
 
 signal closed
 signal join_requested
 
 const Hud := preload("res://prototype/hud.gd")
+const Press := preload("res://prototype/press.gd")
+const LapGen := preload("res://prototype/lap_gen.gd")
 const ROWS := 8
 const DISTANCE_ROWS := 5      # fewer rows: the tabs and pills are taller in that mode
 const TAP := 66.0
@@ -62,6 +74,7 @@ var _fetch_id := 0
 var _t := 0.0
 
 var _rects := {}
+var _press := Press.new()
 
 
 func open(d: int, count: int) -> void:
@@ -155,26 +168,11 @@ func _input(event: InputEvent) -> void:
 		close()
 		return
 
-	# Real touches + real mouse only — emulated mouse events (device
-	# -1, synthesised from touch) would double-fire every tap.
-	var pos := Vector2.ZERO
-	var tapped := false
-	if event is InputEventScreenTouch and event.pressed:
-		pos = event.position
-		tapped = true
-	elif event is InputEventMouseButton and event.pressed \
-			and event.button_index == MOUSE_BUTTON_LEFT \
-			and event.device != InputEvent.DEVICE_ID_EMULATION:
-		pos = event.position
-		tapped = true
-	if not tapped:
-		return
-
-	for key in _rects:
-		if _rects[key].has_point(pos):
-			Sfx.play("tap")
-			_tap(str(key))
-			return
+	# A button acts when the finger lifts on it (press.gd: real touches and
+	# a real mouse only, the click on the way down).
+	var tapped := _press.feed(event, _rects)
+	if tapped != "":
+		_tap(tapped)
 
 
 func _tap(what: String) -> void:
@@ -246,7 +244,7 @@ func _draw() -> void:
 	if distance_mode:
 		# The dim over the menu's live world, drawn here, BEHIND the rows
 		# (the menu's own dim was drawn over them). Same darkness as before.
-		draw_rect(Rect2(Vector2.ZERO, screen), Color(0.04, 0.05, 0.08, 0.65), true)
+		draw_rect(Rect2(Vector2.ZERO, screen), Color(0.04, 0.05, 0.08, 0.55), true)
 		_draw_distance(screen, font, cx)
 		return
 
@@ -369,44 +367,145 @@ func _draw_list(font, cx: float, lx: float, top: float, list_w: float, row_h: fl
 			jr.get_center(), 15, Palette.GOAL)
 
 
-# Distance mode's top: the title, BACK, and the two scope tabs. The list
-# below is the shared one.
-# Laid out for a phone: BACK top-left clear of the notch, the title
-# centred, the two tabs centred under it, then the list. The frame
+# Distance mode, in the menu's look (see the header). Laid out for a
+# phone, 540 units tall: BACK top-left clear of the notch, the title
+# centred, the two tabs under it, the card, JOIN at the bottom. The frame
 # readout (dev builds) lives top-right, so nothing is put there.
+const D_MARGIN := 88.0
+const D_ROW := 46.0
+const D_CARD_TOP := 180.0
+const D_PAGE := 60.0
+
 func _draw_distance(screen: Vector2, font, cx: float) -> void:
-	_centre(font, "LEADERBOARD", Vector2(cx, 34.0), 24, Color.WHITE)
-	_centre(font, "SEASON  ·  furthest distance", Vector2(cx, 58.0), 11, Palette.TEXT)
+	Hud.title(self, Hud.bold(), "LEADERBOARD", cx, 58.0, 30, 5.0, Color.WHITE)
+	Hud.title(self, font, "SEASON %d  ·  FURTHEST DISTANCE" % LapGen.SEASON_SEED, cx, 84.0, 12, 2.0, Color(1, 1, 1, 0.75))
 
-	var back := Rect2(Vector2(88.0, 18.0), Vector2(110.0, TAP))
+	var back := Rect2(Vector2(D_MARGIN, 22.0), Vector2(TAP, TAP))
 	_rects["back"] = back
-	Hud.glass_pill(self, back, Palette.TEXT, 0.8)
-	_centre(font, "< BACK", back.get_center(), 13, Color.WHITE)
+	var bs := _press.state("back")
+	Hud.capsule_button(self, back, Hud.GLASS_TOP, Hud.GLASS_BOTTOM, 1.0, 0.0, bs)
+	_chevron(back.get_center() + Hud.sink(bs), -1.0, Color.WHITE)
 
-	# GLOBAL / MY COUNTRY, centred. MY COUNTRY only when there is one to show.
-	var tw := 150.0
-	var ty := 84.0
-	var has_country := not Consent.country.is_empty()
+	# GLOBAL / MY COUNTRY, centred; MY COUNTRY only when there is one to show.
+	var tw := 190.0
+	var ty := 100.0
 	var gr := Rect2(Vector2(cx - tw * 0.5, ty), Vector2(tw, TAP))
-	if has_country:
-		gr.position.x = cx - tw - 6.0
-		var cr := Rect2(Vector2(cx + 6.0, ty), Vector2(tw, TAP))
+	if not Consent.country.is_empty():
+		gr.position.x = cx - tw - 8.0
+		var cr := Rect2(Vector2(cx + 8.0, ty), Vector2(tw, TAP))
 		_rects["scope_country"] = cr
-		Hud.glass_pill(self, cr, Palette.EDGE if scope_country else Palette.TEXT, 1.0 if scope_country else 0.55)
-		_centre(font, "MY COUNTRY", cr.get_center() + Vector2(0, -6), 12, Color.WHITE if scope_country else Palette.TEXT)
-		_centre(font, Consent.country, cr.get_center() + Vector2(0, 10), 11, Palette.EDGE if scope_country else Palette.TEXT)
+		Hud.button(self, cr, "MY COUNTRY  ·  " + Consent.country, "go" if scope_country else "glass", _press.state("scope_country"), 15)
 	_rects["scope_global"] = gr
-	Hud.glass_pill(self, gr, Palette.EDGE if not scope_country else Palette.TEXT, 1.0 if not scope_country else 0.55)
-	_centre(font, "GLOBAL", gr.get_center(), 13, Color.WHITE if not scope_country else Palette.TEXT)
+	Hud.button(self, gr, "GLOBAL", "go" if not scope_country else "glass", _press.state("scope_global"), 15)
 
-	var top := 172.0
-	var row_h := 36.0
-	var list_w := minf(680.0, screen.x - 176.0)
-	var lx := cx - list_w * 0.5
-	var panel := Rect2(Vector2(lx - 10.0, top - 10.0), Vector2(list_w + 20.0, DISTANCE_ROWS * row_h + 20.0))
-	draw_rect(panel, Color(0.04, 0.05, 0.08, 0.7), true)
-	Hud.glass_pill(self, panel, Palette.EDGE, 0.5)
-	_draw_list(font, cx, lx, top, list_w, row_h, panel, screen)
+	var join_h := TAP if not Talo.logged_in() else 0.0
+	var card_bottom := screen.y - 24.0 - join_h - (14.0 if join_h > 0.0 else 0.0)
+	var list_w := minf(700.0, screen.x - 2.0 * (D_MARGIN + D_PAGE + 24.0))
+	var card := Rect2(Vector2(cx - list_w * 0.5, D_CARD_TOP), Vector2(list_w, card_bottom - D_CARD_TOP))
+	Hud.card(self, card)
+	_draw_distance_list(font, card)
+
+	# PREV / NEXT, round, either side of the card.
+	var mid_y := card.get_center().y
+	var can_prev := view_page > 0
+	var can_next := (view_page + 1) * DISTANCE_ROWS < entries.size() or (not _last_server_page and not entries.is_empty())
+	for side in [["prev", -1.0, can_prev], ["next", 1.0, can_next]]:
+		var key: String = side[0]
+		var dir: float = side[1]
+		var on: bool = side[2]
+		var x: float = card.position.x - 24.0 - D_PAGE if dir < 0.0 else card.end.x + 24.0
+		var r := Rect2(Vector2(x, mid_y - D_PAGE * 0.5), Vector2(D_PAGE, D_PAGE))
+		if on:
+			_rects[key] = r
+		var st := _press.state(key, on)
+		Hud.capsule_button(self, r, Hud.GLASS_TOP, Hud.GLASS_BOTTOM, 1.0, 0.0, st)
+		_chevron(r.get_center() + Hud.sink(st), dir, Color(1, 1, 1, 0.5 if not on else 1.0))
+
+	if join_h > 0.0:
+		var jw := minf(460.0, screen.x - 48.0)
+		var jr := Rect2(Vector2(cx - jw * 0.5, screen.y - 24.0 - join_h), Vector2(jw, join_h))
+		_rects["join"] = jr
+		Hud.button(self, jr, "JOIN TO POST YOUR DISTANCE", "goal", _press.state("join"), 17)
+
+
+# A chevron pointing left (dir -1) or right (+1): BACK, PREV, NEXT.
+func _chevron(at: Vector2, dir: float, col: Color) -> void:
+	draw_polyline(PackedVector2Array([at + Vector2(-4.0 * dir, -11.0), at + Vector2(5.0 * dir, 0.0),
+		at + Vector2(-4.0 * dir, 11.0)]), col, 4.0, true)
+
+
+# The rows on the card, or what stands in for them: loading, an error
+# with RETRY, or nobody yet.
+func _draw_distance_list(font, card: Rect2) -> void:
+	var cx := card.get_center().x
+	var mid := card.get_center().y
+	if loading and entries.size() <= view_page * DISTANCE_ROWS:
+		_draw_loading_dots(Vector2(cx, mid))
+		return
+	if not error_text.is_empty():
+		_centre(font, error_text, Vector2(cx, mid - 30.0), 14, Color(1, 1, 1, 0.85))
+		var rr := Rect2(Vector2(cx - 80.0, mid), Vector2(160.0, TAP))
+		_rects["retry"] = rr
+		Hud.button(self, rr, "RETRY", "glass", _press.state("retry"), 15)
+		return
+	if entries.is_empty():
+		Hud.title(self, Hud.bold(), "NOBODY HAS RUN YET", cx, mid - 4.0, 20, 2.0, Color.WHITE)
+		Hud.title(self, font, "Be the first.", cx, mid + 26.0, 14, 1.0, Palette.GOAL)
+		return
+	var top := card.position.y + (card.size.y - DISTANCE_ROWS * D_ROW) * 0.5
+	var start := view_page * DISTANCE_ROWS
+	for i in range(start, mini(start + DISTANCE_ROWS, entries.size())):
+		_draw_distance_row(font, entries[i], i, Rect2(Vector2(card.position.x + 18.0, top + (i - start) * D_ROW + 3.0),
+			Vector2(card.size.x - 36.0, D_ROW - 6.0)))
+
+
+# One row: a rank badge, the name (YOU on the player's own), the country
+# on a small glass chip, the metres. Every word solid (2026-09-29).
+func _draw_distance_row(font, entry: Dictionary, index: int, row: Rect2) -> void:
+	var alias: Dictionary = entry.get("playerAlias", {})
+	var mine: bool = int(alias.get("id", -2)) == Talo.alias_id
+	var rank := index + 1
+	if mine:
+		Hud._round(self, row, -1.0, Color(WorldPalette.SAFE, 0.32), Color(WorldPalette.SAFE.darkened(0.3), 0.32))
+		Hud._outline(self, row, -1.0, Color(WorldPalette.SAFE.lightened(0.3), 0.9))
+	elif index % 2 == 0:
+		Hud._round(self, row, -1.0, Color(1, 1, 1, 0.05))
+	var cy := row.get_center().y
+	var badge := Vector2(row.position.x + 26.0, cy)
+	var label := str(rank)
+	if rank == 1:
+		draw_circle(badge, 16.0, Palette.GOAL)
+		draw_arc(badge, 16.0, 0.0, TAU, 24, Palette.GOAL.lightened(0.4), 1.5, true)
+		_centre(Hud.bold(), label, badge, 16, Color(0.2, 0.11, 0.0))
+	elif rank <= 3:
+		draw_circle(badge, 16.0, Hud.GLASS_TOP)
+		draw_arc(badge, 16.0, 0.0, TAU, 24, Color(1, 1, 1, 0.5), 1.5, true)
+		_centre(Hud.bold(), label, badge, 16, Color.WHITE)
+	else:
+		_centre(Hud.bold(), label, badge, 15, Color(1, 1, 1, 0.7))
+
+	var who := str(alias.get("identifier", "?"))
+	var nx := row.position.x + 58.0
+	draw_string(Hud.bold(), Vector2(nx, cy + 7.0), who, HORIZONTAL_ALIGNMENT_LEFT, -1, 18,
+		WorldPalette.SAFE.lightened(0.5) if mine else Color.WHITE)
+	if mine:
+		var nw: float = Hud.bold().get_string_size(who, HORIZONTAL_ALIGNMENT_LEFT, -1, 18).x
+		var tag := Rect2(Vector2(nx + nw + 12.0, cy - 11.0), Vector2(46.0, 22.0))
+		Hud._round(self, tag, -1.0, WorldPalette.SAFE.lightened(0.3), WorldPalette.SAFE.darkened(0.1))
+		_centre(Hud.bold(), "YOU", tag.get_center(), 11, Hud.INK)
+
+	var country := ""
+	for p in entry.get("props", []):
+		if p is Dictionary and str(p.get("key", "")) == "country":
+			country = str(p.get("value", ""))
+	var metres := Hud.metres(int(float(entry.get("score", 0.0))))
+	var mw: float = Hud.bold().get_string_size(metres, HORIZONTAL_ALIGNMENT_LEFT, -1, 20).x
+	var mx := row.end.x - 18.0 - mw
+	draw_string(Hud.bold(), Vector2(mx, cy + 7.0), metres, HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Color.WHITE)
+	if not country.is_empty():
+		var chip := Rect2(Vector2(mx - 60.0, cy - 12.0), Vector2(44.0, 24.0))
+		Hud._round(self, chip, -1.0, Color(Hud.GLASS_TOP, 0.9), Color(Hud.GLASS_BOTTOM, 0.9))
+		_centre(Hud.bold(), country, chip.get_center(), 12, Color(1, 1, 1, 0.9))
 
 
 func _draw_row(font, entry: Dictionary, index: int, pos: Vector2, w: float, h: float) -> void:
