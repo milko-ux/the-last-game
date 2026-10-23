@@ -1,8 +1,8 @@
 # Phase R prototype — "an album you survive"
 
-## Where we are (2026-10-23) — start here
+## Where we are (2026-10-24) — start here
 
-### START HERE: STEPS 1–4 DONE — STEP 5 (THE SHARE SCREEN) IS BUILT, MILKO TESTS IT ON THE PHONE
+### START HERE (2026-10-24): STEP 5 BUILT AND PASSED ON THE PHONE — FRIENDS TEST IT TODAY, THEN CLOSE STEP 5
 
 **The plan is `docs/ROADMAP.md`. Read it first; finish a step's "done when" before the next step.**
 
@@ -12,9 +12,46 @@
 | 2 | Native iPhone build (TestFlight) | DONE 2026-10-15 |
 | 3 | Look, round 3 (canyon, time of day, hero, scarf) | DONE 2026-10-22 |
 | 4 | Feel and UI (sounds, hearts, menu, UI kit, motion, season card) | DONE 2026-10-23 |
-| **5** | **The share screen — BUILT, phone test next** | all of it built 2026-10-23 (`62fd305`, `bdd3690`..`2a60757`) |
-| 6 | Soft launch (20–50 testers; seasons with an end date; colour-blind check) | — |
-| 7 | Launch, then money (prizes after the legal / tax / Apple checklist; the golden top hat) | — |
+| **5** | **The share screen — built, phone-tested; the friend test today closes it** | 2026-10-23/24 |
+| 6 | Soft launch (testers, Android, store pages, privacy policy, seasons, colour-blind check, Instagram + TikTok) | — |
+| 7 | The full code review (agents), launch, then money | — |
+
+**Today (Milko):** a couple of friends play and give feedback → if one shares without being asked, **step 5 is done** (tick it in `docs/ROADMAP.md`). Their feedback = the first fixes.
+
+**Waiting on Apple:** build **0.9.0** (release: no dev tools) is uploaded as "App Store Connect" and **submitted for external TestFlight review** (group **Friends**, Test Information filled in). When Apple approves: Milko turns on **Public Link** in the Friends group and sends it → Code puts it in `ShareCard.LINK` (`prototype/share_card.gd`, one line) in the next build. Don't post the link until the code review (step 7) — Milko's call.
+
+**Code's first jobs today, all for the next build (0.9.1):**
+1. **The song is in A♭ minor** (Milko 2026-10-24) — the sound effects are tuned to B♭ C D E A (a guess): retune in `tools/make_sfx.py` (`ROOT_HZ` / the scale) to A♭ minor (A♭ B♭ C♭ D♭ E♭ F♭ G♭), re-run it, Milko listens on the phone.
+2. **The share code's dSYM** — the upload warned "Upload Symbols Failed … libshare.ios.framework" (harmless: only crash reports inside the share code would be unreadable). Build the dylib with debug info and a dSYM (`tools/build_share.sh`) so the archive carries it.
+3. **A real app icon** — `icon.svg` is still Godot's default robot (testers see it on their home screen). Milko decides the design.
+4. The TestFlight link into `ShareCard.LINK` once it exists.
+5. Check the memory fix on the end screen (`a2481d4`): the black box's `tex` there should be well under 227 MB (0.9.0 has no readout; the log still has it).
+- **The cable folder `../the-last-game-build/ios/` holds the RELEASE build (0.9.0) now** — a cable test build with the readout needs `--export-debug` again. Next upload: raise `application/config/version` (0.9.0 is used), `--export-release`, Archive → Distribute → **App Store Connect**.
+
+**Settled 2026-10-24:** the roast lines — Milko keeps all of them, random within the right situation (`prototype/roast.gd`). **Godot runs only with `--headless`** (hook `.claude/hooks/block-godot-window.sh`; renderer jobs batched, `ALLOW_WINDOW=1`, announced to Milko first). The dev tools follow the build (`Progress.UNLOCK_ALL`: off in `--export-release`).
+
+**Step 6 reminder for Code:** when step 6 starts, say to Milko: **"Ssshh im playing a game"** (his campaign; he knows the rest). Step 6 also has: an Instagram and a TikTok account for the game.
+
+**Open (not blocking):** delete the two unused grey building models (`assets/models/building_tall*`, `building_stacked*`)?
+
+**State of the repo:** **pushed by Milko up to `ee57993`** (2026-10-23). Local after it: `9d02f0a` (the window guard matches command starts only), `a2481d4` (SHARE memory: freeze only the card's slice, delete the JPEG once shared), `7e4d857` (release build 0.9.0, dev tools follow the build) and README notes. The cable folder holds the release build 0.9.0 (00:15, uploaded to TestFlight 00:27).
+
+**2026-10-24, TestFlight for outside testers (Milko: "I want a TestFlight link, feels professional"):** 0.8.0 was "TestFlight Internal Only" and can never take a public link, so a new upload is needed as **"App Store Connect"**. Code made **release build 0.9.0** (`--export-release`; the dev tools now follow the build: off in release, on in the cable app — `Progress.UNLOCK_ALL`), Xcode Release build: SUCCEEDED. **`../the-last-game-build/ios/` holds that RELEASE build now: the next cable test build must be `--export-debug` again.** Milko's steps (Archive → Distribute → App Store Connect; TestFlight → Test Information, an External group "Friends", Submit for Review, Public Link) are in this session's chat; the link goes into `ShareCard.LINK`. If App Store Connect asks for a privacy policy URL, there is none yet (step 6 item). The app icon is still Godot's default robot. Roast lines: Milko keeps all of them, random within the right situation. The full code review is planned for before the store release (ROADMAP step 7).
+
+**Where things are (step 4's work):**
+- `prototype/hud.gd` — the UI kit: `capsule_button` (NORMAL / PRESSED / DISABLED), `button()` with styles (**go = the main action, `WorldPalette.ACTION` dark sage — one per screen**; chosen; glass; goal amber = the prize colour; danger; scarf = cyan), `card()`, the lettering (`bold` / `tracked` / `title`), the motion (`intro_k`, `zoom`, `push`), the clay hearts, the end screen.
+- `prototype/press.gd` — buttons act on the finger's LIFT, squash and spring, haptic tick, click.
+- `prototype/menu.gd` — PLAY alone and biggest; the season card top left (rank / gap, or #1 to beat, red dot when passed — `Progress.lb_seen_rank`); the profile button top right; the first launch goes straight into a run (`Progress.played`).
+- `prototype/sfx.gd` + `tools/make_sfx.py` — the synthesised sounds; EFFECTS / MUSIC are two buses (`Progress`).
+
+**How we work (learned this week):**
+- **Milko quits Xcode (⌘Q) BEFORE Code exports a new cable build** — the export replaces the project folder; with Xcode open it asks to "re-save" (answer Close, never Re-save).
+- After Xcode stops the app on screen, the next launch shows **one small red line** ("last session did not close… Xcode stopped it") — expected; the detail is in `blackbox.log` (`xcrun devicectl device copy from --device … --domain-type appDataContainer --domain-identifier se.karrot.thelastgame --source Documents/blackbox.log`).
+- **Since 2026-10-24 Godot runs only with `--headless`** (a renderer job only batched, `ALLOW_WINDOW=1`, announced first). Before that: Code's windowed screenshots drew nothing while the Mac's screen was asleep/locked (Milko away) — then only headless checks; the phone is the visual check.
+- Milko pushes himself: `! git push origin phase-r-prototype` — the `!` must be the very first character.
+
+
+### (2026-10-23, evening to 2026-10-24 night) STEP 5 BUILT: ROAST LINES, TO BEAT, SHARE (NATIVE SHARE SHEET); THE SHARE FREEZE FOUND AND FIXED; 0.9.0 TO TESTFLIGHT
 
 **Step 5, the share screen** — the run-over screen people want to post; it is how the game spreads for free (ROADMAP §5):
 - distance, best, a roast line, a screenshot moment;
@@ -37,28 +74,6 @@
 - **Not seen by Code: the share sheet itself** — it only exists on the phone. Everything up to it ran on the Mac (end screen, share image).
 - **NEXT (Milko, phone — quit Xcode first if open, then `! open /Users/benim/the-last-game-build/ios/TheLastGame.xcodeproj`, ⌘R):** lose a run → read the roast line and the "TO BEAT" line → tap SHARE → the share sheet opens? → "Save Image" and look at it in Photos, and send one to yourself in Messages. Also: any hitch the moment the run ends (the frame grab)? Then edit the roast lines (tell Code which to change). **Done when** (roadmap): a friend who has never seen the game shares their result without being asked.
 - **Open for Milko:** the share text has **no link** yet (`ShareCard.LINK`, one line) — a TestFlight public link (needs external testing, step 6) or a website? Android gets its own share code later (before step 6).
-
-**State of the repo:** **pushed by Milko up to `ee57993`** (2026-10-23: the SHARE freeze fix, the heat state, the Godot window block); after it only README notes. **Godot runs only with `--headless`** (hook `.claude/hooks/block-godot-window.sh`; renderer jobs batched, `ALLOW_WINDOW=1`, announced to Milko first).
-
-**2026-10-24, TestFlight for outside testers (Milko: "I want a TestFlight link, feels professional"):** 0.8.0 was "TestFlight Internal Only" and can never take a public link, so a new upload is needed as **"App Store Connect"**. Code made **release build 0.9.0** (`--export-release`; the dev tools now follow the build: off in release, on in the cable app — `Progress.UNLOCK_ALL`), Xcode Release build: SUCCEEDED. **`../the-last-game-build/ios/` holds that RELEASE build now: the next cable test build must be `--export-debug` again.** Milko's steps (Archive → Distribute → App Store Connect; TestFlight → Test Information, an External group "Friends", Submit for Review, Public Link) are in this session's chat; the link goes into `ShareCard.LINK`. If App Store Connect asks for a privacy policy URL, there is none yet (step 6 item). The app icon is still Godot's default robot. Roast lines: Milko keeps all of them, random within the right situation. The full code review is planned for before the store release (ROADMAP step 7).
-
-**Next (step 5's last items):** Milko's roast line edits (`prototype/roast.gd`); the share text's link (`ShareCard.LINK`: TestFlight public link or a website?); shrink the frozen death frame to the card's crop (end screen 227 MB → ~150 MB); then the friend test (the "done when"). The cable app in `../the-last-game-build/ios/` is exported from the latest code (22:24).
-
-**Open questions for Milko (not blocking):**
-- The song's real key — the sounds are tuned to Bb C D E A from a chroma count (`tools/make_sfx.py` `ROOT_HZ`, one line).
-- Delete the two grey building models (`assets/models/building_tall*`, `building_stacked*`)? Nothing uses them since the menu dropped them.
-
-**Where things are (step 4's work):**
-- `prototype/hud.gd` — the UI kit: `capsule_button` (NORMAL / PRESSED / DISABLED), `button()` with styles (**go = the main action, `WorldPalette.ACTION` dark sage — one per screen**; chosen; glass; goal amber = the prize colour; danger; scarf = cyan), `card()`, the lettering (`bold` / `tracked` / `title`), the motion (`intro_k`, `zoom`, `push`), the clay hearts, the end screen.
-- `prototype/press.gd` — buttons act on the finger's LIFT, squash and spring, haptic tick, click.
-- `prototype/menu.gd` — PLAY alone and biggest; the season card top left (rank / gap, or #1 to beat, red dot when passed — `Progress.lb_seen_rank`); the profile button top right; the first launch goes straight into a run (`Progress.played`).
-- `prototype/sfx.gd` + `tools/make_sfx.py` — the synthesised sounds; EFFECTS / MUSIC are two buses (`Progress`).
-
-**How we work (learned this week):**
-- **Milko quits Xcode (⌘Q) BEFORE Code exports a new cable build** — the export replaces the project folder; with Xcode open it asks to "re-save" (answer Close, never Re-save).
-- After Xcode stops the app on screen, the next launch shows **one small red line** ("last session did not close… Xcode stopped it") — expected; the detail is in `blackbox.log` (`xcrun devicectl device copy from --device … --domain-type appDataContainer --domain-identifier se.karrot.thelastgame --source Documents/blackbox.log`).
-- Code's windowed screenshots draw nothing while the Mac's screen is asleep/locked (Milko away) — then only headless checks; the phone is the visual check.
-- Milko pushes himself: `! git push origin phase-r-prototype` — the `!` must be the very first character.
 
 ### (2026-10-23, afternoon) THE RESEARCH PASS BUILT — MOTION, THE NEW MENU, THE FIRST LAUNCH; MILKO'S PHONE VERDICT CLOSES STEP 4
 

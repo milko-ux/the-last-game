@@ -80,6 +80,9 @@ The roast-style death/run-over screen people want to post. It's how the game spr
 - From the research pass (2026-10-23): a colour-blindness check of a normal frame (deuteranopia / protanopia) -- magenta against cyan must never be the only cue (Game Accessibility Guidelines: no essential information by colour alone).
 - **The season, framed from the soft launch:** a season with a start and an end date (today the season is only a seed, 20260901, with no end), a countdown on the menu's season card, and the board reset each season -- so testers already play for a place, before any prize exists.
 
+- **Promotion starts (Milko 2026-10-24):** set up an Instagram account and a TikTok account for the game.
+- **Remind Milko, in these words, when step 6 starts: "Ssshh im playing a game"** -- his marketing campaign; he knows what it is (not written down here on purpose).
+
 **Done when:** testers keep coming back, and there are no known crashes.
 
 ## 7. Launch, then money
