@@ -85,10 +85,9 @@ var score := 0
 var _freeze := 0.0
 var _last_cause := {}                # the death the black box records
 # Step 5, the screenshot moment: the world the instant the run ended,
-# without the HUD (the share image's picture), kept on the graphics chip
-# (ShareCard.freeze), and where the creature stood across it (0..1).
+# without the HUD: the share image's slice of it, centred on the creature,
+# kept on the graphics chip (ShareCard.freeze).
 var _death_frame: SubViewport = null
-var _death_focus := 0.5
 var _sharing := false
 var _start_delay := 0.0
 var _run_started_ms := 0
@@ -1506,11 +1505,11 @@ func _capture_death_frame() -> void:
 	if DisplayServer.get_name() == "headless":
 		return
 	var screen := get_viewport().get_visible_rect().size
-	_death_focus = clampf(rig.cam.unproject_position(player.global_position).x / screen.x, 0.0, 1.0)
+	var focus := clampf(rig.cam.unproject_position(player.global_position).x / screen.x, 0.0, 1.0)
 	# (ShareCard.drawn has a ceiling: the UI can never stay hidden.)
 	$UI.visible = false
 	await ShareCard.drawn(self)
-	_death_frame = ShareCard.freeze(self, get_viewport().get_texture())
+	_death_frame = ShareCard.freeze(self, get_viewport().get_texture(), focus)
 	await ShareCard.drawn(self)
 	$UI.visible = true
 
@@ -1523,7 +1522,7 @@ func _share() -> void:
 		return
 	_sharing = true
 	var best := maxi(_best_m, distance_m)
-	var path: String = await ShareCard.save(self, _death_frame.get_texture() if _death_frame != null else null, _death_focus, {
+	var path: String = await ShareCard.save(self, _death_frame.get_texture() if _death_frame != null else null, {
 		"distance": Hud.metres(distance_m),
 		"best": "BEST " + Hud.metres(best) if best > 0 else "",
 		"new_best": hud.end_new_best,
@@ -1546,6 +1545,9 @@ func _share() -> void:
 # How the share sheet went away: shared (and where to) or cancelled.
 func _on_share_closed(completed: bool, activity: String) -> void:
 	RenderingServer.render_loop_enabled = true
+	# The JPEG was only for the sheet (sent or not, it has it): the phone
+	# keeps no copy. Made again on the next SHARE.
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(ShareCard.PATH))
 	print("SHARE closed completed=%s activity=%s" % [completed, activity])
 	BlackBox.record("share %s %s" % ["sent" if completed else "cancelled", activity])
 

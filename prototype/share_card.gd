@@ -4,10 +4,10 @@ extends Node2D
 # the end screen hands the phone's share sheet. A 1080 x 1350 portrait
 # card (4:5 -- the tallest Instagram's feed shows uncropped; Messages and
 # stories show it whole too):
-#   the moment   the frame the run ended on, without the HUD, kept on
-#                the graphics chip (freeze(), track_test.gd
-#                _capture_death_frame), filling the card, the crop
-#                centred on the creature
+#   the moment   the frame the run ended on, without the HUD: the card's
+#                slice of it, centred on the creature, kept on the
+#                graphics chip (freeze(), track_test.gd
+#                _capture_death_frame), filling the card
 #   the words    THE LAST GAME at the top; at the bottom, on a dark fade:
 #                NEW BEST or the best in amber, the distance big, the
 #                roast line, and the dare in amber
@@ -26,7 +26,10 @@ extends Node2D
 # shadow from the same glyphs instead -- the outlines were the slow part;
 # MSDF was tried and drew dark blobs in the bold glyphs); the JPEG is
 # written on a worker thread. Only the card's own readback (1080 x 1350,
-# 5.8 MB) is left on the main thread.
+# 5.8 MB) is left on the main thread. And the frozen copy is only the
+# card's slice of the screen (~944 x 1179 on the phone, not 2556 x 1179):
+# the whole screen held the end screen at 227 MB of textures, 114 before.
+# The JPEG is deleted once the share sheet has closed (track_test.gd).
 # ============================================================
 
 const Hud := preload("res://prototype/hud.gd")
@@ -38,7 +41,6 @@ const PATH := "user://share.jpg"
 const LINK := ""
 
 var frame: Texture2D = null     # the moment (freeze()'s texture); null = the plain dark card
-var focus_x := 0.5              # where the creature was across the frame, 0..1
 var facts := {}                 # distance, best, new_best, roast, rank (strings / bool)
 
 
@@ -55,18 +57,27 @@ static func drawn(host: Node) -> void:
 		await host.get_tree().process_frame
 
 
-# A copy of `source` (the screen's texture) that stays put: a viewport
-# that draws it once and keeps it, on the graphics chip. It draws on the
-# NEXT frame, from the screen's texture as it is then (the last frame).
-static func freeze(host: Node, source: Texture2D) -> SubViewport:
+# The card's slice of `source` (the screen's texture), kept: a viewport
+# that draws it once and holds it, on the graphics chip. The slice has the
+# card's shape, as tall as the screen (never taller than the card), across
+# at `focus` (0..1, where the creature stood) as far as the edges allow.
+# It draws on the NEXT frame, from the screen's texture as it is then
+# (the last frame).
+static func freeze(host: Node, source: Texture2D, focus: float) -> SubViewport:
+	var src := source.get_size()
+	var k := minf(1.0, float(SIZE.y) / src.y)
+	var slice := Vector2(minf(src.x, src.y * SIZE.x / SIZE.y), src.y)
+	var x := clampf(focus * src.x - slice.x * 0.5, 0.0, src.x - slice.x)
 	var vp := SubViewport.new()
-	vp.size = Vector2i(source.get_size())
+	vp.size = Vector2i((slice * k).round())
 	vp.disable_3d = true
 	vp.render_target_update_mode = SubViewport.UPDATE_ONCE
 	var pic := TextureRect.new()
 	pic.texture = source
+	pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	vp.add_child(pic)
-	pic.size = source.get_size()
+	pic.position = Vector2(-x, 0.0) * k
+	pic.size = src * k
 	host.add_child(vp)
 	return vp
 
@@ -74,14 +85,13 @@ static func freeze(host: Node, source: Texture2D) -> SubViewport:
 # Renders the card for `facts` over `frame` and saves it. Returns the
 # saved file's path, or "" when it could not be made. Takes two frames
 # and the JPEG's time on a worker thread.
-static func save(host: Node, frame_tex: Texture2D, focus: float, run_facts: Dictionary) -> String:
+static func save(host: Node, frame_tex: Texture2D, run_facts: Dictionary) -> String:
 	var vp := SubViewport.new()
 	vp.size = SIZE
 	vp.disable_3d = true
 	vp.render_target_update_mode = SubViewport.UPDATE_ONCE
 	var card: Node2D = load("res://prototype/share_card.gd").new()
 	card.frame = frame_tex
-	card.focus_x = focus
 	card.facts = run_facts
 	vp.add_child(card)
 	host.add_child(vp)
@@ -111,12 +121,11 @@ func _draw() -> void:
 	var h := float(SIZE.y)
 	draw_rect(Rect2(0, 0, w, h), Hud.PILL_BODY, true)
 	if frame != null:
-		# Cover the card (crop, never stretch), the creature in the middle.
+		# Cover the card (crop, never stretch); freeze() already cut the
+		# slice to the card's shape, so this only scales it up.
 		var fs := frame.get_size()
-		var k := maxf(w / fs.x, h / fs.y)
-		var size := fs * k
-		var x := clampf(w * 0.5 - focus_x * size.x, w - size.x, 0.0)
-		draw_texture_rect(frame, Rect2(Vector2(x, (h - size.y) * 0.5), size), false)
+		var size := fs * maxf(w / fs.x, h / fs.y)
+		draw_texture_rect(frame, Rect2((Vector2(w, h) - size) * 0.5, size), false)
 	_fade(0.0, 300.0, 0.55, 0.0)       # under the name
 	_fade(h * 0.4, h * 0.66, 0.0, 0.84)   # under the words: dark well before
 	_fade(h * 0.66, h, 0.84, 0.96)        # the number starts
