@@ -216,9 +216,24 @@ def tap() -> np.ndarray:
 	return snap + 0.6 * knock
 
 
+def best() -> np.ndarray:
+	# NEW BEST (the end screen, 2026-10-23): a bright run up the song's
+	# notes -- Bb C D E A Bb -- with a shimmer under it, the one fanfare.
+	dur = 1.1
+	t = t_of(dur)
+	x = np.zeros(len(t))
+	for i, (semi, octv) in enumerate([(0, 1), (2, 1), (4, 1), (6, 1), (11, 1), (0, 2)]):
+		start = int(i * 0.065 * SR)
+		m = mallet(note(semi, octv), dur, 0.16 if i < 5 else 0.3)
+		x[start:] += m[:len(x) - start] * (0.8 + 0.04 * i)
+	pad_env = np.clip(t / 0.35, 0, 1) * np.exp(-np.maximum(t - 0.35, 0) / 0.3)
+	pad = sum(np.sin(2 * np.pi * note(0, 1) * d * t) for d in (1.0, 1.003, 1.5, 2.0)) * pad_env
+	return x + 0.1 * pad
+
+
 DRY = {"tap"}          # no room on these
 SOUNDS = {"jump": jump, "land": land, "pickup": pickup, "near_miss": near_miss,
-	"shield_on": shield_on, "shield_pop": shield_pop, "death": death, "tap": tap}
+	"shield_on": shield_on, "shield_pop": shield_pop, "death": death, "tap": tap, "best": best}
 
 
 def write_all() -> dict:

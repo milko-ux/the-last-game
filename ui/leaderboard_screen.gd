@@ -75,6 +75,7 @@ var _t := 0.0
 
 var _rects := {}
 var _press := Press.new()
+var _open_t := 0.0          # seconds since the board opened (the pop-in)
 
 
 func open(d: int, count: int) -> void:
@@ -90,6 +91,7 @@ func open(d: int, count: int) -> void:
 # The endless run's board (section 8). Anyone may read it.
 func open_distance() -> void:
 	distance_mode = true
+	_open_t = 0.0
 	board_finishers = false
 	scope_country = false
 	visible = true
@@ -109,6 +111,7 @@ func close() -> void:
 func _process(delta: float) -> void:
 	if visible:
 		_t += delta
+		_open_t += delta
 		queue_redraw()
 
 
@@ -245,7 +248,9 @@ func _draw() -> void:
 		# The dim over the menu's live world, drawn here, BEHIND the rows
 		# (the menu's own dim was drawn over them). Same darkness as before.
 		draw_rect(Rect2(Vector2.ZERO, screen), Color(0.04, 0.05, 0.08, 0.55), true)
+		Hud.zoom(self, screen * 0.5, Hud.intro_k(_open_t))
 		_draw_distance(screen, font, cx)
+		Hud.unzoom(self)
 		return
 
 	draw_rect(Rect2(Vector2.ZERO, screen), Palette.BG, true)
@@ -394,9 +399,9 @@ func _draw_distance(screen: Vector2, font, cx: float) -> void:
 		gr.position.x = cx - tw - 8.0
 		var cr := Rect2(Vector2(cx + 8.0, ty), Vector2(tw, TAP))
 		_rects["scope_country"] = cr
-		Hud.button(self, cr, "MY COUNTRY  ·  " + Consent.country, "go" if scope_country else "glass", _press.state("scope_country"), 15)
+		Hud.button(self, cr, "MY COUNTRY  ·  " + Consent.country, "chosen" if scope_country else "glass", _press.state("scope_country"), 15, 1.0, _press.scale("scope_country"))
 	_rects["scope_global"] = gr
-	Hud.button(self, gr, "GLOBAL", "go" if not scope_country else "glass", _press.state("scope_global"), 15)
+	Hud.button(self, gr, "GLOBAL", "chosen" if not scope_country else "glass", _press.state("scope_global"), 15, 1.0, _press.scale("scope_global"))
 
 	var join_h := TAP if not Talo.logged_in() else 0.0
 	var card_bottom := screen.y - 24.0 - join_h - (14.0 if join_h > 0.0 else 0.0)
@@ -425,7 +430,7 @@ func _draw_distance(screen: Vector2, font, cx: float) -> void:
 		var jw := minf(460.0, screen.x - 48.0)
 		var jr := Rect2(Vector2(cx - jw * 0.5, screen.y - 24.0 - join_h), Vector2(jw, join_h))
 		_rects["join"] = jr
-		Hud.button(self, jr, "JOIN TO POST YOUR DISTANCE", "goal", _press.state("join"), 17)
+		Hud.button(self, jr, "JOIN TO POST YOUR DISTANCE", "goal", _press.state("join"), 17, 1.0, _press.scale("join"))
 
 
 # A chevron pointing left (dir -1) or right (+1): BACK, PREV, NEXT.
@@ -466,8 +471,8 @@ func _draw_distance_row(font, entry: Dictionary, index: int, row: Rect2) -> void
 	var mine: bool = int(alias.get("id", -2)) == Talo.alias_id
 	var rank := index + 1
 	if mine:
-		Hud._round(self, row, -1.0, Color(WorldPalette.SAFE, 0.32), Color(WorldPalette.SAFE.darkened(0.3), 0.32))
-		Hud._outline(self, row, -1.0, Color(WorldPalette.SAFE.lightened(0.3), 0.9))
+		Hud._round(self, row, -1.0, Color(1, 1, 1, 0.2), Color(1, 1, 1, 0.12))
+		Hud._outline(self, row, -1.0, Color(1, 1, 1, 0.85))
 	elif index % 2 == 0:
 		Hud._round(self, row, -1.0, Color(1, 1, 1, 0.05))
 	var cy := row.get_center().y
@@ -486,13 +491,13 @@ func _draw_distance_row(font, entry: Dictionary, index: int, row: Rect2) -> void
 
 	var who := str(alias.get("identifier", "?"))
 	var nx := row.position.x + 58.0
-	draw_string(Hud.bold(), Vector2(nx, cy + 7.0), who, HORIZONTAL_ALIGNMENT_LEFT, -1, 18,
-		WorldPalette.SAFE.lightened(0.5) if mine else Color.WHITE)
+	draw_string(Hud.bold(), Vector2(nx, cy + 7.0), who, HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color.WHITE)
 	if mine:
 		var nw: float = Hud.bold().get_string_size(who, HORIZONTAL_ALIGNMENT_LEFT, -1, 18).x
 		var tag := Rect2(Vector2(nx + nw + 12.0, cy - 11.0), Vector2(46.0, 22.0))
-		Hud._round(self, tag, -1.0, WorldPalette.SAFE.lightened(0.3), WorldPalette.SAFE.darkened(0.1))
-		_centre(Hud.bold(), "YOU", tag.get_center(), 11, Hud.INK)
+		var ch := Hud.style("chosen")
+		Hud._round(self, tag, -1.0, ch[0], ch[1])
+		_centre(Hud.bold(), "YOU", tag.get_center(), 11, ch[2])
 
 	var country := ""
 	for p in entry.get("props", []):

@@ -55,6 +55,7 @@ var _pass_visible := false
 # Tap targets, recorded while drawing (same pattern as ui.gd).
 var _rects := {}          # name -> Rect2
 var _press := Press.new()
+var _open_t := 0.0        # seconds since the panel opened (the pop-in)
 
 var _name_edit: LineEdit
 var _pass_edit: LineEdit
@@ -123,6 +124,7 @@ func open() -> void:
 	_name_edit.text = Profile.username
 	_pass_edit.text = ""
 	_email_edit.text = ""
+	_open_t = 0.0
 	visible = true
 
 
@@ -140,8 +142,9 @@ func _hide_edits() -> void:
 		e.release_focus()
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	if visible:
+		_open_t += delta
 		queue_redraw()
 
 
@@ -277,13 +280,14 @@ func _finish_country_edit() -> void:
 # A capsule button in a Hud style, showing the state the finger gives it.
 func _button(rect: Rect2, key: String, label: String, style := "glass", size := 15) -> void:
 	_rects[key] = rect
-	Hud.button(self, rect, label, style, _press.state(key), size)
+	Hud.button(self, rect, label, style, _press.state(key), size, 1.0, _press.scale(key))
 
 
-# A two-way switch: the chosen side cyan, the other dark glass.
+# A two-way switch: the chosen side light glass, the other dark glass
+# (cyan is kept for a screen's one main action).
 func _choice(rect: Rect2, key: String, label: String, on: bool, size := 13) -> void:
 	_rects[key] = rect
-	Hud.button(self, rect, label, "go" if on else "glass", _press.state(key), size)
+	Hud.button(self, rect, label, "chosen" if on else "glass", _press.state(key), size, 1.0, _press.scale(key))
 
 
 # A text link (NOT NOW, KEEP MY ACCOUNT, What exactly is stored?).
@@ -308,6 +312,10 @@ func _draw() -> void:
 	var h := 470.0 if mode == Mode.CONSENT else 420.0
 	var panel := Rect2(Vector2((screen.x - w) * 0.5, (screen.y - h) * 0.5), Vector2(w, h))
 
+	# The sheet pops in. The LineEdits are real controls and cannot scale
+	# with it, so they appear once it has settled.
+	var k := Hud.intro_k(_open_t)
+	Hud.zoom(self, panel.get_center(), k)
 	Hud.card(self, panel)
 
 	# Close, a round glass button top-right -- except mid-delete, where
@@ -333,6 +341,10 @@ func _draw() -> void:
 
 	if busy:
 		_centre(Hud.bold(), "...", Vector2(panel.get_center().x, panel.end.y - 22), 20, WorldPalette.SAFE.lightened(0.3))
+	Hud.unzoom(self)
+	if _open_t < Hud.POP_S:
+		for e in [_name_edit, _pass_edit, _email_edit, _country_edit]:
+			e.visible = false
 
 
 # The consent screen (2026-09-22, Milko's copy): short enough to read

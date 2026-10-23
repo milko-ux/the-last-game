@@ -31,6 +31,7 @@ const VOLUME := {
 	"shield_pop": -4.0,  # dB  saved your run: the loudest good thing
 	"death": -5.0,  # dB
 	"tap": -15.0,  # dB  buttons: a dry click (make_sfx.py)
+	"best": -4.0,  # dB  NEW BEST on the end screen: the one fanfare
 }
 const PITCH_JITTER := {"jump": 0.04, "land": 0.06, "tap": 0.03, "near_miss": 0.05}
 # Semitones above the root, climbed one step per dot of the streak.

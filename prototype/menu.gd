@@ -182,6 +182,14 @@ var _editing_name := false
 # Tap targets, recorded while drawing (the same pattern as ui.gd).
 var _rects := {}
 var _press := Press.new()
+var _age := 0.0                 # seconds since the menu opened (the pop-in)
+var _panel_age := 0.0           # seconds since the settings sheet opened
+# THE SEASON CARD (2026-10-23): the board's page 0, read once when the
+# menu opens -- the player's rank and the gap to the one above, or #1 to
+# beat. "loading" / "ok" / "failed" / "off" (no Talo key). Fails quietly:
+# the card just says LEADERBOARD.
+var _season := {}
+var _season_state := "loading"
 
 # LOADING: the tap is taken, the label goes up, and the scene changes
 # only once the label has really been painted.
@@ -267,6 +275,7 @@ func _ready() -> void:
 	# player is signed in — now, or the moment they register in SETTINGS.
 	Talo.auth_changed.connect(_post_best)
 	_post_best()
+	_fetch_season()
 
 	if FrameMeter.enabled():
 		$UI.add_child(FrameMeter.new())
@@ -475,6 +484,8 @@ func _process(delta: float) -> void:
 		BeatClock.downbeat.emit(0)
 
 	_tick_idle(delta)
+	_age += delta
+	_panel_age += delta
 
 	if _loading:
 		_tick_loading()
@@ -522,6 +533,31 @@ func _overlay_open() -> bool:
 # Section 8: the stored best goes to the board once (Talo.post_best_distance
 # does nothing when it is already there). Fire-and-forget; the menu has no
 # rank line to show, the end screen does.
+func _fetch_season() -> void:
+	if not Talo.configured():
+		_season_state = "off"
+		return
+	var res: Dictionary = await Talo.get_entries(Talo.DISTANCE_BOARD, 0)
+	if not res.ok:
+		_season_state = "failed"
+		return
+	var entries: Array = res.data.get("entries", [])
+	_season = {}
+	if not entries.is_empty():
+		_season["top_name"] = str(entries[0].get("playerAlias", {}).get("identifier", "?"))
+		_season["top_m"] = int(float(entries[0].get("score", 0.0)))
+	for i in entries.size():
+		if int(entries[i].get("playerAlias", {}).get("id", -2)) == Talo.alias_id:
+			_season["rank"] = i + 1
+			_season["my_m"] = int(float(entries[i].get("score", 0.0)))
+			if i > 0:
+				_season["above_m"] = int(float(entries[i - 1].get("score", 0.0)))
+			break
+	var rank := int(_season.get("rank", 0))
+	_season["dot"] = rank > 0 and Progress.lb_seen_rank > 0 and rank > Progress.lb_seen_rank
+	_season_state = "ok"
+
+
 func _post_best() -> void:
 	var line: String = await Talo.post_best_distance(LapGen.SEASON_SEED)
 	if line != "":
@@ -553,9 +589,13 @@ func _tap(what: String) -> void:
 			_play()
 		"leaderboard":
 			if Talo.configured():
+				# Seen: the red dot goes until the rank drops again.
+				Progress.set_lb_seen_rank(int(_season.get("rank", 0)))
+				_season["dot"] = false
 				lb_screen.open_distance()
 		"settings", "name_chip":
 			_panel = Sheet.SETTINGS
+			_panel_age = 0.0
 		"close":
 			_close_panel()
 		"effects_on":
@@ -671,6 +711,7 @@ func draw_overlay(c: CanvasItem) -> void:
 	var a := _alpha
 	_draw_title(c, screen, font, a)
 	_draw_buttons(c, screen, font, a)
+	_draw_season_card(c, screen, font, a)
 	_draw_name_chip(c, screen, font, a)
 	_draw_scarf_teaser(c, font, a)
 	if Progress.UNLOCK_ALL:
@@ -686,65 +727,99 @@ func draw_overlay(c: CanvasItem) -> void:
 		_draw_settings(c, screen, font)
 
 
-# THE LAST over GAME, centred, as the mockup stacks it; bottom left the
-# best distance in the goal's amber (or the game's question before there
-# is one) and the season under it. The lettering is Hud's (tracked,
-# outlined, GAME emboldened): the screens share it.
+# THE LAST over GAME, centred, as the mockup stacks it. The lettering is
+# Hud's (tracked, outlined, GAME emboldened). Both lines pop in.
 const TITLE_TOP := 64.0
 const TITLE_GAME := 128.0
 
 func _draw_title(c: CanvasItem, screen: Vector2, font: Font, a: float) -> void:
 	var cx := screen.x * 0.5
+	Hud.push(c, Vector2(cx, TITLE_TOP - 8.0), Hud.intro_k(_age, 0.0))
 	Hud.title(c, font, "THE LAST", cx, TITLE_TOP, 24, 10.0, Color(1, 1, 1, 0.95 * a))
+	Hud.pop_t(c)
+	Hud.push(c, Vector2(cx, TITLE_GAME - 24.0), Hud.intro_k(_age, 0.06))
 	Hud.title(c, Hud.bold(), "GAME", cx, TITLE_GAME, 66, 6.0, Color(1, 1, 1, 0.97 * a))
-	var y := screen.y - BOTTOM - 30.0
-	var best := Progress.best_distance_for(LapGen.SEASON_SEED)
-	if best > 0:
-		Hud.tracked(c, Hud.bold(), "BEST " + Hud.metres(best), Vector2(MARGIN, y), 19, 2.0,
-			Color(Palette.GOAL.r, Palette.GOAL.g, Palette.GOAL.b, 0.97 * a))
-	else:
-		Hud.tracked(c, font, "HOW FAR CAN YOU GET", Vector2(MARGIN, y), 15, 2.0, Color(1, 1, 1, 0.85 * a))
-	Hud.tracked(c, font, "SEASON %d" % LapGen.SEASON_SEED, Vector2(MARGIN, y + 22.0), 11, 2.0, Color(1, 1, 1, 0.6 * a))
+	Hud.pop_t(c)
 
 
-# PLAY, big and cyan (cyan = safe: go), centred at the bottom; the two
-# round dark-glass buttons either side of it, a trophy for the
-# leaderboard and a gear for settings. The glass is dark so the white
-# icons read on the light sky (the canyon's lesson, 2026-10-21). Every
-# button shows the state the finger gives it (press.gd); the trophy is
-# DISABLED when this build has no Talo key.
-const PLAY_SIZE := Vector2(300.0, 84.0)
-const ROUND := 78.0
-const ROUND_GAP := 28.0
+# PLAY, ALONE (2026-10-23, the research pass: one main button per screen,
+# in the one colour kept for the main action). Big and cyan, centred at
+# the bottom; it pops in, breathes gently while it waits, squashes under
+# the finger and springs back (press.gd). The leaderboard is the season
+# card beside it, settings the profile chip top right.
+const PLAY_SIZE := Vector2(320.0, 88.0)
 
 func _draw_buttons(c: CanvasItem, screen: Vector2, font: Font, a: float) -> void:
 	var play := Rect2(Vector2(screen.x * 0.5 - PLAY_SIZE.x * 0.5, screen.y - BOTTOM - PLAY_SIZE.y - 8.0), PLAY_SIZE)
 	_rects["play"] = play
 	var ps := _press.state("play")
+	var breathe := 1.0 + 0.022 * sin(_age * 2.4)
+	Hud.push(c, play.get_center(), Hud.intro_k(_age, 0.16) * breathe * _press.scale("play"))
 	var go := Hud.style("go")
 	Hud.capsule_button(c, play, go[0], go[1], a, go[3], ps)
-	var label_w: float = Hud.bold().get_string_size("PLAY", HORIZONTAL_ALIGNMENT_LEFT, -1, 34).x
-	var group := 22.0 + 14.0 + label_w
+	var label_w: float = Hud.bold().get_string_size("PLAY", HORIZONTAL_ALIGNMENT_LEFT, -1, 36).x
+	var group := 24.0 + 14.0 + label_w
 	var left := play.get_center().x - group * 0.5
 	var mid_y := play.get_center().y + Hud.sink(ps).y
-	c.draw_colored_polygon(PackedVector2Array([Vector2(left, mid_y - 12.0), Vector2(left + 22.0, mid_y),
-		Vector2(left, mid_y + 12.0)]), Color(Hud.INK, a))
-	c.draw_string(Hud.bold(), Vector2(left + 36.0, mid_y + 12.0), "PLAY", HORIZONTAL_ALIGNMENT_LEFT, -1, 34, Color(Hud.INK, a))
+	c.draw_colored_polygon(PackedVector2Array([Vector2(left, mid_y - 13.0), Vector2(left + 24.0, mid_y),
+		Vector2(left, mid_y + 13.0)]), Color(Hud.INK, a))
+	c.draw_string(Hud.bold(), Vector2(left + 38.0, mid_y + 13.0), "PLAY", HORIZONTAL_ALIGNMENT_LEFT, -1, 36, Color(Hud.INK, a))
+	Hud.pop_t(c)
 
-	var row_mid := play.get_center().y
-	var lb := Rect2(Vector2(play.position.x - ROUND_GAP - ROUND, row_mid - ROUND * 0.5), Vector2(ROUND, ROUND))
-	var lb_state := _press.state("leaderboard", Talo.configured())
-	if Talo.configured():
-		_rects["leaderboard"] = lb
-	Hud.capsule_button(c, lb, Hud.GLASS_TOP, Hud.GLASS_BOTTOM, 0.95 * a, 0.0, lb_state)
-	_draw_trophy(c, lb.get_center() + Hud.sink(lb_state), Color(1, 1, 1, (0.5 if lb_state == Hud.Btn.DISABLED else 0.95) * a))
 
-	var st := Rect2(Vector2(play.end.x + ROUND_GAP, row_mid - ROUND * 0.5), Vector2(ROUND, ROUND))
-	_rects["settings"] = st
-	var st_state := _press.state("settings")
-	Hud.capsule_button(c, st, Hud.GLASS_TOP, Hud.GLASS_BOTTOM, 0.95 * a, 0.0, st_state)
-	_draw_gear(c, st.get_center() + Hud.sink(st_state), Color(1, 1, 1, 0.95 * a),
-		Color(Hud.GLASS_TOP.lerp(Hud.GLASS_BOTTOM, 0.5), a))
+# THE SEASON CARD, bottom left: the leaderboard is the game's hook (real
+# prizes later, roadmap step 7), so it is on the first screen, in the
+# prize colour, amber. What it says (the board's page 0, _fetch_season):
+#   ranked     YOU #12 · 38 m TO #11   (or YOU LEAD)
+#   not yet    #1 VoidHusk · 609 m TO BEAT
+#   and the player's own best under it. A red dot when someone has passed
+#   the player since they last opened the board (a badge, never a popup).
+# The whole card is the leaderboard button.
+func _draw_season_card(c: CanvasItem, screen: Vector2, font: Font, a: float) -> void:
+	var play_left := screen.x * 0.5 - PLAY_SIZE.x * 0.5
+	var w := clampf(play_left - MARGIN - 24.0, 220.0, 320.0)
+	var card := Rect2(Vector2(MARGIN, screen.y - BOTTOM - 104.0), Vector2(w, 104.0))
+	var on := _season_state != "off"
+	if on:
+		_rects["leaderboard"] = card
+	var st := _press.state("leaderboard", on)
+	Hud.push(c, card.get_center(), Hud.intro_k(_age, 0.1) * _press.scale("leaderboard"))
+	Hud.capsule_button(c, card, Hud.GLASS_TOP, Hud.GLASS_BOTTOM, 0.95 * a, 0.0, st)
+	var o := card.position + Hud.sink(st)
+	var amber := Color(Palette.GOAL.r, Palette.GOAL.g, Palette.GOAL.b, a * (0.5 if not on else 1.0))
+	_draw_trophy(c, o + Vector2(40.0, 52.0), amber)
+	var x := o.x + 74.0
+	Hud.tracked(c, Hud.bold(), "THIS SEASON", Vector2(x, o.y + 30.0), 11, 2.0, amber)
+	var line := "LEADERBOARD"
+	var sub := ""
+	if _season_state == "loading":
+		sub = "loading…"
+	elif _season_state == "failed":
+		sub = "can't load · tap to retry"
+	elif _season_state == "ok":
+		var rank := int(_season.get("rank", 0))
+		if rank == 1:
+			line = "YOU  #1"
+			sub = "YOU LEAD THE SEASON"
+		elif rank > 1:
+			line = "YOU  #%d" % rank
+			sub = "%s TO #%d" % [Hud.metres(int(_season["above_m"]) - int(_season["my_m"]) + 1), rank - 1]
+		elif _season.has("top_name"):
+			line = "#1  %s" % _season["top_name"]
+			sub = "%s TO BEAT" % Hud.metres(int(_season["top_m"]))
+		else:
+			line = "NOBODY YET"
+			sub = "BE THE FIRST ON THE BOARD"
+	c.draw_string(Hud.bold(), Vector2(x, o.y + 56.0), line, HORIZONTAL_ALIGNMENT_LEFT, w - 90.0, 18, Color(1, 1, 1, a))
+	c.draw_string(Hud.bold(), Vector2(x, o.y + 76.0), sub, HORIZONTAL_ALIGNMENT_LEFT, w - 90.0, 12, amber)
+	var best := Progress.best_distance_for(LapGen.SEASON_SEED)
+	if best > 0:
+		c.draw_string(font, Vector2(x, o.y + 94.0), "YOUR BEST " + Hud.metres(best), HORIZONTAL_ALIGNMENT_LEFT, w - 90.0, 11, Color(1, 1, 1, 0.7 * a))
+	if bool(_season.get("dot", false)):
+		var dot := card.position + Vector2(w - 18.0, 16.0)
+		c.draw_circle(dot, 9.0, Color(0.93, 0.2, 0.25, a))
+		c.draw_arc(dot, 9.0, 0.0, TAU, 20, Color(1, 1, 1, 0.9 * a), 2.0, true)
+	Hud.pop_t(c)
 
 
 # The trophy: a cup with two handles on a stem and a base, ~30 across.
@@ -758,15 +833,15 @@ func _draw_trophy(c: CanvasItem, at: Vector2, col: Color) -> void:
 
 
 # The gear: a disc, eight teeth, a hole in the middle in the glass colour.
-func _draw_gear(c: CanvasItem, at: Vector2, col: Color, hole: Color) -> void:
+func _draw_gear(c: CanvasItem, at: Vector2, col: Color, hole: Color, r := 1.0) -> void:
 	for i in 8:
 		var t := TAU * i / 8.0
 		var d := Vector2(cos(t), sin(t))
 		var s := Vector2(-d.y, d.x)
-		c.draw_colored_polygon(PackedVector2Array([at + d * 9.0 - s * 3.6, at + d * 15.0 - s * 2.6,
-			at + d * 15.0 + s * 2.6, at + d * 9.0 + s * 3.6]), col)
-	c.draw_circle(at, 11.0, col)
-	c.draw_circle(at, 4.6, hole)
+		c.draw_colored_polygon(PackedVector2Array([at + d * 9.0 * r - s * 3.6 * r, at + d * 15.0 * r - s * 2.6 * r,
+			at + d * 15.0 * r + s * 2.6 * r, at + d * 9.0 * r + s * 3.6 * r]), col)
+	c.draw_circle(at, 11.0 * r, col)
+	c.draw_circle(at, 4.6 * r, hole)
 
 
 # Over the creature's head until the scarf is earned: what it takes.
@@ -780,24 +855,29 @@ func _draw_scarf_teaser(c: CanvasItem, font: Font, a: float) -> void:
 	var label := "REACH %s TO UNLOCK THE SCARF" % Hud.metres(Scarf.UNLOCK_M).replace(" 000 m", " KM")
 	var w: float = Hud.bold().get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x + 40.0
 	var pill := Rect2(at - Vector2(w * 0.5, 18.0), Vector2(w, 36.0))
-	Hud.button(c, pill, label, "scarf", Hud.Btn.NORMAL, 13, 0.92 * a)
+	Hud.button(c, pill, label, "scarf", Hud.Btn.NORMAL, 13, 0.92 * a, Hud.intro_k(_age, 0.3))
 
 
-# Top right: who is playing. A tap goes to the same place SETTINGS does,
-# because that is where the nickname and the account live. The dot is
-# cyan when signed in.
+# THE PROFILE BUTTON, top right (2026-10-23: settings, the nickname and
+# the account behind one corner button, Monument Valley's way): who is
+# playing -- the dot cyan when signed in -- and a gear. A tap opens
+# SETTINGS, where the nickname and the account live.
 func _draw_name_chip(c: CanvasItem, screen: Vector2, font: Font, a: float) -> void:
 	var label := Profile.username
-	var w: float = Hud.bold().get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, 17).x + 76.0
+	var w: float = Hud.bold().get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, 17).x + 104.0
 	var chip := Rect2(Vector2(screen.x - MARGIN - w, 72.0), Vector2(w, TAP_MIN))
 	_rects["name_chip"] = chip
 	var cs := _press.state("name_chip")
+	Hud.push(c, chip.get_center(), Hud.intro_k(_age, 0.12) * _press.scale("name_chip"))
 	var tint: Color = WorldPalette.SAFE if Talo.logged_in() else Palette.TEXT
 	Hud.capsule_button(c, chip, Hud.GLASS_TOP, Hud.GLASS_BOTTOM, 0.9 * a, 0.0, cs)
 	var o := chip.position + Hud.sink(cs)
 	c.draw_circle(o + Vector2(26.0, chip.size.y * 0.5), 4.5, Color(tint.r, tint.g, tint.b, 0.95 * a))
 	c.draw_string(Hud.bold(), o + Vector2(42.0, chip.size.y * 0.5 + 6.0), label,
 		HORIZONTAL_ALIGNMENT_LEFT, -1, 17, Color(1, 1, 1, 0.92 * a))
+	_draw_gear(c, o + Vector2(w - 32.0, chip.size.y * 0.5), Color(1, 1, 1, 0.9 * a),
+		Color(Hud.GLASS_TOP.lerp(Hud.GLASS_BOTTOM, 0.5), a), 0.8)
+	Hud.pop_t(c)
 
 
 # ------------------------------------------------------------
@@ -810,6 +890,7 @@ const SHEET := Vector2(540.0, 480.0)
 
 func _draw_settings(c: CanvasItem, screen: Vector2, font: Font) -> void:
 	var panel := Rect2(screen * 0.5 - SHEET * 0.5, SHEET)
+	Hud.zoom(c, panel.get_center(), Hud.intro_k(_panel_age))
 	Hud.card(c, panel)
 	var px := panel.position.x
 	var py := panel.position.y
@@ -834,15 +915,15 @@ func _draw_settings(c: CanvasItem, screen: Vector2, font: Font) -> void:
 		var key := String(row[1])
 		_rects[key + "_on"] = on_rect
 		_rects[key + "_off"] = off_rect
-		Hud.button(c, on_rect, "ON", "go" if on else "glass", _press.state(key + "_on"), 16)
-		Hud.button(c, off_rect, "OFF", "go" if not on else "glass", _press.state(key + "_off"), 16)
+		Hud.button(c, on_rect, "ON", "chosen" if on else "glass", _press.state(key + "_on"), 16, 1.0, _press.scale(key + "_on"))
+		Hud.button(c, off_rect, "OFF", "chosen" if not on else "glass", _press.state(key + "_off"), 16, 1.0, _press.scale(key + "_off"))
 
 	# Nickname: the name in a glass field (tap it, or EDIT, to type one).
 	Hud.tracked(c, Hud.bold(), "NAME", Vector2(px + 40.0, py + 272.0), 16, 2.0, Color(1, 1, 1, 0.9))
 	var field := Rect2(Vector2(px + 40.0, py + 286.0), Vector2(236.0, TAP_MIN))
 	_rects["name_field"] = field
 	if not _editing_name:
-		Hud.button(c, field, Profile.username, "glass", _press.state("name_field", not Profile.claimed), 18)
+		Hud.button(c, field, Profile.username, "glass", _press.state("name_field", not Profile.claimed), 18, 1.0, _press.scale("name_field"))
 	if Profile.claimed:
 		c.draw_string(font, Vector2(px + 292.0, py + 326.0), "your account name",
 			HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(1, 1, 1, 0.6))
@@ -851,8 +932,8 @@ func _draw_settings(c: CanvasItem, screen: Vector2, font: Font) -> void:
 		var ed := Rect2(Vector2(px + 412.0, py + 286.0), Vector2(88.0, TAP_MIN))
 		_rects["random"] = rnd
 		_rects["edit"] = ed
-		Hud.button(c, rnd, "RANDOM", "glass", _press.state("random"), 14)
-		Hud.button(c, ed, "EDIT", "glass", _press.state("edit"), 14)
+		Hud.button(c, rnd, "RANDOM", "glass", _press.state("random"), 14, 1.0, _press.scale("random"))
+		Hud.button(c, ed, "EDIT", "glass", _press.state("edit"), 14, 1.0, _press.scale("edit"))
 
 	# The account: the existing panel, nothing new.
 	var acc := Rect2(Vector2(px + 40.0, py + 380.0), Vector2(pw - 80.0, 72.0))
@@ -868,3 +949,4 @@ func _draw_settings(c: CanvasItem, screen: Vector2, font: Font) -> void:
 		Hud.centre_text(c, font, "post your distance to the leaderboard", mid + Vector2(0, 15), 12, Color(ink, 0.75))
 	else:
 		Hud.button(c, acc, "ACCOUNTS ARE NOT SET UP IN THIS BUILD", "glass", Hud.Btn.DISABLED, 13)
+	Hud.unzoom(c)

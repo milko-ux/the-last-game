@@ -225,6 +225,7 @@ func _ready() -> void:
 	player.reset_to(0.0, _start_z)
 	ui.level_count = 1
 	ui.show_hud = false
+	hud.press = _press
 	ui.leave_menu()
 	_edge_line = MeshInstance3D.new()
 	var bm := BoxMesh.new()
@@ -1370,7 +1371,7 @@ func _game_over() -> void:
 		# The two lines that always draw on top would cut across the buttons.
 		_edge_line.visible = false
 		_best_line.visible = false
-		hud.show_end(Hud.metres(distance_m), "BEST " + Hud.metres(maxi(_best_m, distance_m)), new_best)
+		hud.show_end(Hud.metres(distance_m), "BEST " + Hud.metres(maxi(_best_m, distance_m)), new_best, distance_m)
 		_post_distance()
 		print("RUN OVER distance=%d m best=%d m new_best=%s laps=%d run_s=%.1f deaths=%d notes=%d shields_used=%d" % [
 			distance_m, maxi(_best_m, distance_m), new_best, BeatClock.current_lap(),

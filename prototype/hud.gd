@@ -61,6 +61,12 @@ var paused := false
 var countin := 0.0          # seconds left of the count-in, 0 = none
 var pause_rect := Rect2()
 var pressed := ""           # the pause panel's / end screen's button held down (press.gd), "" = none
+var press: Object = null    # the run's press.gd: the buttons' squash and spring
+var end_metres := -1        # the distance as a number: the end screen counts up to it
+var _pause_t := 0.0         # seconds the pause panel has been up (its pop-in)
+var _end_t := 0.0           # seconds the end screen has been up (count-up, NEW BEST)
+var _best_played := false
+const COUNT_S := 0.8        # the distance counts up over this; NEW BEST lands at its end
 var resume_rect := Rect2()
 var restart_rect := Rect2()
 var home_rect := Rect2()
@@ -70,6 +76,15 @@ const PAUSE_SIZE := 66.0                 # 48 pt on the phone
 
 func _process(delta: float) -> void:
 	shield_pop = maxf(0.0, shield_pop - delta * 2.5)
+	_pause_t = _pause_t + delta if paused else 0.0
+	_end_t = _end_t + delta if end_shown else 0.0
+	if end_shown and end_new_best and _end_t >= COUNT_S and not _best_played:
+		_best_played = true
+		Sfx.play("best")
+	# The pause panel and the end screen move (pop-in, count-up, the
+	# buttons' spring): they repaint every frame while up. Neither is play.
+	if paused or end_shown:
+		queue_redraw()
 	if _heart_pop.size() != lives_max:
 		_heart_pop.resize(lives_max)
 		_heart_pop.fill(0.0)
@@ -221,6 +236,11 @@ func _state(name: String) -> int:
 	return Btn.PRESSED if pressed == name else Btn.NORMAL
 
 
+func _k(name: String, delay := 0.0, age := -1.0) -> float:
+	var t := _pause_t if paused else _end_t
+	return intro_k(t if age < 0.0 else age, delay) * (press.scale(name) if press != null else 1.0)
+
+
 # Near-opaque on purpose: a paused screen must not be a way to study the
 # hazards at leisure (the end screen's dim is lighter; there is nothing
 # left to study there).
@@ -228,14 +248,16 @@ func _state(name: String) -> int:
 func _draw_pause_panel(screen: Vector2, font: Font) -> void:
 	draw_rect(Rect2(Vector2.ZERO, screen), Color(0.04, 0.05, 0.08, 0.93), true)
 	var c := screen * 0.5
+	zoom(self, c, intro_k(_pause_t))
 	card(self, Rect2(c + Vector2(-200, -176), Vector2(400, 362)))
 	title(self, bold(), "PAUSED", c.x, c.y - 112.0, 30, 6.0, Color.WHITE)
 	resume_rect = Rect2(c + Vector2(-150, -84), Vector2(300, 72))
-	button(self, resume_rect, "RESUME", "go", _state("resume"), 26)
+	button(self, resume_rect, "RESUME", "go", _state("resume"), 26, 1.0, _k("resume", 0.05))
 	restart_rect = Rect2(c + Vector2(-150, 6), Vector2(300, 66))
-	button(self, restart_rect, "RESTART", "glass", _state("restart"), 18)
+	button(self, restart_rect, "RESTART", "glass", _state("restart"), 18, 1.0, _k("restart", 0.1))
 	home_rect = Rect2(c + Vector2(-150, 86), Vector2(300, 66))
-	button(self, home_rect, "HOME", "glass", _state("home"), 18)
+	button(self, home_rect, "HOME", "glass", _state("home"), 18, 1.0, _k("home", 0.15))
+	unzoom(self)
 
 
 # 3 · 2 · 1, big, with the world visible behind it so what is coming can
@@ -257,11 +279,13 @@ func _draw_countin(screen: Vector2, font: Font) -> void:
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
-func show_end(distance: String, best: String, new_best: bool) -> void:
+func show_end(distance: String, best: String, new_best: bool, metres_run := -1) -> void:
 	end_shown = true
 	end_distance = distance
 	end_best = best
 	end_new_best = new_best
+	end_metres = metres_run
+	_best_played = false
 
 
 # The dark glass every button and card is made of (the canyon's lesson,
@@ -291,7 +315,10 @@ const GLASS_TOP := Color(0.36, 0.32, 0.5)
 const GLASS_BOTTOM := Color(0.13, 0.11, 0.22)       # PILL_BODY
 const INK := Color(0.05, 0.17, 0.2)                 # the label on a light body
 # A STYLE is [body top, body bottom, label colour, glow].
-#   go     cyan: the way forward (PLAY, RESUME, RETRY, a chosen option)
+#   go     cyan: THE main action of a screen, one per screen, used for
+#          nothing else (PLAY, RESUME, RETRY, CREATE ACCOUNT's confirm) --
+#          2026-10-23, the "one accent for the main action" rule
+#   chosen light glass, dark label: the chosen side of a switch or tab
 #   glass  dark glass, white label: everything else
 #   goal   amber: joining the leaderboard
 #   danger the lethal magenta: deleting the account
@@ -306,6 +333,8 @@ static func style(name: String) -> Array:
 			return [WorldPalette.LETHAL_LIVE.lightened(0.2), WorldPalette.LETHAL_LIVE.darkened(0.3), Color.WHITE, 0.0]
 		"scarf":
 			return [WorldPalette.SCARF.darkened(0.15), WorldPalette.SCARF.darkened(0.5), Color.WHITE, 0.0]
+		"chosen":
+			return [Color(0.95, 0.94, 0.99), Color(0.74, 0.71, 0.86), GLASS_BOTTOM, 0.0]
 	return [GLASS_TOP, GLASS_BOTTOM, Color.WHITE, 0.0]
 
 
@@ -351,13 +380,66 @@ static func sink(state: int) -> Vector2:
 	return Vector2(0, PRESS_SINK) if state == Btn.PRESSED else Vector2.ZERO
 
 
-# A capsule_button in a STYLE with its label centred on it (bold).
-static func button(c: CanvasItem, rect: Rect2, label: String, style_name := "glass", state := Btn.NORMAL, size := 16, a := 1.0) -> void:
+# A capsule_button in a STYLE with its label centred on it (bold), drawn
+# `k` times its size around its centre (press.gd's squash and spring).
+static func button(c: CanvasItem, rect: Rect2, label: String, style_name := "glass", state := Btn.NORMAL, size := 16, a := 1.0, k := 1.0) -> void:
+	push(c, rect.get_center(), k)
 	var st := style(style_name)
 	capsule_button(c, rect, st[0], st[1], a, st[3], state)
 	var ink: Color = st[2]
 	var ia := a * (0.5 if state == Btn.DISABLED else 1.0)
 	centre_text(c, bold(), label, rect.get_center() + sink(state) + Vector2(0, -1), size, Color(ink, ia))
+	pop_t(c)
+
+
+# ============================================================
+# MOTION (2026-10-23, "okay is not GREAT": nothing on the screens moved).
+# Sheets and buttons pop in with a small overshoot, a pressed button
+# squashes and springs back (press.gd), PLAY breathes. Never in the way:
+# every tap target is live from the first frame; only the drawing moves.
+# zoom() scales a whole sheet about a point; push() / pop_t() scale one
+# thing on it about its own centre, on top of the sheet's zoom.
+# ============================================================
+const POP_S := 0.34
+
+# 0 -> 1 with a small overshoot (ease-out-back), `age` seconds after
+# `delay`; 0 before it.
+static func intro(age: float, delay := 0.0) -> float:
+	if age <= delay:
+		return 0.0
+	var x := clampf((age - delay) / POP_S, 0.0, 1.0)
+	const C1 := 1.70158
+	return 1.0 + (C1 + 1.0) * pow(x - 1.0, 3.0) + C1 * pow(x - 1.0, 2.0)
+
+
+# A pop-in as a scale: from 0.85 up through a slight overshoot to 1.
+static func intro_k(age: float, delay := 0.0) -> float:
+	return 0.85 + 0.15 * intro(age, delay)
+
+
+static var _base := Transform2D.IDENTITY
+
+static func _about(at: Vector2, k: float) -> Transform2D:
+	return Transform2D(0.0, Vector2(k, k), 0.0, at * (1.0 - k))
+
+
+static func zoom(c: CanvasItem, at: Vector2, k: float) -> void:
+	_base = _about(at, k)
+	c.draw_set_transform_matrix(_base)
+
+
+static func unzoom(c: CanvasItem) -> void:
+	_base = Transform2D.IDENTITY
+	c.draw_set_transform_matrix(_base)
+
+
+static func push(c: CanvasItem, at: Vector2, k: float) -> void:
+	if k != 1.0:
+		c.draw_set_transform_matrix(_base * _about(at, k))
+
+
+static func pop_t(c: CanvasItem) -> void:
+	c.draw_set_transform_matrix(_base)
 
 
 # THE CARD: a sheet's rounded dark-glass panel -- a drop shadow, the
@@ -577,19 +659,47 @@ func _draw_end_screen(screen: Vector2, font: Font) -> void:
 	var c := screen * 0.5
 	# The menu's look (2026-10-23): the menu's lettering, RETRY cyan, MENU
 	# glass, JOIN amber. The share screen (roadmap step 5) replaces this.
-	title(self, bold(), end_distance, c.x, c.y - 80.0, 72, 3.0, Color(1, 1, 1, 0.97 * a))
+	# The distance counts up (ease-out over COUNT_S); a new best then lands
+	# with a burst and its own sound. RETRY is the biggest thing here (the
+	# fail-screen rule: the way back in is the loudest button).
+	var shown := end_distance
+	if end_metres >= 0:
+		var u := clampf(_end_t / COUNT_S, 0.0, 1.0)
+		shown = metres(int(round(end_metres * (1.0 - pow(1.0 - u, 3.0)))))
+	title(self, bold(), shown, c.x, c.y - 92.0, 72, 3.0, Color(1, 1, 1, 0.97 * a))
 	var gold := Color(Palette.GOAL.r, Palette.GOAL.g, Palette.GOAL.b, a)
 	if end_new_best:
-		title(self, bold(), "NEW BEST", c.x, c.y - 40.0, 22, 4.0, gold)
+		_draw_burst(c + Vector2(0, -116), _end_t - COUNT_S)
+		push(self, c + Vector2(0, -60), intro_k(_end_t, COUNT_S) if _end_t >= COUNT_S else 0.0)
+		if _end_t >= COUNT_S:
+			title(self, bold(), "NEW BEST", c.x, c.y - 52.0, 24, 5.0, gold)
+		pop_t(self)
 	else:
-		title(self, bold(), end_best, c.x, c.y - 40.0, 18, 2.0, gold)
+		title(self, bold(), end_best, c.x, c.y - 52.0, 18, 2.0, gold)
 	if end_rank != "":
-		title(self, bold(), end_rank, c.x, c.y - 14.0, 15, 1.0, Color(WorldPalette.SAFE.lightened(0.4), a))
-	retry_rect = Rect2(c + Vector2(-150, 4), Vector2(300, 72))
-	button(self, retry_rect, "RETRY", "go", _state("retry"), 28, a)
-	menu_rect = Rect2(c + Vector2(-90, 90), Vector2(180, 66))
-	button(self, menu_rect, "MENU", "glass", _state("menu"), 18, a)
+		title(self, bold(), end_rank, c.x, c.y - 26.0, 15, 1.0, Color(1, 1, 1, 0.9 * a))
+	retry_rect = Rect2(c + Vector2(-170, -6), Vector2(340, 86))
+	button(self, retry_rect, "RETRY", "go", _state("retry"), 32, a, _k("retry", 0.2))
+	menu_rect = Rect2(c + Vector2(-90, 96), Vector2(180, 62))
+	button(self, menu_rect, "MENU", "glass", _state("menu"), 18, a, _k("menu", 0.3))
 	join_rect = Rect2()
 	if end_join:
-		join_rect = Rect2(c + Vector2(-180, 166), Vector2(360, 66))
-		button(self, join_rect, "JOIN TO POST YOUR DISTANCE", "goal", _state("join"), 16, a)
+		join_rect = Rect2(c + Vector2(-180, 172), Vector2(360, 62))
+		button(self, join_rect, "JOIN TO POST YOUR DISTANCE", "goal", _state("join"), 16, a, _k("join", 0.4))
+
+
+# NEW BEST: amber and white sparks flying out from the number and fading,
+# `t` seconds after it landed (nothing before).
+const BURST_S := 0.9
+
+func _draw_burst(at: Vector2, t: float) -> void:
+	if t < 0.0 or t > BURST_S:
+		return
+	var e := t / BURST_S
+	var out := 1.0 - pow(1.0 - e, 2.0)
+	for i in 22:
+		var ang := TAU * float(i) / 22.0 + 0.3 * sin(float(i) * 1.7)
+		var reach := (70.0 + 50.0 * fposmod(float(i) * 0.618, 1.0)) * (0.4 + 1.6 * out)
+		var p := at + Vector2(cos(ang) * reach * 1.6, sin(ang) * reach)
+		var col: Color = Palette.GOAL if i % 3 != 0 else Color.WHITE
+		draw_circle(p, 5.0 * (1.0 - e) + 1.0, Color(col, 1.0 - e))
