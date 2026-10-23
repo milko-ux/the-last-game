@@ -508,7 +508,15 @@ static func _round_points(rect: Rect2, radius: float, seg := 7) -> PackedVector2
 	for cn in corners:
 		for i in seg + 1:
 			var t: float = float(cn[1]) + PI * 0.5 * float(i) / seg
-			pts.append(cn[0] + Vector2(cos(t), sin(t)) * r)
+			var q: Vector2 = cn[0] + Vector2(cos(t), sin(t)) * r
+			# On a capsule two corners share a centre, so where they meet the
+			# same point comes twice -- and the polygon filler refuses a
+			# shape with a repeated point ("triangulation failed": a layer
+			# of the button not drawn). Each point once.
+			if pts.is_empty() or q.distance_to(pts[pts.size() - 1]) > 0.01:
+				pts.append(q)
+	if pts.size() > 1 and pts[0].distance_to(pts[pts.size() - 1]) <= 0.01:
+		pts.remove_at(pts.size() - 1)
 	return pts
 
 
