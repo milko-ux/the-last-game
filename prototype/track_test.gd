@@ -85,9 +85,9 @@ var score := 0
 var _freeze := 0.0
 var _last_cause := {}                # the death the black box records
 # Step 5, the screenshot moment: the world the instant the run ended,
-# without the HUD (the share image's picture), and where the creature
-# stood across it (0..1).
-var _death_frame: Image = null
+# without the HUD (the share image's picture), kept on the graphics chip
+# (ShareCard.freeze), and where the creature stood across it (0..1).
+var _death_frame: SubViewport = null
 var _death_focus := 0.5
 var _sharing := false
 var _start_delay := 0.0
@@ -1428,6 +1428,9 @@ func pause_run() -> void:
 # goes back to the panel. Phone and web only: a Mac tool's window losing
 # focus must not pause its run.
 func _notification(what: int) -> void:
+	if what == NOTIFICATION_EXIT_TREE:
+		RenderingServer.render_loop_enabled = true    # never leave the game undrawn
+		return
 	if what != NOTIFICATION_APPLICATION_FOCUS_OUT and what != NOTIFICATION_APPLICATION_PAUSED:
 		return
 	if not (OS.has_feature("mobile") or OS.has_feature("web")) or not endless or bot != null:
@@ -1494,17 +1497,21 @@ func _post_distance() -> void:
 
 
 # The screenshot moment: the frame the run ended on, with the UI layer
-# (HUD, controls, readout) hidden for that one frame -- the end screen is
-# only fading in, so nothing visible is lost. Read back the frame after.
+# (HUD, controls, readout) hidden for two frames -- the end screen is only
+# fading in, so nothing visible is lost. Frame N draws the world without
+# the UI; on frame N+1 ShareCard.freeze copies the screen's texture (still
+# frame N while it draws) and keeps it. Nothing is read back to the CPU:
+# the first version did, and it cost the phone seconds (share_card.gd).
 func _capture_death_frame() -> void:
 	if DisplayServer.get_name() == "headless":
 		return
 	var screen := get_viewport().get_visible_rect().size
 	_death_focus = clampf(rig.cam.unproject_position(player.global_position).x / screen.x, 0.0, 1.0)
+	# (ShareCard.drawn has a ceiling: the UI can never stay hidden.)
 	$UI.visible = false
-	await RenderingServer.frame_post_draw
-	await get_tree().process_frame
-	_death_frame = get_viewport().get_texture().get_image()
+	await ShareCard.drawn(self)
+	_death_frame = ShareCard.freeze(self, get_viewport().get_texture())
+	await ShareCard.drawn(self)
 	$UI.visible = true
 
 
@@ -1516,7 +1523,7 @@ func _share() -> void:
 		return
 	_sharing = true
 	var best := maxi(_best_m, distance_m)
-	var path: String = await ShareCard.save(self, _death_frame, _death_focus, {
+	var path: String = await ShareCard.save(self, _death_frame.get_texture() if _death_frame != null else null, _death_focus, {
 		"distance": Hud.metres(distance_m),
 		"best": "BEST " + Hud.metres(best) if best > 0 else "",
 		"new_best": hud.end_new_best,
@@ -1527,6 +1534,10 @@ func _share() -> void:
 	var shown := false
 	if path != "" and Engine.has_singleton("NativeShare"):
 		shown = Engine.get_singleton("NativeShare").share(text, ProjectSettings.globalize_path(path))
+	# The sheet covers the game: draw nothing under it until it closes. It
+	# kept drawing the world at full cost before, and the phone got hot.
+	if shown:
+		RenderingServer.render_loop_enabled = false
 	print("SHARE image=%s sheet=%s text=%s" % [ProjectSettings.globalize_path(path) if path != "" else "-", shown, text])
 	BlackBox.record("share at %d m: %s" % [distance_m, "sheet open" if shown else "no share sheet"])
 	_sharing = false
@@ -1534,6 +1545,7 @@ func _share() -> void:
 
 # How the share sheet went away: shared (and where to) or cancelled.
 func _on_share_closed(completed: bool, activity: String) -> void:
+	RenderingServer.render_loop_enabled = true
 	print("SHARE closed completed=%s activity=%s" % [completed, activity])
 	BlackBox.record("share %s %s" % ["sent" if completed else "cancelled", activity])
 

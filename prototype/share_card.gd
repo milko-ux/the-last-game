@@ -4,15 +4,29 @@ extends Node2D
 # the end screen hands the phone's share sheet. A 1080 x 1350 portrait
 # card (4:5 -- the tallest Instagram's feed shows uncropped; Messages and
 # stories show it whole too):
-#   the moment   the frame the run ended on, without the HUD
-#                (track_test.gd _capture_death_frame), filling the card,
-#                the crop centred on the creature
+#   the moment   the frame the run ended on, without the HUD, kept on
+#                the graphics chip (freeze(), track_test.gd
+#                _capture_death_frame), filling the card, the crop
+#                centred on the creature
 #   the words    THE LAST GAME at the top; at the bottom, on a dark fade:
 #                NEW BEST or the best in amber, the distance big, the
 #                roast line, and the dare in amber
-# Drawn with the HUD's own lettering (hud.gd title / bold), rendered once
-# in a SubViewport of its own, saved as a JPEG (user://share.jpg) the
-# native share sheet reads (native/share/share.mm).
+# Drawn in the HUD's bold, tracked lettering (hud.gd bold) WITHOUT its
+# outline (_title below), rendered once in a SubViewport of its own, saved
+# as a JPEG (user://share.jpg) the native share sheet reads
+# (native/share/share.mm).
+#
+# THE PHONE FROZE ON THE FIRST VERSION (2026-10-23, the black box: SHARE
+# took ~5 s, the song's clock lost 4 s, the phone got hot). All of it was
+# main-thread work, timed on the Mac: reading the whole screen back to the
+# CPU at death (138-156 ms: the HDR screen is 8 bytes a pixel, 24 MB), the
+# card's lettering rasterised at 168 px with outlines (190-220 ms in one
+# frame), the readback and the JPEG (40-160 ms). Now: the moment never
+# leaves the graphics chip (freeze()); the lettering has no outline (a
+# shadow from the same glyphs instead -- the outlines were the slow part;
+# MSDF was tried and drew dark blobs in the bold glyphs); the JPEG is
+# written on a worker thread. Only the card's own readback (1080 x 1350,
+# 5.8 MB) is left on the main thread.
 # ============================================================
 
 const Hud := preload("res://prototype/hud.gd")
@@ -23,34 +37,65 @@ const PATH := "user://share.jpg"
 # public link, then the store's). "" = the text goes without a link.
 const LINK := ""
 
-var frame: Texture2D = null     # the moment; null = the plain dark card
+var frame: Texture2D = null     # the moment (freeze()'s texture); null = the plain dark card
 var focus_x := 0.5              # where the creature was across the frame, 0..1
 var facts := {}                 # distance, best, new_best, roast, rank (strings / bool)
 
 
-# Renders the card for `facts` over `frame_img` and saves it. Returns the
-# saved file's path, or "" when it could not be made. Takes two frames.
-static func save(host: Node, frame_img: Image, focus: float, run_facts: Dictionary) -> String:
+# Waits until a frame has been DRAWN since the call (Engine's count of
+# drawn frames has moved), at most DRAWN_CEILING_MS: a frame that never
+# comes (nothing drawing) must not hang the end screen. Resumes on a
+# process frame, never inside a render callback (CLAUDE.md).
+const DRAWN_CEILING_MS := 500
+
+static func drawn(host: Node) -> void:
+	var n := Engine.get_frames_drawn()
+	var t0 := Time.get_ticks_msec()
+	while Engine.get_frames_drawn() <= n and Time.get_ticks_msec() - t0 < DRAWN_CEILING_MS:
+		await host.get_tree().process_frame
+
+
+# A copy of `source` (the screen's texture) that stays put: a viewport
+# that draws it once and keeps it, on the graphics chip. It draws on the
+# NEXT frame, from the screen's texture as it is then (the last frame).
+static func freeze(host: Node, source: Texture2D) -> SubViewport:
+	var vp := SubViewport.new()
+	vp.size = Vector2i(source.get_size())
+	vp.disable_3d = true
+	vp.render_target_update_mode = SubViewport.UPDATE_ONCE
+	var pic := TextureRect.new()
+	pic.texture = source
+	vp.add_child(pic)
+	pic.size = source.get_size()
+	host.add_child(vp)
+	return vp
+
+
+# Renders the card for `facts` over `frame` and saves it. Returns the
+# saved file's path, or "" when it could not be made. Takes two frames
+# and the JPEG's time on a worker thread.
+static func save(host: Node, frame_tex: Texture2D, focus: float, run_facts: Dictionary) -> String:
 	var vp := SubViewport.new()
 	vp.size = SIZE
 	vp.disable_3d = true
 	vp.render_target_update_mode = SubViewport.UPDATE_ONCE
 	var card: Node2D = load("res://prototype/share_card.gd").new()
-	if frame_img != null and not frame_img.is_empty():
-		card.frame = ImageTexture.create_from_image(frame_img)
+	card.frame = frame_tex
 	card.focus_x = focus
 	card.facts = run_facts
 	vp.add_child(card)
 	host.add_child(vp)
-	# Read back on the frame AFTER the one that drew it (never inside the
-	# frame_post_draw signal itself: CLAUDE.md).
-	await RenderingServer.frame_post_draw
-	await host.get_tree().process_frame
+	await drawn(host)
 	var img := vp.get_texture().get_image()
 	vp.queue_free()
 	if img == null or img.is_empty():
 		return ""
-	return PATH if img.save_jpg(PATH, 0.9) == OK else ""
+	var err := [FAILED]
+	var task := WorkerThreadPool.add_task(func(): err[0] = img.save_jpg(PATH, 0.9))
+	while not WorkerThreadPool.is_task_completed(task):
+		await host.get_tree().process_frame
+	WorkerThreadPool.wait_for_task_completion(task)
+	return PATH if err[0] == OK else ""
 
 
 # The words that go with the image.
@@ -79,24 +124,38 @@ func _draw() -> void:
 	var white := Color(1, 1, 1, 0.97)
 	var gold := Color(Palette.GOAL, 1.0)
 	var f := Hud.bold()
-	Hud.title(self, f, "THE LAST GAME", w * 0.5, 96.0, 34, 9.0, white)
+	_title(f, "THE LAST GAME", w * 0.5, 96.0, 34, 9.0, white)
 
 	var y := h - 412.0
 	if bool(facts.get("new_best", false)):
-		Hud.title(self, f, "NEW BEST", w * 0.5, y, 40, 10.0, gold)
+		_title(f, "NEW BEST", w * 0.5, y, 40, 10.0, gold)
 	elif str(facts.get("best", "")) != "":
-		Hud.title(self, f, str(facts["best"]), w * 0.5, y, 30, 4.0, gold)
-	Hud.title(self, f, str(facts.get("distance", "")), w * 0.5, y + 170.0, 168, 4.0, white)
+		_title(f, str(facts["best"]), w * 0.5, y, 30, 4.0, gold)
+	_title(f, str(facts.get("distance", "")), w * 0.5, y + 170.0, 168, 4.0, white)
 	var roast := str(facts.get("roast", ""))
 	if roast != "":
 		var size := 42
 		while size > 26 and Hud.tracked_width(f, roast, size, 1.0) > w - 100.0:
 			size -= 2
-		Hud.title(self, f, roast, w * 0.5, y + 250.0, size, 1.0, Color(1, 1, 1, 0.92))
+		_title(f, roast, w * 0.5, y + 250.0, size, 1.0, Color(1, 1, 1, 0.92))
 	var rank := str(facts.get("rank", ""))
 	if rank != "":
-		Hud.title(self, f, rank, w * 0.5, y + 310.0, 26, 3.0, Color(1, 1, 1, 0.75))
-	Hud.title(self, f, "CAN YOU BEAT IT?", w * 0.5, h - 44.0, 30, 6.0, gold)
+		_title(f, rank, w * 0.5, y + 310.0, 26, 3.0, Color(1, 1, 1, 0.75))
+	_title(f, "CAN YOU BEAT IT?", w * 0.5, h - 44.0, 30, 6.0, gold)
+
+
+# The HUD's tracked lettering (hud.gd tracked) without its outline: the
+# words sit on the dark fade, and an outline is a second, slow
+# rasterisation of every glyph at every size. A soft shadow instead, from
+# the same glyphs (nothing new to rasterise).
+func _title(f: Font, text: String, cx: float, y: float, size: int, track: float, col: Color) -> void:
+	var x := cx - Hud.tracked_width(f, text, size, track) * 0.5
+	var shade := Color(INK, 0.55 * col.a)
+	for i in text.length():
+		var ch := text[i]
+		draw_string(f, Vector2(x, y + size * 0.04), ch, HORIZONTAL_ALIGNMENT_LEFT, -1, size, shade)
+		draw_string(f, Vector2(x, y), ch, HORIZONTAL_ALIGNMENT_LEFT, -1, size, col)
+		x += f.get_string_size(ch, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x + track
 
 
 # A vertical fade of INK from alpha a0 at y0 to a1 at y1.
