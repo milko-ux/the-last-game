@@ -17,6 +17,7 @@ Milko — musician/creative director (ODZ collective), self-taught builder with 
 2. **One commit per section of a brief.** Not one commit per session, not one per file — per section, so any single piece can be reverted on its own.
 3. **Update "Where we are" in `prototype/README.md` at the end of every session.** It is the canonical snapshot and the first thing the next session reads. If it's stale, the next session starts wrong.
 4. **Judging how the game looks and feels is Milko's job, on his phone.** Never open a visible game window on his Mac to play or look at the game. Code only runs the game invisibly in the background (headless bots, validators and the screenshot tools).
+   Godot is only run with --headless. Screenshot/probe jobs that need a renderer are batched at the end of a section, run with ALLOW_WINDOW=1, and announced first. (Enforced by `.claude/hooks/block-godot-window.sh`; the Godot MCP's `play_scene`, `run_test_scenario` and `deploy_to_android` are denied in `.claude/settings.json`.)
 5. **Always run Godot from scripts with a kill switch.** A script error makes a `-s` tool spin forever and there is no `timeout` on this Mac.
 6. **Bots and tools set `Progress.save_enabled = false`** — never let one write the save file.
 7. **Never make things more complicated than they need to be — one file per real thing.** A new song = one audio file + one beatmap. A tempo variant = audio only, scaled in code. If a change needs a second copy of something that already exists, that is the signal to stop and ask whether it needs to exist at all.

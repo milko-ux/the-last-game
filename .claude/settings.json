@@ -10,6 +10,12 @@
             "command": "\"${CLAUDE_PROJECT_DIR}/.claude/hooks/git-push-gate.sh\"",
             "timeout": 15,
             "statusMessage": "Push gate"
+          },
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PROJECT_DIR}/.claude/hooks/block-godot-window.sh\"",
+            "timeout": 10,
+            "statusMessage": "Godot window guard"
           }
         ]
       }
@@ -32,6 +38,13 @@
           }
         ]
       }
+    ]
+  },
+  "permissions": {
+    "deny": [
+      "mcp__godot-mcp__play_scene",
+      "mcp__godot-mcp__run_test_scenario",
+      "mcp__godot-mcp__deploy_to_android"
     ]
   }
 }
