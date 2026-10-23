@@ -258,10 +258,14 @@ func mark_level_cleared(level: int) -> void:
 		save_progress()
 
 
-# DEV SWITCH (Phase R playtesting): true opens every level the level
-# select can play (1-6) without clearing the one before. Set to false
-# before anything ships. Does not touch the 2D game's difficulty unlocks.
-const UNLOCK_ALL := true
+# DEV SWITCH: the developer tools -- the menu's DEV button and its level
+# select, and (with FrameMeter.enabled()) the frame readout, the black
+# box's red line, the look switch and the web's URL switches. Follows the
+# build, so nothing has to be remembered before shipping (2026-10-24):
+# ON in a debug export (the cable app, the Mac's tools) and in the web
+# preview (its preset's "phase_r" feature); OFF in a release export (the
+# TestFlight / App Store app, exported with --export-release).
+var UNLOCK_ALL := OS.is_debug_build() or OS.has_feature("phase_r")
 
 
 # Level 1 is always open; level n opens when level n-1 has been cleared.

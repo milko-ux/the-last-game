@@ -90,14 +90,14 @@ A Godot web build needs a **secure context**: plain `http://<LAN-IP>` fails with
 
 ### Before any release export — checklist
 
-- [ ] Set `Progress.UNLOCK_ALL = false` (this also turns off the frame readout and the dev URL switches).
+- [x] The dev tools (DEV button, level select, frame readout, red black-box line, look switch, URL switches) follow the build since 2026-10-24: OFF in any `--export-release` iOS export, ON in `--export-debug` (the cable app) and the web preview (`phase_r` feature). **A TestFlight / App Store build is always exported with `--export-release`.**
 - [ ] Confirm the Phase R preset's `exclude_filter` still keeps `docs/` and `addons/` out of the pack.
 - [x] The Godot MCP plugin is OFF (2026-09-22) — see below.
 - [ ] `tools/` ships deliberately — `?autoplay=1` loads `res://tools/autoplay.gd`. The MP3s do NOT ship (`*.mp3` in `exclude_filter`); the old levels (`level=N`) exist for the headless tools only.
 - [x] `talo.cfg` is in BOTH presets' `include_filter` (2026-09-22). Keep it there: `.cfg` is not a resource and the exporter drops it silently, and the build then ships with no leaderboard and no error. The key is safe to ship as scoped — `docs/TALO_SETUP.md`, "The access key".
 - [ ] Bump `application/config/version` in `project.godot` — every leaderboard entry carries it as `build`.
 - [x] iOS preset: bundle ID `se.karrot.thelastgame`, Team ID `36S75NUDV8` (the paid team kept the Personal Team's ID, confirmed 2026-10-15), Release signing fixed (`code_sign_identity_release`, 2026-10-15).
-- [ ] iOS: a real icon, and decide `user_data/accessible_from_files_app` (on for the black box's log).
+- [ ] iOS: a real icon (`icon.svg` is still Godot's default robot), and decide `user_data/accessible_from_files_app` (on for the black box's log — but it also lets a player edit `progress.save` in the Files app: settle before prizes).
 - [ ] iOS: confirm the encryption declaration. Godot's template writes `ITSAppUsesNonExemptEncryption = false` into Info.plist, so App Store Connect never asked (2026-10-15). The game's only encryption is HTTPS to Talo (Godot's own TLS library), which Apple exempts — Milko to confirm against Apple's export-compliance questions before the App Store release.
 
 ### The Godot MCP plugin is disabled on purpose
