@@ -2,7 +2,16 @@
 
 ## Where we are (2026-10-22) — start here
 
-### START HERE (2026-10-23): STEP 4 BUILT TO THE END — EVERY SCREEN IN THE MENU'S LOOK, PRESSED / DISABLED STATES; MILKO JUDGES ON THE PHONE
+### START HERE (2026-10-23, afternoon): THE RESEARCH PASS BUILT — MOTION, THE NEW MENU, THE FIRST LAUNCH; MILKO'S PHONE VERDICT CLOSES STEP 4
+
+Milko on the kit build: "everything looks okey, but im not really feeling its GREAT". He researched top games (Clash Royale, Monument Valley, Supercell, Candy Crush, Subway Surfers, PUBG) with Claude desktop; Code checked it against sources and proposed three steps, all built (`ebfa649`, `57e5a6b`), cable app exported 13:48:
+1. **Motion** (`Hud.intro_k` / `zoom` / `push`, `press.gd` `scale()` + a haptic tick): every sheet pops in, buttons squash and spring, PLAY breathes; the end screen counts the distance up and a NEW BEST lands with a spark burst and its own fanfare (`best.wav`); RETRY is the biggest element.
+2. **The new menu:** PLAY alone (the only cyan: cyan = a screen's one main action; chosen tabs/switches are the new light "chosen" glass); the **season card** bottom left (amber = the prize colour: "YOU #12 · 38 m TO #11" or "#1 VoidHusk · 609 m TO BEAT", a red dot when someone passed you — `Progress.lb_seen_rank`); one **profile button** (name + gear) top right.
+3. **First launch straight into a run** (`Progress.played`; old saves with a best or graduated count as played — Milko's phone will NOT show it; a fresh install will).
+- Roadmap updated: step 4's result, step 5's fail-screen items, step 6's colour-blind check and **the season framed with a start/end date from the soft launch** (today the season is only a seed — no end, so no countdown yet), step 7's **prize checklist** (Swedish skill-contest law, the 1 800 kr tax line, Apple 5.3, Google Play, nothing paid may help a prize run, cheat check first, email for winners).
+- **Next:** Milko's phone verdict → tick step 4 → step 5 (the share / fail screen). Open: the song's key; delete the unused grey building models?
+
+### (2026-10-23, midday) STEP 4 BUILT TO THE END — EVERY SCREEN IN THE MENU'S LOOK, PRESSED / DISABLED STATES; MILKO JUDGES ON THE PHONE
 
 Milko: "Yes lets finish step 4." Built (`7ea151c`, `a3e01a8`, `5759e46`), cable app exported 2026-10-23 12:58:
 - **One UI kit in `prototype/hud.gd`:** `capsule_button` in three states (NORMAL / PRESSED: sinks onto its lip / DISABLED: grey), `button()` with styles (go cyan, glass, goal amber, danger magenta, scarf), `card()` (the rounded glass sheet), the menu's lettering (`bold()`, `tracked()`, `title()`). The old square `glass_pill` is gone.
