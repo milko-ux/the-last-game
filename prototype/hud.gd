@@ -313,26 +313,29 @@ enum Btn { NORMAL, PRESSED, DISABLED }
 const PRESS_SINK := 4.0              # how far a pressed body sinks onto its lip
 const GLASS_TOP := Color(0.36, 0.32, 0.5)
 const GLASS_BOTTOM := Color(0.13, 0.11, 0.22)       # PILL_BODY
-const INK := Color(0.05, 0.17, 0.2)                 # the label on a light body
+const INK := Color(0.05, 0.17, 0.2)                 # the label on the cyan scarf teaser
 # A STYLE is [body top, body bottom, label colour, glow].
-#   go     cyan: THE main action of a screen, one per screen, used for
-#          nothing else (PLAY, RESUME, RETRY, CREATE ACCOUNT's confirm) --
-#          2026-10-23, the "one accent for the main action" rule
+#   go     dark sage green (WorldPalette.ACTION): THE main action of a
+#          screen, one per screen, used for nothing else (PLAY, RESUME,
+#          RETRY) -- 2026-10-23, the "one accent for the main action"
+#          rule. It was cyan; Milko: "feels too much like AI-slop", and he
+#          picked the scarf label's dark green, which reads cleaner.
 #   chosen light glass, dark label: the chosen side of a switch or tab
 #   glass  dark glass, white label: everything else
 #   goal   amber: joining the leaderboard
 #   danger the lethal magenta: deleting the account
-#   scarf  the scarf's sage: its teaser
+#   scarf  the scarf teaser over the menu's creature: the cyan the main
+#          action gave up (Milko's swap, 2026-10-23)
 static func style(name: String) -> Array:
 	match name:
 		"go":
-			return [WorldPalette.SAFE.lightened(0.45), WorldPalette.SAFE.darkened(0.2), INK, 1.0]
+			return [WorldPalette.ACTION.darkened(0.15), WorldPalette.ACTION.darkened(0.5), Color.WHITE, 0.6]
 		"goal":
 			return [WorldPalette.GOAL.lightened(0.35), WorldPalette.GOAL.darkened(0.15), Color(0.2, 0.11, 0.0), 0.5]
 		"danger":
 			return [WorldPalette.LETHAL_LIVE.lightened(0.2), WorldPalette.LETHAL_LIVE.darkened(0.3), Color.WHITE, 0.0]
 		"scarf":
-			return [WorldPalette.SCARF.darkened(0.15), WorldPalette.SCARF.darkened(0.5), Color.WHITE, 0.0]
+			return [WorldPalette.SAFE.lightened(0.45), WorldPalette.SAFE.darkened(0.2), INK, 0.5]
 		"chosen":
 			return [Color(0.95, 0.94, 0.99), Color(0.74, 0.71, 0.86), GLASS_BOTTOM, 0.0]
 	return [GLASS_TOP, GLASS_BOTTOM, Color.WHITE, 0.0]

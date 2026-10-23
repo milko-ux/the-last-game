@@ -232,7 +232,7 @@ func _draw_loading_dots(center: Vector2) -> void:
 		var phase := _t * 3.0 - float(i) * 0.6
 		var a := 0.35 + 0.65 * absf(sin(phase))
 		draw_circle(center + Vector2(float(i - 1) * 14.0, 0.0),
-			3.5, Color(Palette.EDGE.r, Palette.EDGE.g, Palette.EDGE.b, a))
+			3.5, Color(1, 1, 1, a))
 
 
 # ============================================================

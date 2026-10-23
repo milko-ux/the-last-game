@@ -34,7 +34,7 @@ extends Node2D
 # (prototype/hud.gd's kit): a rounded glass card, capsule buttons in
 # their styles -- amber for joining (CREATE ACCOUNT, LOG IN), glass for
 # SIGN OUT, the lethal magenta for deleting -- capsule tabs and switches
-# with the chosen side cyan, rounded glass fields, the menu's lettering,
+# with the chosen side light glass, rounded glass fields, the menu's lettering,
 # a round close button. Buttons act when the finger lifts (press.gd).
 # ============================================================
 
@@ -85,7 +85,7 @@ func _make_edit(max_len: int) -> LineEdit:
 	e.alignment = HORIZONTAL_ALIGNMENT_LEFT
 
 	# The menu's look (2026-10-23): a rounded well of dark glass, its rim
-	# cyan while it has the keyboard.
+	# green (the main action's) while it has the keyboard.
 	var normal := StyleBoxFlat.new()
 	normal.bg_color = Color(0.06, 0.05, 0.12, 0.85)
 	normal.border_color = Color(1, 1, 1, 0.18)
@@ -96,13 +96,13 @@ func _make_edit(max_len: int) -> LineEdit:
 	normal.content_margin_right = 14.0
 
 	var focus: StyleBoxFlat = normal.duplicate()
-	focus.border_color = Color(WorldPalette.SAFE.lightened(0.3), 0.95)
+	focus.border_color = Color(WorldPalette.ACTION.lightened(0.3), 0.95)
 	focus.set_border_width_all(2)
 
 	e.add_theme_stylebox_override("normal", normal)
 	e.add_theme_stylebox_override("focus", focus)
 	e.add_theme_color_override("font_color", Color.WHITE)
-	e.add_theme_color_override("caret_color", WorldPalette.SAFE.lightened(0.3))
+	e.add_theme_color_override("caret_color", WorldPalette.ACTION.lightened(0.3))
 	e.add_theme_font_size_override("font_size", 16)
 	add_child(e)
 	return e
@@ -284,7 +284,7 @@ func _button(rect: Rect2, key: String, label: String, style := "glass", size := 
 
 
 # A two-way switch: the chosen side light glass, the other dark glass
-# (cyan is kept for a screen's one main action).
+# (the green is kept for a screen's one main action).
 func _choice(rect: Rect2, key: String, label: String, on: bool, size := 13) -> void:
 	_rects[key] = rect
 	Hud.button(self, rect, label, "chosen" if on else "glass", _press.state(key), size, 1.0, _press.scale(key))
@@ -340,7 +340,7 @@ func _draw() -> void:
 			_draw_delete(panel, font)
 
 	if busy:
-		_centre(Hud.bold(), "...", Vector2(panel.get_center().x, panel.end.y - 22), 20, WorldPalette.SAFE.lightened(0.3))
+		_centre(Hud.bold(), "...", Vector2(panel.get_center().x, panel.end.y - 22), 20, WorldPalette.ACTION.lightened(0.3))
 	Hud.unzoom(self)
 	if _open_t < Hud.POP_S:
 		for e in [_name_edit, _pass_edit, _email_edit, _country_edit]:
@@ -414,7 +414,7 @@ func _draw_form(panel: Rect2, font) -> void:
 	var fw := panel.size.x - 80.0
 	var y := panel.position.y + 24.0
 
-	# The two forms as a capsule switch, the chosen one cyan.
+	# The two forms as a capsule switch, the chosen one light glass.
 	var tw := 170.0
 	_choice(Rect2(Vector2(cx - tw - 6.0, y), Vector2(tw, 38.0)), "tab_register", "CREATE ACCOUNT", not form_login)
 	_choice(Rect2(Vector2(cx + 6.0, y), Vector2(tw, 38.0)), "tab_login", "LOG IN", form_login)
@@ -447,7 +447,7 @@ func _field(font, label: String, edit: LineEdit, x: float, y: float, fw: float) 
 		var tr := Rect2(Vector2(x + fw - 54.0, y - 4.0), Vector2(54.0, 18.0))
 		_rects["pass_toggle"] = tr
 		_centre(Hud.bold(), "SHOW" if not _pass_visible else "HIDE", tr.get_center(), 10,
-			WorldPalette.SAFE.lightened(0.35))
+			WorldPalette.ACTION.lightened(0.35))
 
 	edit.visible = true
 	edit.position = Vector2(x, y + 16.0)
@@ -490,7 +490,7 @@ func _draw_signed_in(panel: Rect2, font) -> void:
 	var y := panel.position.y + 56.0
 
 	_centre(Hud.bold(), "SIGNED IN AS", Vector2(cx, y), 12, Color(1, 1, 1, 0.65))
-	Hud.title(self, Hud.bold(), Talo.identifier, cx, y + 38.0, 26, 2.0, WorldPalette.SAFE.lightened(0.45))
+	Hud.title(self, Hud.bold(), Talo.identifier, cx, y + 38.0, 26, 2.0, WorldPalette.ACTION.lightened(0.45))
 	y += 70.0
 
 	y = _draw_country_row(font, x, y, fw)

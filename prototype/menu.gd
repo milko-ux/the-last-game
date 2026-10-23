@@ -633,12 +633,12 @@ func _make_name_edit() -> LineEdit:
 	e.alignment = HORIZONTAL_ALIGNMENT_CENTER
 	var box := StyleBoxFlat.new()
 	box.bg_color = Color(0, 0, 0, 0.45)
-	box.border_color = Color(Palette.EDGE.r, Palette.EDGE.g, Palette.EDGE.b, 0.8)
+	box.border_color = Color(WorldPalette.ACTION.lightened(0.3), 0.9)
 	box.set_border_width_all(1)
 	e.add_theme_stylebox_override("normal", box)
 	e.add_theme_stylebox_override("focus", box)
-	e.add_theme_color_override("font_color", Palette.EDGE)
-	e.add_theme_color_override("caret_color", Palette.EDGE)
+	e.add_theme_color_override("font_color", Color.WHITE)
+	e.add_theme_color_override("caret_color", WorldPalette.ACTION.lightened(0.3))
 	e.add_theme_font_size_override("font_size", 20)
 	e.text_submitted.connect(func(_t: String) -> void: _finish_name_edit())
 	return e
@@ -687,7 +687,7 @@ func draw_overlay(c: CanvasItem) -> void:
 
 	# Landscape only, the same words the run uses (ui/ui.gd).
 	if screen.y > screen.x:
-		Hud.centre_text(c, font, "ROTATE YOUR PHONE", Vector2(screen.x * 0.5, screen.y * 0.5 - 24), 26, Palette.EDGE)
+		Hud.centre_text(c, font, "ROTATE YOUR PHONE", Vector2(screen.x * 0.5, screen.y * 0.5 - 24), 26, Color.WHITE)
 		Hud.centre_text(c, font, "This one is played sideways", Vector2(screen.x * 0.5, screen.y * 0.5 + 18), 16, Palette.TEXT)
 		return
 
@@ -743,7 +743,8 @@ func _draw_title(c: CanvasItem, screen: Vector2, font: Font, a: float) -> void:
 
 
 # PLAY, ALONE (2026-10-23, the research pass: one main button per screen,
-# in the one colour kept for the main action). Big and cyan, centred at
+# in the one colour kept for the main action, WorldPalette.ACTION's dark
+# sage -- cyan until Milko's swap the same day). Big, centred at
 # the bottom; it pops in, breathes gently while it waits, squashes under
 # the finger and springs back (press.gd). The leaderboard is the season
 # card beside it, settings the profile chip top right.
@@ -762,8 +763,8 @@ func _draw_buttons(c: CanvasItem, screen: Vector2, font: Font, a: float) -> void
 	var left := play.get_center().x - group * 0.5
 	var mid_y := play.get_center().y + Hud.sink(ps).y
 	c.draw_colored_polygon(PackedVector2Array([Vector2(left, mid_y - 13.0), Vector2(left + 24.0, mid_y),
-		Vector2(left, mid_y + 13.0)]), Color(Hud.INK, a))
-	c.draw_string(Hud.bold(), Vector2(left + 38.0, mid_y + 13.0), "PLAY", HORIZONTAL_ALIGNMENT_LEFT, -1, 36, Color(Hud.INK, a))
+		Vector2(left, mid_y + 13.0)]), Color(go[2], a))
+	c.draw_string(Hud.bold(), Vector2(left + 38.0, mid_y + 13.0), "PLAY", HORIZONTAL_ALIGNMENT_LEFT, -1, 36, Color(go[2], a))
 	Hud.pop_t(c)
 
 
@@ -860,7 +861,7 @@ func _draw_scarf_teaser(c: CanvasItem, font: Font, a: float) -> void:
 
 # THE PROFILE BUTTON, top right (2026-10-23: settings, the nickname and
 # the account behind one corner button, Monument Valley's way): who is
-# playing -- the dot cyan when signed in -- and a gear. A tap opens
+# playing -- the dot green when signed in -- and a gear. A tap opens
 # SETTINGS, where the nickname and the account live.
 func _draw_name_chip(c: CanvasItem, screen: Vector2, font: Font, a: float) -> void:
 	var label := Profile.username
@@ -869,7 +870,7 @@ func _draw_name_chip(c: CanvasItem, screen: Vector2, font: Font, a: float) -> vo
 	_rects["name_chip"] = chip
 	var cs := _press.state("name_chip")
 	Hud.push(c, chip.get_center(), Hud.intro_k(_age, 0.12) * _press.scale("name_chip"))
-	var tint: Color = WorldPalette.SAFE if Talo.logged_in() else Palette.TEXT
+	var tint: Color = WorldPalette.ACTION.lightened(0.35) if Talo.logged_in() else Palette.TEXT
 	Hud.capsule_button(c, chip, Hud.GLASS_TOP, Hud.GLASS_BOTTOM, 0.9 * a, 0.0, cs)
 	var o := chip.position + Hud.sink(cs)
 	c.draw_circle(o + Vector2(26.0, chip.size.y * 0.5), 4.5, Color(tint.r, tint.g, tint.b, 0.95 * a))
@@ -883,7 +884,7 @@ func _draw_name_chip(c: CanvasItem, screen: Vector2, font: Font, a: float) -> vo
 # ------------------------------------------------------------
 # SETTINGS — sound, the nickname, and the door to the account panel.
 # A Hud card with Hud buttons (2026-10-23: it matches the menu now): the
-# chosen side of a switch is cyan, the other dark glass; ACCOUNT is the
+# chosen side of a switch is light glass, the other dark; ACCOUNT is the
 # leaderboard's amber, DISABLED when this build has no Talo key.
 # ------------------------------------------------------------
 const SHEET := Vector2(540.0, 480.0)
