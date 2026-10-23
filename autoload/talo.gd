@@ -236,6 +236,23 @@ func country_rank(board: String, country: String, max_pages: int = 3) -> int:
 	return 0
 
 
+# The next place up from `metres` on a board's first page (best first):
+# the nearest entry above it that is not the player's own, as
+# {"rank": 12, "score": 250}, or {} when nothing is above it or the board
+# did not answer. Needs no account (a guest reads the board too). The end
+# screen's "38 m TO BEAT #12".
+func next_place_above(board: String, metres: int) -> Dictionary:
+	var res: Dictionary = await get_entries(board, 0)
+	if not res.ok:
+		return {}
+	var entries: Array = res.data.get("entries", [])
+	for i in range(entries.size() - 1, -1, -1):
+		var score := int(float(entries[i].get("score", 0.0)))
+		if score > metres and int(entries[i].get("playerAlias", {}).get("id", -2)) != alias_id:
+			return {"rank": i + 1, "score": score}
+	return {}
+
+
 # ============================================================
 # ACCOUNTS
 # All of these return {ok, status, data, error} — callers show

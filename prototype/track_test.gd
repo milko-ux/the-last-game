@@ -1383,6 +1383,7 @@ func _game_over() -> void:
 		hud.show_end(Hud.metres(distance_m), best_line, new_best, distance_m)
 		hud.end_roast = Roast.line(distance_m, _best_m, new_best, String(_last_cause.get("kind", "")))
 		_post_distance()
+		_fetch_beat()
 		print("RUN OVER distance=%d m best=%d m new_best=%s laps=%d run_s=%.1f deaths=%d notes=%d shields_used=%d" % [
 			distance_m, maxi(_best_m, distance_m), new_best, BeatClock.current_lap(),
 			BeatClock.song_time() - BeatClock.start_offset, deaths, notes, shields_used])
@@ -1478,6 +1479,17 @@ func _post_distance() -> void:
 	var line: String = await Talo.post_best_distance(LapGen.SEASON_SEED)
 	if state == State.GAMEOVER:
 		hud.end_rank = line
+
+
+# How far this run was from the next place up on the board (step 5,
+# "38 m TO BEAT #12") -- for a guest too, reading needs no account.
+# Fire-and-forget, like the post. Not for a bot or a tool's run.
+func _fetch_beat() -> void:
+	if not (Talo.configured() and Progress.save_enabled):
+		return
+	var above: Dictionary = await Talo.next_place_above(Talo.DISTANCE_BOARD, distance_m)
+	if state == State.GAMEOVER and not above.is_empty():
+		hud.end_beat = "%s TO BEAT #%d" % [Hud.metres(int(above["score"]) - distance_m + 1), int(above["rank"])]
 
 
 # Signing in on the end screen (JOIN -> the account panel) posts the run

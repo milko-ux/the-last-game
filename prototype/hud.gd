@@ -56,8 +56,10 @@ var menu_rect := Rect2()
 # account panel.
 var end_rank := ""
 var end_join := false
-# Step 5: the roast line under the distance (prototype/roast.gd).
+# Step 5: the roast line under the distance (prototype/roast.gd), and how
+# far this run was from the next place on the board ("38 m TO BEAT #12").
 var end_roast := ""
+var end_beat := ""
 var join_rect := Rect2()
 # PAUSE (2026-09-22): a small glass pill top-left while the run is on,
 # the panel (RESUME · RESTART · HOME) while paused, and the 3-2-1 count
@@ -114,7 +116,7 @@ func _process(delta: float) -> void:
 	# ui/ui.gd's header). Steady play repaints nothing.
 	var key := [endless, end_shown, end_alpha, paused, countin, fill, best, ticks, lit, word, word_alpha,
 		lives, lives_max, _heart_pop.duplicate(), shield, shield_armed, shield_pop, show_pause, end_distance, end_best, end_new_best,
-		end_rank, end_join, end_roast, pressed, best_flag, best_flag_at.round(), get_viewport_rect().size]
+		end_rank, end_join, end_roast, end_beat, pressed, best_flag, best_flag_at.round(), get_viewport_rect().size]
 	if key != _drawn_key:
 		_drawn_key = key
 		queue_redraw()
@@ -726,7 +728,8 @@ func _draw_end_screen(screen: Vector2, font: Font) -> void:
 		var u := clampf(_end_t / COUNT_S, 0.0, 1.0)
 		shown = metres(int(round(end_metres * (1.0 - pow(1.0 - u, 3.0)))))
 	# Top to bottom: the distance, the roast (the moment's caption, in
-	# white), the best in amber, then the rank.
+	# white), the best in amber, then the board: the rank and the gap to
+	# the next place up.
 	title(self, bold(), shown, c.x, c.y - 140.0, 72, 3.0, Color(1, 1, 1, 0.97 * a))
 	if end_roast != "":
 		title(self, bold(), end_roast, c.x, c.y - 96.0, 19, 0.6, Color(1, 1, 1, 0.92 * a * clampf(intro(_end_t, 0.15), 0.0, 1.0)))
@@ -739,8 +742,9 @@ func _draw_end_screen(screen: Vector2, font: Font) -> void:
 		pop_t(self)
 	else:
 		title(self, bold(), end_best, c.x, c.y - 60.0, 18, 2.0, gold)
-	if end_rank != "":
-		title(self, bold(), end_rank, c.x, c.y - 32.0, 15, 1.0, Color(1, 1, 1, 0.9 * a))
+	var board := end_rank if end_beat == "" else (end_beat if end_rank == "" else end_rank + "   ·   " + end_beat)
+	if board != "":
+		title(self, bold(), board, c.x, c.y - 32.0, 15, 1.0, Color(1, 1, 1, 0.9 * a))
 	retry_rect = Rect2(c + Vector2(-170, -6), Vector2(340, 86))
 	button(self, retry_rect, "RETRY", "go", _state("retry"), 32, a, _k("retry", 0.2))
 	menu_rect = Rect2(c + Vector2(-90, 96), Vector2(180, 62))
