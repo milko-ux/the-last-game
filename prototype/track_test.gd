@@ -19,6 +19,7 @@ const Mats := preload("res://prototype/flat_mats.gd")
 const HazardMath := preload("res://prototype/hazard_math.gd")
 const LapGen := preload("res://prototype/lap_gen.gd")
 const Hud := preload("res://prototype/hud.gd")
+const Roast := preload("res://prototype/roast.gd")
 const Press := preload("res://prototype/press.gd")
 const Looks := preload("res://prototype/looks.gd")
 const Scarf := preload("res://prototype/scarf.gd")
@@ -1380,6 +1381,7 @@ func _game_over() -> void:
 		if not new_best and _best_m > 0:
 			best_line = "EQUALLED YOUR BEST" if distance_m == _best_m else "%s TO YOUR BEST" % Hud.metres(_best_m - distance_m)
 		hud.show_end(Hud.metres(distance_m), best_line, new_best, distance_m)
+		hud.end_roast = Roast.line(distance_m, _best_m, new_best, String(_last_cause.get("kind", "")))
 		_post_distance()
 		print("RUN OVER distance=%d m best=%d m new_best=%s laps=%d run_s=%.1f deaths=%d notes=%d shields_used=%d" % [
 			distance_m, maxi(_best_m, distance_m), new_best, BeatClock.current_lap(),
