@@ -8,8 +8,13 @@
 # renderer, batched at the end of a section and announced to Milko first
 # (CLAUDE.md). Anything else: blocked (exit 2), with the reason on stderr.
 #
-# Matches Godot as a command word, not as part of a name: godot-cpp,
-# .godot/ and godot_mcp pass. A script that runs Godot inside itself
+# Matches Godot where a command starts -- a line's start, after ; & | or
+# $( or a backtick, after VAR=value prefixes, as the last part of a path
+# (.../MacOS/Godot) -- not as a word inside text: the first version
+# blocked a commit message saying "(Godot runs headless only now)". A
+# line of text that STARTS with "Godot" is still blocked (a multi-line
+# script's own Godot line must be caught); reword it. Names pass:
+# godot-cpp, .godot/, godot_mcp. A script that runs Godot inside itself
 # (tools/package_web.sh) is not seen here -- those already pass --headless.
 # ============================================================
 
@@ -21,7 +26,10 @@ fi
 cmd=$(jq -r '.tool_input.command // empty')
 [ -z "$cmd" ] && exit 0
 
-godot_re='(^|[[:space:];&|(/"'"'"'])(godot|Godot)([[:space:];&|)"'"'"']|$)|Godot\.app|Godot_v4|run_godot\.sh'
+start='(^|[;&|`]|\$\()[[:space:]]*([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*'
+path='"?([^[:space:]"=]*/)?'
+name='(godot|Godot|Godot_v4[^[:space:]"]*|run_godot\.sh)'
+godot_re="${start}${path}${name}([[:space:]\";&|)]|\$)"
 if printf '%s' "$cmd" | grep -Eq "$godot_re"; then
 	case "$cmd" in
 		*--headless*|*ALLOW_WINDOW=1*) exit 0 ;;
