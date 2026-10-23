@@ -11,6 +11,8 @@ extends SceneTree
 #                    count-in, then print PAUSE CHECK: the clock and the audio
 #                    before and after, and the drift 2 s on -- the proof the
 #                    song and the clock stayed together; no screenshot)
+#   ... end=1 share=1   (endless=1 grad=1: the end screen, then press SHARE and
+#                    copy the share image to `out`-share.jpg)
 #   ... light=0     (brief 6's light off: the flat look, for a before/after pair)
 #   ... pair=1      (the SAME frame twice: save `out` with the light on, pause the
 #                    clock, turn the light off, save `out`-light0.png; the exact
@@ -33,6 +35,8 @@ var grad := false            # grad=1: as a graduated player (lives on, no teach
 var render_scale := 1.0      # scale=0.75: the 3D render scale the phone uses (see track_test RENDER SCALE)
 var end_screen := false      # end=1 (with endless=1 grad=1): lose every life from `bar` on, shoot the end screen
 var _end_wait := 0.0
+var share := false           # share=1 (with end=1): press SHARE, keep the share image
+var _shared := false
 var scene_kind := "run"      # scene=select captures the level-select screen instead
 var _select_frames := -1
 var test: Node = null
@@ -145,9 +149,16 @@ func _process(_delta: float) -> bool:
 	if end_screen:
 		if test.state == test.State.GAMEOVER:
 			_end_wait += _delta
-			if _end_wait > 1.0:
+			if _end_wait > 1.0 and not _shared:
 				var img := root.get_viewport().get_texture().get_image()
 				print("SHOT saved=%s err=%d (end screen)" % [out, img.save_png(out)])
+				if not share:
+					return true
+				_shared = true
+				test._share()
+			elif _shared and not test._sharing:
+				var copy := out.get_basename() + "-share.jpg"
+				print("SHOT share image copied=%s err=%d" % [copy, DirAccess.copy_absolute(ProjectSettings.globalize_path("user://share.jpg"), copy)])
 				return true
 		elif test.state == test.State.RUN and clock.current_bar() >= bar:
 			test.debug_walk_into_danger()
@@ -240,6 +251,7 @@ func _setup_args() -> void:
 			"endless": endless = kv[1] == "1"
 			"grad": grad = kv[1] == "1"
 			"end": end_screen = kv[1] == "1"
+			"share": share = kv[1] == "1"
 			"scale": render_scale = float(kv[1])
 			"start_lap": start_lap = int(kv[1])
 			"scene": scene_kind = kv[1]

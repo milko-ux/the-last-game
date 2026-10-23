@@ -20,6 +20,7 @@ const HazardMath := preload("res://prototype/hazard_math.gd")
 const LapGen := preload("res://prototype/lap_gen.gd")
 const Hud := preload("res://prototype/hud.gd")
 const Roast := preload("res://prototype/roast.gd")
+const ShareCard := preload("res://prototype/share_card.gd")
 const Press := preload("res://prototype/press.gd")
 const Looks := preload("res://prototype/looks.gd")
 const Scarf := preload("res://prototype/scarf.gd")
@@ -83,6 +84,12 @@ var furthest_t := 0.0       # furthest song time reached this run (distance)
 var score := 0
 var _freeze := 0.0
 var _last_cause := {}                # the death the black box records
+# Step 5, the screenshot moment: the world the instant the run ended,
+# without the HUD (the share image's picture), and where the creature
+# stood across it (0..1).
+var _death_frame: Image = null
+var _death_focus := 0.5
+var _sharing := false
 var _start_delay := 0.0
 var _run_started_ms := 0
 var _fair_warning := ""
@@ -228,6 +235,8 @@ func _ready() -> void:
 	ui.level_count = 1
 	ui.show_hud = false
 	hud.press = _press
+	if Engine.has_singleton("NativeShare"):
+		Engine.get_singleton("NativeShare").connect("closed", _on_share_closed)
 	ui.leave_menu()
 	_edge_line = MeshInstance3D.new()
 	var bm := BoxMesh.new()
@@ -944,6 +953,8 @@ func _hud_button(what: String) -> void:
 			_to_menu()
 		"join":
 			account_panel.open()
+		"share":
+			_share()
 
 
 # RETRY / RESTART: a new run with the short run-up.
@@ -1366,6 +1377,7 @@ func _game_over() -> void:
 	_end_shown = 0.0
 	hud.hide_word()
 	if endless:
+		_capture_death_frame()
 		# The end screen (section 6): distance big, BEST / NEW BEST, RETRY, MENU.
 		var new_best: bool = Progress.record_distance(LapGen.SEASON_SEED, distance_m, _run_props()) or (distance_m > _best_m and distance_m > 0)
 		status.text = ""
@@ -1479,6 +1491,51 @@ func _post_distance() -> void:
 	var line: String = await Talo.post_best_distance(LapGen.SEASON_SEED)
 	if state == State.GAMEOVER:
 		hud.end_rank = line
+
+
+# The screenshot moment: the frame the run ended on, with the UI layer
+# (HUD, controls, readout) hidden for that one frame -- the end screen is
+# only fading in, so nothing visible is lost. Read back the frame after.
+func _capture_death_frame() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	var screen := get_viewport().get_visible_rect().size
+	_death_focus = clampf(rig.cam.unproject_position(player.global_position).x / screen.x, 0.0, 1.0)
+	$UI.visible = false
+	await RenderingServer.frame_post_draw
+	await get_tree().process_frame
+	_death_frame = get_viewport().get_texture().get_image()
+	$UI.visible = true
+
+
+# SHARE on the end screen: the share image (share_card.gd), then the
+# phone's share sheet (native/share). Where there is none (the Mac, the
+# web) the image is still made and its path printed.
+func _share() -> void:
+	if _sharing:
+		return
+	_sharing = true
+	var best := maxi(_best_m, distance_m)
+	var path: String = await ShareCard.save(self, _death_frame, _death_focus, {
+		"distance": Hud.metres(distance_m),
+		"best": "BEST " + Hud.metres(best) if best > 0 else "",
+		"new_best": hud.end_new_best,
+		"roast": hud.end_roast,
+		"rank": hud.end_rank if hud.end_rank.begins_with("#") else "",
+	})
+	var text := ShareCard.text(Hud.metres(distance_m))
+	var shown := false
+	if path != "" and Engine.has_singleton("NativeShare"):
+		shown = Engine.get_singleton("NativeShare").share(text, ProjectSettings.globalize_path(path))
+	print("SHARE image=%s sheet=%s text=%s" % [ProjectSettings.globalize_path(path) if path != "" else "-", shown, text])
+	BlackBox.record("share at %d m: %s" % [distance_m, "sheet open" if shown else "no share sheet"])
+	_sharing = false
+
+
+# How the share sheet went away: shared (and where to) or cancelled.
+func _on_share_closed(completed: bool, activity: String) -> void:
+	print("SHARE closed completed=%s activity=%s" % [completed, activity])
+	BlackBox.record("share %s %s" % ["sent" if completed else "cancelled", activity])
 
 
 # How far this run was from the next place up on the board (step 5,

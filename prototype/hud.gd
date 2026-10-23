@@ -50,6 +50,7 @@ var end_best := ""
 var end_new_best := false
 var end_alpha := 0.0
 var retry_rect := Rect2()
+var share_rect := Rect2()
 var menu_rect := Rect2()
 # Section 8: the rank line ("#12 GLOBAL   ·   #3 SE", or "POSTING…", or
 # an error) under BEST, and for a guest the JOIN pill that leads to the
@@ -275,7 +276,7 @@ func button_rects() -> Dictionary:
 	if paused:
 		return {"resume": resume_rect, "restart": restart_rect, "home": home_rect}
 	if end_shown:
-		var r := {"retry": retry_rect, "menu": menu_rect}
+		var r := {"retry": retry_rect, "share": share_rect, "menu": menu_rect}
 		if end_join:
 			r["join"] = join_rect
 		return r
@@ -718,8 +719,8 @@ func _draw_end_screen(screen: Vector2, font: Font) -> void:
 	var a := end_alpha
 	draw_rect(Rect2(Vector2.ZERO, screen), Color(0.04, 0.05, 0.08, 0.74 * a), true)
 	var c := screen * 0.5
-	# The menu's look (2026-10-23): the menu's lettering, RETRY cyan, MENU
-	# glass, JOIN amber. The share screen (roadmap step 5) replaces this.
+	# The menu's look (2026-10-23): the menu's lettering, RETRY green, MENU
+	# glass, JOIN amber; SHARE (step 5) round, beside RETRY.
 	# The distance counts up (ease-out over COUNT_S); a new best then lands
 	# with a burst and its own sound. RETRY is the biggest thing here (the
 	# fail-screen rule: the way back in is the loudest button).
@@ -747,12 +748,30 @@ func _draw_end_screen(screen: Vector2, font: Font) -> void:
 		title(self, bold(), board, c.x, c.y - 32.0, 15, 1.0, Color(1, 1, 1, 0.9 * a))
 	retry_rect = Rect2(c + Vector2(-170, -6), Vector2(340, 86))
 	button(self, retry_rect, "RETRY", "go", _state("retry"), 32, a, _k("retry", 0.2))
+	share_rect = Rect2(c + Vector2(186, 0), Vector2(74, 74))
+	_draw_share_button(share_rect, a, _k("share", 0.25))
 	menu_rect = Rect2(c + Vector2(-90, 96), Vector2(180, 62))
 	button(self, menu_rect, "MENU", "glass", _state("menu"), 18, a, _k("menu", 0.3))
 	join_rect = Rect2()
 	if end_join:
 		join_rect = Rect2(c + Vector2(-180, 172), Vector2(360, 62))
 		button(self, join_rect, "JOIN TO POST YOUR DISTANCE", "goal", _state("join"), 16, a, _k("join", 0.4))
+
+
+# SHARE (step 5): a round glass button beside RETRY (the menu's round
+# buttons), smaller than RETRY -- the way back in stays the loudest -- with
+# the phone's own share sign: a tray open at the top, an arrow out of it.
+func _draw_share_button(rect: Rect2, a: float, k: float) -> void:
+	var state := _state("share")
+	push(self, rect.get_center(), k)
+	capsule_button(self, rect, GLASS_TOP, GLASS_BOTTOM, a, 0.0, state)
+	var o := rect.get_center() + sink(state) + Vector2(0, 2)
+	var col := Color(1, 1, 1, 0.95 * a)
+	draw_polyline(PackedVector2Array([o + Vector2(-6, -6), o + Vector2(-13, -6), o + Vector2(-13, 15),
+		o + Vector2(13, 15), o + Vector2(13, -6), o + Vector2(6, -6)]), col, 3.5, true)
+	draw_line(o + Vector2(0, 6), o + Vector2(0, -19), col, 3.5, true)
+	draw_polyline(PackedVector2Array([o + Vector2(-7, -12), o + Vector2(0, -19), o + Vector2(7, -12)]), col, 3.5, true)
+	pop_t(self)
 
 
 # NEW BEST: amber and white sparks flying out from the number and fading,

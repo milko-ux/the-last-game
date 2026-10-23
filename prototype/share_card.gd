@@ -1,0 +1,106 @@
+extends Node2D
+# ============================================================
+# THE SHARE IMAGE (roadmap step 5, "a screenshot moment"): what SHARE on
+# the end screen hands the phone's share sheet. A 1080 x 1350 portrait
+# card (4:5 -- the tallest Instagram's feed shows uncropped; Messages and
+# stories show it whole too):
+#   the moment   the frame the run ended on, without the HUD
+#                (track_test.gd _capture_death_frame), filling the card,
+#                the crop centred on the creature
+#   the words    THE LAST GAME at the top; at the bottom, on a dark fade:
+#                NEW BEST or the best in amber, the distance big, the
+#                roast line, and the dare in amber
+# Drawn with the HUD's own lettering (hud.gd title / bold), rendered once
+# in a SubViewport of its own, saved as a JPEG (user://share.jpg) the
+# native share sheet reads (native/share/share.mm).
+# ============================================================
+
+const Hud := preload("res://prototype/hud.gd")
+
+const SIZE := Vector2i(1080, 1350)
+const PATH := "user://share.jpg"
+# The link the share text carries, once the game has one (a TestFlight
+# public link, then the store's). "" = the text goes without a link.
+const LINK := ""
+
+var frame: Texture2D = null     # the moment; null = the plain dark card
+var focus_x := 0.5              # where the creature was across the frame, 0..1
+var facts := {}                 # distance, best, new_best, roast, rank (strings / bool)
+
+
+# Renders the card for `facts` over `frame_img` and saves it. Returns the
+# saved file's path, or "" when it could not be made. Takes two frames.
+static func save(host: Node, frame_img: Image, focus: float, run_facts: Dictionary) -> String:
+	var vp := SubViewport.new()
+	vp.size = SIZE
+	vp.disable_3d = true
+	vp.render_target_update_mode = SubViewport.UPDATE_ONCE
+	var card: Node2D = load("res://prototype/share_card.gd").new()
+	if frame_img != null and not frame_img.is_empty():
+		card.frame = ImageTexture.create_from_image(frame_img)
+	card.focus_x = focus
+	card.facts = run_facts
+	vp.add_child(card)
+	host.add_child(vp)
+	# Read back on the frame AFTER the one that drew it (never inside the
+	# frame_post_draw signal itself: CLAUDE.md).
+	await RenderingServer.frame_post_draw
+	await host.get_tree().process_frame
+	var img := vp.get_texture().get_image()
+	vp.queue_free()
+	if img == null or img.is_empty():
+		return ""
+	return PATH if img.save_jpg(PATH, 0.9) == OK else ""
+
+
+# The words that go with the image.
+static func text(distance: String) -> String:
+	var t := "I ran %s in The Last Game. Can you beat it?" % distance
+	return t if LINK == "" else t + " " + LINK
+
+
+const INK := Color(0.07, 0.06, 0.13)      # the fades: the HUD glass's plum, darker
+
+func _draw() -> void:
+	var w := float(SIZE.x)
+	var h := float(SIZE.y)
+	draw_rect(Rect2(0, 0, w, h), Hud.PILL_BODY, true)
+	if frame != null:
+		# Cover the card (crop, never stretch), the creature in the middle.
+		var fs := frame.get_size()
+		var k := maxf(w / fs.x, h / fs.y)
+		var size := fs * k
+		var x := clampf(w * 0.5 - focus_x * size.x, w - size.x, 0.0)
+		draw_texture_rect(frame, Rect2(Vector2(x, (h - size.y) * 0.5), size), false)
+	_fade(0.0, 300.0, 0.55, 0.0)       # under the name
+	_fade(h * 0.4, h * 0.66, 0.0, 0.84)   # under the words: dark well before
+	_fade(h * 0.66, h, 0.84, 0.96)        # the number starts
+
+	var white := Color(1, 1, 1, 0.97)
+	var gold := Color(Palette.GOAL, 1.0)
+	var f := Hud.bold()
+	Hud.title(self, f, "THE LAST GAME", w * 0.5, 96.0, 34, 9.0, white)
+
+	var y := h - 412.0
+	if bool(facts.get("new_best", false)):
+		Hud.title(self, f, "NEW BEST", w * 0.5, y, 40, 10.0, gold)
+	elif str(facts.get("best", "")) != "":
+		Hud.title(self, f, str(facts["best"]), w * 0.5, y, 30, 4.0, gold)
+	Hud.title(self, f, str(facts.get("distance", "")), w * 0.5, y + 170.0, 168, 4.0, white)
+	var roast := str(facts.get("roast", ""))
+	if roast != "":
+		var size := 42
+		while size > 26 and Hud.tracked_width(f, roast, size, 1.0) > w - 100.0:
+			size -= 2
+		Hud.title(self, f, roast, w * 0.5, y + 250.0, size, 1.0, Color(1, 1, 1, 0.92))
+	var rank := str(facts.get("rank", ""))
+	if rank != "":
+		Hud.title(self, f, rank, w * 0.5, y + 310.0, 26, 3.0, Color(1, 1, 1, 0.75))
+	Hud.title(self, f, "CAN YOU BEAT IT?", w * 0.5, h - 44.0, 30, 6.0, gold)
+
+
+# A vertical fade of INK from alpha a0 at y0 to a1 at y1.
+func _fade(y0: float, y1: float, a0: float, a1: float) -> void:
+	var w := float(SIZE.x)
+	draw_polygon(PackedVector2Array([Vector2(0, y0), Vector2(w, y0), Vector2(w, y1), Vector2(0, y1)]),
+		PackedColorArray([Color(INK, a0), Color(INK, a0), Color(INK, a1), Color(INK, a1)]))
