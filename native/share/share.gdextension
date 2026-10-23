@@ -1,0 +1,12 @@
+; The share sheet (native/share/share.mm). One build per platform serves
+; the debug (cable) and the release app alike. The Mac's build does
+; nothing; it is there so the Mac's tools load without an error.
+[configuration]
+
+entry_symbol = "share_library_init"
+compatibility_minimum = "4.5"
+
+[libraries]
+
+ios = "res://native/share/bin/libshare.ios.dylib"
+macos = "res://native/share/bin/libshare.macos.dylib"

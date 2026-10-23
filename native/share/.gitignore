@@ -1,0 +1,3 @@
+# scons build state (tools/build_share.sh)
+.sconsign.dblite
+*.os

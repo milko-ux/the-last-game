@@ -1,0 +1,11 @@
+#!/usr/bin/env python
+# The share sheet's GDExtension (share.mm), for the iPhone or the Mac. Run
+# by tools/build_share.sh, which passes GODOT_CPP (the godot-cpp checkout,
+# outside the project) and platform=ios|macos arch=arm64 target=template_release.
+import os
+
+env = SConscript(os.path.join(os.environ["GODOT_CPP"], "SConstruct"))
+env.Append(CCFLAGS=["-fobjc-arc"])
+if env["platform"] == "ios":
+	env.Append(LINKFLAGS=["-framework", "UIKit", "-framework", "Foundation", "-framework", "CoreGraphics"])
+Default(env.SharedLibrary("bin/libshare.%s.dylib" % env["platform"], source=["share.mm"]))
