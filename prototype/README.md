@@ -2,7 +2,7 @@
 
 ## Where we are (2026-10-23) — start here
 
-### START HERE: STEPS 1–4 DONE — NEXT IS STEP 5, THE SHARE / FAIL SCREEN
+### START HERE: STEPS 1–4 DONE — STEP 5 (THE SHARE SCREEN) IS BUILT, MILKO TESTS IT ON THE PHONE
 
 **The plan is `docs/ROADMAP.md`. Read it first; finish a step's "done when" before the next step.**
 
@@ -12,7 +12,7 @@
 | 2 | Native iPhone build (TestFlight) | DONE 2026-10-15 |
 | 3 | Look, round 3 (canyon, time of day, hero, scarf) | DONE 2026-10-22 |
 | 4 | Feel and UI (sounds, hearts, menu, UI kit, motion, season card) | DONE 2026-10-23 |
-| **5** | **The share screen — IN PROGRESS** | part 1 built 2026-10-23 (`62fd305`) |
+| **5** | **The share screen — BUILT, phone test next** | all of it built 2026-10-23 (`62fd305`, `bdd3690`..`2a60757`) |
 | 6 | Soft launch (20–50 testers; seasons with an end date; colour-blind check) | — |
 | 7 | Launch, then money (prizes after the legal / tax / Apple checklist; the golden top hat) | — |
 
@@ -24,10 +24,16 @@
 - **Done when:** a friend who has never seen the game shares their result without being asked.
 - **Built (part 1, `62fd305`, cable app 14:51):** the best line's amber "BEST 92 m" flag at the runway's rim (only while the line is on screen), the NEW BEST fanfare the moment it is crossed, and the end screen's "62 m TO YOUR BEST" / EQUALLED YOUR BEST when a run falls short.
 - **Also (Milko 2026-10-23, `37ac97b`):** the clay hearts bigger in a dark glass tray, the shield a round badge with a crest and a thick ring (amber charging, cyan + pulse armed) — "they need to pop out a bit more". Cable app exported after it.
-- **Still to build:** the **share button** — Godot has no share-sheet API, so a small native iOS plugin (ObjC/Swift, UIActivityViewController) has to be written and tested on the phone: its own session; the **screenshot moment** (capture the frame at death for the share image); the **roast lines** — Milko's voice: Code drafts, Milko edits; "38 m to beat #12" (needs the board entry above the player — the run already posts and gets its rank).
-- Today's end screen (`hud.gd` `_draw_end_screen`): the distance counting up, NEW BEST with a burst and `best.wav`, the rank line, RETRY (green, biggest), MENU, JOIN. Step 5 builds on it.
+- **Built (part 2, 2026-10-23 evening, cable app 22:24)** — one commit each:
+  - `bdd3690` **the roast lines** (`prototype/roast.gd`): one line under the distance, by situation (new best, equalled, close, warm-up, then a coin toss between the killer — slammer, sweeper, gate, orbiter, volley, plate, fall, back edge — and the time of day the run ended in). **Drafted by Code; Milko edits the wording** — it is all in that one file.
+  - `bfb152e` **"38 m TO BEAT #12"** (`Talo.next_place_above`): the nearest board entry above the run that is not yours, after the rank ("#12 GLOBAL · 38 m TO BEAT #11"); for guests too. Today the board has one entry (VoidHusk, 609 m).
+  - `bab71d6` **the share sheet's native code** (`native/share/share.mm`, a GDExtension: native iPhone code Godot loads at start; singleton `NativeShare`). Built by `tools/build_share.sh` with godot-cpp (`godot-4.5-stable`, kept at `../godot-cpp`, outside the project); both `.dylib` files are committed — re-run the script only after changing `share.mm`. A do-nothing Mac build keeps the Mac's tools free of "no GDExtension library" errors; the web has none (its export warns, harmless). The iOS export wraps it into `libshare.ios.framework` and embeds it; an `xcodebuild` of an export: BUILD SUCCEEDED.
+  - `2a60757` **SHARE + the screenshot moment + the share image**: at game over the UI layer is hidden for ONE frame and that frame is kept (the world, clean); SHARE (round glass button beside RETRY, smaller) makes a 1080×1350 card (`prototype/share_card.gd`: the moment cropped on the creature, THE LAST GAME, NEW BEST / best, the distance, the roast, the rank, CAN YOU BEAT IT?) and opens the phone's share sheet with it and "I ran 312 m in The Last Game. Can you beat it?". The black box logs each share (sent / cancelled, and where to). `tools/shot.gd end=1 share=1` makes the image on the Mac.
+- **Not seen by Code: the share sheet itself** — it only exists on the phone. Everything up to it ran on the Mac (end screen, share image).
+- **NEXT (Milko, phone — quit Xcode first if open, then `! open /Users/benim/the-last-game-build/ios/TheLastGame.xcodeproj`, ⌘R):** lose a run → read the roast line and the "TO BEAT" line → tap SHARE → the share sheet opens? → "Save Image" and look at it in Photos, and send one to yourself in Messages. Also: any hitch the moment the run ends (the frame grab)? Then edit the roast lines (tell Code which to change). **Done when** (roadmap): a friend who has never seen the game shares their result without being asked.
+- **Open for Milko:** the share text has **no link** yet (`ShareCard.LINK`, one line) — a TestFlight public link (needs external testing, step 6) or a website? Android gets its own share code later (before step 6).
 
-**State of the repo:** everything is **pushed by Milko up to `3d70d57`** (2026-10-23); after it only README notes. The cable app in `../the-last-game-build/ios/` is exported from the latest code (14:11).
+**State of the repo:** **pushed by Milko up to `357cfa7`** (2026-10-23); `bdd3690`..`2a60757` and this note are local. The cable app in `../the-last-game-build/ios/` is exported from the latest code (22:24).
 
 **Open questions for Milko (not blocking):**
 - The song's real key — the sounds are tuned to Bb C D E A from a chroma count (`tools/make_sfx.py` `ROOT_HZ`, one line).

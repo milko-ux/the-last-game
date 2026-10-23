@@ -68,6 +68,8 @@ The roast-style death/run-over screen people want to post. It's how the game spr
 
 **Done when:** a friend who has never seen the game shares their result without being asked.
 
+**Built (2026-10-23):** the best line's BEST flag and its fanfare, "62 m TO YOUR BEST", the roast lines (`prototype/roast.gd`, Code's drafts for Milko to edit), "38 m TO BEAT #12", the screenshot moment (the frame the run ended on, without the HUD), the share image (`prototype/share_card.gd`, 1080 x 1350) and SHARE beside RETRY opening the iPhone's own share sheet (`native/share/`, a GDExtension). Open: the link in the share text (none until the game has one); Android's share sheet (before step 6). Next: Milko's phone test, then the friend test.
+
 ## 6. Soft launch
 - TestFlight (and Android closed testing) with 20–50 people outside the team.
 - Measure whether they come back the next day and the next week.
