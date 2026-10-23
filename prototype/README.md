@@ -10,6 +10,7 @@ Milko on the kit build: "everything looks okey, but im not really feeling its GR
 3. **First launch straight into a run** (`Progress.played`; old saves with a best or graduated count as played — Milko's phone will NOT show it; a fresh install will).
 - Roadmap updated: step 4's result, step 5's fail-screen items, step 6's colour-blind check and **the season framed with a start/end date from the soft launch** (today the season is only a seed — no end, so no countdown yet), step 7's **prize checklist** (Swedish skill-contest law, the 1 800 kr tax line, Apple 5.3, Google Play, nothing paid may help a prize run, cheat check first, email for winners).
 - **Next:** Milko's phone verdict → tick step 4 → step 5 (the share / fail screen). Open: the song's key; delete the unused grey building models?
+- **Pushed by Milko up to `a08bc87` (2026-10-23).**
 
 ### (2026-10-23, midday) STEP 4 BUILT TO THE END — EVERY SCREEN IN THE MENU'S LOOK, PRESSED / DISABLED STATES; MILKO JUDGES ON THE PHONE
 
