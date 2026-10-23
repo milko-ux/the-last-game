@@ -83,6 +83,7 @@ The roast-style death/run-over screen people want to post. It's how the game spr
 **Done when:** testers keep coming back, and there are no known crashes.
 
 ## 7. Launch, then money
+- **Before the store release: a full code review by area** (Milko 2026-10-24: "when we go live live, like for real"; not needed for TestFlight). Parallel review agents, one per area (the run and its rules; graphics and performance; menus and screens; the leaderboard, saving and the native code; tools), each ranking findings by value (speed, heat and battery, memory, load time, dead code, simpler code). Milko picks; fixes one area per commit with proof nothing changed for the player (layout HASHes, the validator bot at fps=60, the phone readout). Expensive in tokens, decided worth it.
 - App Store + Google Play release.
 - Rewarded video ads only, **never on death**.
 - Later: character skins/outfits — the scarf (`prototype/scarf.gd`, 1 km) is the first item and the slot outfits use; some earned by distance, some bought.

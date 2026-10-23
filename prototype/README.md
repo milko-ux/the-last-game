@@ -40,6 +40,8 @@
 
 **State of the repo:** **pushed by Milko up to `ee57993`** (2026-10-23: the SHARE freeze fix, the heat state, the Godot window block); after it only README notes. **Godot runs only with `--headless`** (hook `.claude/hooks/block-godot-window.sh`; renderer jobs batched, `ALLOW_WINDOW=1`, announced to Milko first).
 
+**2026-10-24, TestFlight for outside testers (Milko: "I want a TestFlight link, feels professional"):** 0.8.0 was "TestFlight Internal Only" and can never take a public link, so a new upload is needed as **"App Store Connect"**. Code made **release build 0.9.0** (`--export-release`; the dev tools now follow the build: off in release, on in the cable app — `Progress.UNLOCK_ALL`), Xcode Release build: SUCCEEDED. **`../the-last-game-build/ios/` holds that RELEASE build now: the next cable test build must be `--export-debug` again.** Milko's steps (Archive → Distribute → App Store Connect; TestFlight → Test Information, an External group "Friends", Submit for Review, Public Link) are in this session's chat; the link goes into `ShareCard.LINK`. If App Store Connect asks for a privacy policy URL, there is none yet (step 6 item). The app icon is still Godot's default robot. Roast lines: Milko keeps all of them, random within the right situation. The full code review is planned for before the store release (ROADMAP step 7).
+
 **Next (step 5's last items):** Milko's roast line edits (`prototype/roast.gd`); the share text's link (`ShareCard.LINK`: TestFlight public link or a website?); shrink the frozen death frame to the card's crop (end screen 227 MB → ~150 MB); then the friend test (the "done when"). The cable app in `../the-last-game-build/ios/` is exported from the latest code (22:24).
 
 **Open questions for Milko (not blocking):**
