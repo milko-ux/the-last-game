@@ -2,7 +2,17 @@
 
 ## Where we are (2026-10-22) — start here
 
-### START HERE (2026-10-22, evening): STEP 4 — CLAY HEARTS + THE MOCKUP MENU BUILT, MILKO TESTS BOTH ON THE PHONE
+### START HERE (2026-10-23): STEP 4 BUILT TO THE END — EVERY SCREEN IN THE MENU'S LOOK, PRESSED / DISABLED STATES; MILKO JUDGES ON THE PHONE
+
+Milko: "Yes lets finish step 4." Built (`7ea151c`, `a3e01a8`, `5759e46`), cable app exported 2026-10-23 12:58:
+- **One UI kit in `prototype/hud.gd`:** `capsule_button` in three states (NORMAL / PRESSED: sinks onto its lip / DISABLED: grey), `button()` with styles (go cyan, glass, goal amber, danger magenta, scarf), `card()` (the rounded glass sheet), the menu's lettering (`bold()`, `tracked()`, `title()`). The old square `glass_pill` is gone.
+- **`prototype/press.gd`:** buttons act when the finger LIFTS on them (slide off = cancel), PRESSED while held, the click on the way down. The in-run pause button still acts on the touch.
+- **Restyled:** settings, the leaderboard (badges, YOU row, round PREV/NEXT that go DISABLED), the account panel (all four pages), the pause panel, the end screen, the in-run word, the round pause button. The trophy and ACCOUNT go DISABLED without a Talo key.
+- **Fixed on the way:** the menu drew its title and PLAY over the account panel.
+- `tools/shot_scene.gd`: a tap is press + release; `hold=1` shoots a PRESSED button.
+- **Next:** Milko's phone verdict on every screen. If it holds, tick step 4 in `docs/ROADMAP.md` ("every screen looks designed, every action has a sound") and start **step 5, the share screen**. Open from before: the song's real key (the sounds assume Bb), and whether to delete the unused grey building models.
+
+### (2026-10-22, evening) STEP 4 — CLAY HEARTS + THE MOCKUP MENU BUILT, MILKO TESTS BOTH ON THE PHONE
 
 Milko asked for the two together, one phone test for both, then the readable leaderboard and the pressed / disabled button states after.
 - **Clay hearts for lives** (`876d03b`, `Hud.clay_heart`): coral clay (`WorldPalette.HEART` `#ef7a64`), dome-shaded rings, a lip, a highlight, specks; a lost life is a pale dent, and the heart squashes flat over it for 0.45 s. Only drawn while lives are on (a graduated player, or from lap 1).
