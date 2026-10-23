@@ -978,6 +978,8 @@ func _process(delta: float) -> void:
 					meter.run_started()
 				BeatClock.start(music)
 				_run_started_ms = Time.get_ticks_msec()
+				if bot == null:
+					Progress.set_played()      # the menu opens from now on (menu.gd, first launch)
 				motion.on_level_start()
 				state = State.RUN
 		State.RUN:

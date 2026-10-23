@@ -221,6 +221,14 @@ func _ready() -> void:
 		print("MENU skipped: a dev URL switch asked for the run")
 		get_tree().change_scene_to_file.call_deferred(RUN_SCENE)
 		return
+	# FIRST LAUNCH (2026-10-23, "zero menus before the first run"; Apple's
+	# onboarding guidance: teach by playing). Until a run has been played
+	# the game opens straight into one -- its TAP TO START and lap 0 are
+	# the tutorial -- and this menu is what the first game over leads to.
+	if not Progress.played:
+		print("MENU skipped: first launch, straight into a run")
+		get_tree().change_scene_to_file.call_deferred(RUN_SCENE)
+		return
 	RenderingServer.frame_post_draw.connect(_on_frame_drawn)
 	_apply_render_scale()
 	# The menu's copy of the run's light: the same direction, published

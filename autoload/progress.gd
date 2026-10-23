@@ -107,6 +107,27 @@ var save_enabled := true
 # The scarf (prototype/scarf.gd): earned once, by reaching its distance in
 # one run; worn from then on.
 var scarf_unlocked := false
+# FIRST LAUNCH (2026-10-23, "zero menus before the first run"): the game
+# opens straight into a run until one has been played; the menu comes
+# after. A save from before this flag counts as played if it has a best
+# or has graduated.
+var played := false
+# The player's rank on the season board when they last opened it: the
+# menu's season card shows a red dot when the rank has dropped since
+# (someone passed them). 0 = never ranked.
+var lb_seen_rank := 0
+
+
+func set_played() -> void:
+	if not played:
+		played = true
+		save_progress()
+
+
+func set_lb_seen_rank(rank: int) -> void:
+	if rank != lb_seen_rank:
+		lb_seen_rank = rank
+		save_progress()
 
 
 func unlock_scarf() -> void:
@@ -257,7 +278,8 @@ func save_progress() -> void:
 		return
 	f.store_string(JSON.stringify({"standard_cleared": standard_cleared, "best_song_time": best_song_time,
 		"best_score": best_score, "levels_cleared": levels_cleared,
-		"graduated": graduated, "best_distance": best_distance, "best_run": best_run, "music_on": music_on, "effects_on": effects_on, "scarf_unlocked": scarf_unlocked}))
+		"graduated": graduated, "best_distance": best_distance, "best_run": best_run, "music_on": music_on, "effects_on": effects_on, "scarf_unlocked": scarf_unlocked,
+		"played": played, "lb_seen_rank": lb_seen_rank}))
 	f.close()
 
 
@@ -292,3 +314,5 @@ func load_progress() -> void:
 		music_on = bool(parsed.get("music_on", sound_on))
 		effects_on = bool(parsed.get("effects_on", sound_on))
 		scarf_unlocked = bool(parsed.get("scarf_unlocked", false))
+		played = bool(parsed.get("played", graduated or not best_distance.is_empty()))
+		lb_seen_rank = int(parsed.get("lb_seen_rank", 0))

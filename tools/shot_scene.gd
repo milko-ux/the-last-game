@@ -81,6 +81,12 @@ func _initialize() -> void:
 	var progress = get_root().get_node_or_null("Progress")
 	if progress != null:
 		progress.save_enabled = false
+		# A shot of a screen must show that screen: a save that has never
+		# played a run would send the menu straight into one (menu.gd, first
+		# launch). In memory only -- the save file is never written here.
+		# Set once the save has loaded (Progress's _ready runs after this,
+		# and before the scene's own).
+		progress.ready.connect(func() -> void: progress.played = true)
 	var packed: PackedScene = load(scene_path)
 	if packed == null:
 		printerr("SHOT SCENE: could not load %s" % scene_path)
