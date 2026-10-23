@@ -768,7 +768,10 @@ func _draw_buttons(c: CanvasItem, screen: Vector2, font: Font, a: float) -> void
 	Hud.pop_t(c)
 
 
-# THE SEASON CARD, bottom left: the leaderboard is the game's hook (real
+# THE SEASON CARD, top left (Milko 2026-10-23: out of PLAY's row, so PLAY
+# stands alone, and smaller than PLAY -- the biggest thing on the menu is
+# PLAY), level with the profile button top right. The leaderboard is the
+# game's hook (real
 # prizes later, roadmap step 7), so it is on the first screen, in the
 # prize colour, amber. What it says (the board's page 0, _fetch_season):
 #   ranked     YOU #12 · 38 m TO #11   (or YOU LEAD)
@@ -777,9 +780,9 @@ func _draw_buttons(c: CanvasItem, screen: Vector2, font: Font, a: float) -> void
 #   the player since they last opened the board (a badge, never a popup).
 # The whole card is the leaderboard button.
 func _draw_season_card(c: CanvasItem, screen: Vector2, font: Font, a: float) -> void:
-	var play_left := screen.x * 0.5 - PLAY_SIZE.x * 0.5
-	var w := clampf(play_left - MARGIN - 24.0, 220.0, 320.0)
-	var card := Rect2(Vector2(MARGIN, screen.y - BOTTOM - 104.0), Vector2(w, 104.0))
+	# Clear of the centred title (GAME is ~380 wide on the phone).
+	var w := clampf(screen.x * 0.5 - 190.0 - MARGIN - 16.0, 200.0, 250.0)
+	var card := Rect2(Vector2(MARGIN, 72.0), Vector2(w, 78.0))
 	var on := _season_state != "off"
 	if on:
 		_rects["leaderboard"] = card
@@ -788,9 +791,9 @@ func _draw_season_card(c: CanvasItem, screen: Vector2, font: Font, a: float) -> 
 	Hud.capsule_button(c, card, Hud.GLASS_TOP, Hud.GLASS_BOTTOM, 0.95 * a, 0.0, st)
 	var o := card.position + Hud.sink(st)
 	var amber := Color(Palette.GOAL.r, Palette.GOAL.g, Palette.GOAL.b, a * (0.5 if not on else 1.0))
-	_draw_trophy(c, o + Vector2(40.0, 52.0), amber)
-	var x := o.x + 74.0
-	Hud.tracked(c, Hud.bold(), "THIS SEASON", Vector2(x, o.y + 30.0), 11, 2.0, amber)
+	_draw_trophy(c, o + Vector2(32.0, 41.0), amber)
+	var x := o.x + 60.0
+	Hud.tracked(c, Hud.bold(), "THIS SEASON", Vector2(x, o.y + 21.0), 10, 2.0, amber)
 	var line := "LEADERBOARD"
 	var sub := ""
 	if _season_state == "loading":
@@ -811,13 +814,13 @@ func _draw_season_card(c: CanvasItem, screen: Vector2, font: Font, a: float) -> 
 		else:
 			line = "NOBODY YET"
 			sub = "BE THE FIRST ON THE BOARD"
-	c.draw_string(Hud.bold(), Vector2(x, o.y + 56.0), line, HORIZONTAL_ALIGNMENT_LEFT, w - 90.0, 18, Color(1, 1, 1, a))
-	c.draw_string(Hud.bold(), Vector2(x, o.y + 76.0), sub, HORIZONTAL_ALIGNMENT_LEFT, w - 90.0, 12, amber)
+	c.draw_string(Hud.bold(), Vector2(x, o.y + 40.0), line, HORIZONTAL_ALIGNMENT_LEFT, w - 74.0, 16, Color(1, 1, 1, a))
+	c.draw_string(Hud.bold(), Vector2(x, o.y + 56.0), sub, HORIZONTAL_ALIGNMENT_LEFT, w - 74.0, 11, amber)
 	var best := Progress.best_distance_for(LapGen.SEASON_SEED)
 	if best > 0:
-		c.draw_string(font, Vector2(x, o.y + 94.0), "YOUR BEST " + Hud.metres(best), HORIZONTAL_ALIGNMENT_LEFT, w - 90.0, 11, Color(1, 1, 1, 0.7 * a))
+		c.draw_string(font, Vector2(x, o.y + 70.0), "YOUR BEST " + Hud.metres(best), HORIZONTAL_ALIGNMENT_LEFT, w - 74.0, 10, Color(1, 1, 1, 0.7 * a))
 	if bool(_season.get("dot", false)):
-		var dot := card.position + Vector2(w - 18.0, 16.0)
+		var dot := card.position + Vector2(w - 16.0, 12.0)
 		c.draw_circle(dot, 9.0, Color(0.93, 0.2, 0.25, a))
 		c.draw_arc(dot, 9.0, 0.0, TAU, 20, Color(1, 1, 1, 0.9 * a), 2.0, true)
 	Hud.pop_t(c)
