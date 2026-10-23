@@ -31,9 +31,13 @@ var lives_max := 0          # 0 = lives are off (a new player's lap 0): nothing 
 var shield := 0.0           # 0..1
 var shield_armed := false
 var shield_pop := 0.0       # 1 -> 0 after the shield was used (the ring flashes)
-const SIDE_GAP := 120.0     # from the screen's centre line to the lives / the ring
-const HEART_SIZE := 26.0
-const HEART_GAP := 32.0
+const SIDE_GAP := 132.0     # from the screen's centre line to the nearest heart / the shield
+# 2026-10-23 (Milko: the hearts and the shield "need to pop out a bit
+# more"): bigger hearts in a dark glass tray, and the shield a round glass
+# badge with a thick ring -- dark behind them is what reads on the light sky.
+const HEART_SIZE := 34.0
+const HEART_GAP := 40.0
+const SHIELD_D := 58.0      # the shield badge's diameter
 const HEART_POP_S := 0.45
 var _heart_pop := []        # per heart, 1 -> 0 after it was lost
 var _lives_seen := -1
@@ -78,6 +82,9 @@ const PAUSE_SIZE := 66.0                 # 48 pt on the phone
 
 func _process(delta: float) -> void:
 	shield_pop = maxf(0.0, shield_pop - delta * 2.5)
+	_t += delta
+	if shield_armed and endless and not paused and not end_shown:
+		queue_redraw()             # the armed shield pulses
 	_pause_t = _pause_t + delta if paused else 0.0
 	_end_t = _end_t + delta if end_shown else 0.0
 	if end_shown and end_new_best and _end_t >= COUNT_S and not _best_played:
@@ -112,6 +119,7 @@ func _process(delta: float) -> void:
 
 
 var _drawn_key: Array = []
+var _t := 0.0
 
 
 func show_word(w: String) -> void:
@@ -187,7 +195,12 @@ func _draw_run_hud(screen: Vector2) -> void:
 	_draw_best_flag()
 	var cx := screen.x * 0.5
 	# The lives as clay hearts (2026-10-22): a lost one is a dent, and for
-	# HEART_POP_S after the loss the heart squashes flat over its dent.
+	# HEART_POP_S after the loss the heart squashes flat over its dent. They
+	# sit in a dark glass tray (2026-10-23) so the coral reads on the sky.
+	if lives_max > 0:
+		var right := cx - SIDE_GAP + HEART_GAP * 0.5 + 6.0
+		var left := cx - SIDE_GAP - (lives_max - 1) * HEART_GAP - HEART_GAP * 0.5 - 6.0
+		capsule_button(self, Rect2(Vector2(left, HUD_Y - 27.0), Vector2(right - left, 54.0)), GLASS_TOP, GLASS_BOTTOM, 0.88)
 	for i in lives_max:
 		var c := Vector2(cx - SIDE_GAP - i * HEART_GAP, HUD_Y)
 		var on := i < lives
@@ -195,18 +208,35 @@ func _draw_run_hud(screen: Vector2) -> void:
 		var pop: float = _heart_pop[i] if i < _heart_pop.size() else 0.0
 		if not on and pop > 0.0:
 			clay_heart(self, c, HEART_SIZE, WorldPalette.HEART, pop, true, 1.0 - pop)
-	var rc := Vector2(cx + SIDE_GAP, HUD_Y)
-	var r := 11.0 + 5.0 * shield_pop
-	draw_circle(rc, r, Color(1, 1, 1, 0.05))
-	draw_arc(rc, r, 0.0, TAU, 32, Color(1, 1, 1, 0.22), 1.5, true)
-	var col: Color = Palette.EDGE if shield_armed else Palette.GOAL
+	_draw_shield(Vector2(cx + SIDE_GAP + SHIELD_D * 0.5 - HEART_GAP * 0.5, HUD_Y))
+
+
+# THE SHIELD BADGE (2026-10-23, it was a thin ring): a round glass badge,
+# a shield in it, and a thick ring around it that fills amber as the dots
+# charge it. Armed: the ring and the shield go cyan (cyan = safe, as the
+# bubble round the creature is) and the badge pulses with a soft glow.
+# Used: it flashes white and swells for a moment.
+func _draw_shield(rc: Vector2) -> void:
+	var pulse := 1.0 + (0.06 * sin(_t * 5.0) if shield_armed else 0.0) + 0.25 * shield_pop
+	var safe := WorldPalette.SAFE.lightened(0.25)
+	push(self, rc, pulse)
+	if shield_armed:
+		draw_circle(rc, SHIELD_D * 0.5 + 8.0, Color(safe, 0.18 + 0.08 * sin(_t * 5.0)))
+	capsule_button(self, Rect2(rc - Vector2(SHIELD_D, SHIELD_D) * 0.5, Vector2(SHIELD_D, SHIELD_D)), GLASS_TOP, GLASS_BOTTOM, 0.92)
+	var r := SHIELD_D * 0.5 - 7.0
+	draw_arc(rc, r, 0.0, TAU, 40, Color(1, 1, 1, 0.16), 5.0, true)
+	var col: Color = safe if shield_armed else Palette.GOAL
 	if shield_pop > 0.0:
-		col = Palette.EDGE.lerp(Color.WHITE, shield_pop)
+		col = safe.lerp(Color.WHITE, shield_pop)
 	var f := 1.0 if shield_armed else clampf(shield, 0.0, 1.0)
 	if f > 0.0 or shield_pop > 0.0:
-		draw_arc(rc, r, -PI * 0.5, -PI * 0.5 + TAU * maxf(f, shield_pop), 32, Color(col.r, col.g, col.b, 0.95), 3.0, true)
-	if shield_armed:
-		draw_circle(rc, 4.0, Color(col.r, col.g, col.b, 0.9))
+		draw_arc(rc, r, -PI * 0.5, -PI * 0.5 + TAU * maxf(f, shield_pop), 40, col, 5.0, true)
+	# The shield: a crest, flat on top, coming to a point.
+	var glyph := Color(safe, 1.0) if shield_armed else Color(1, 1, 1, 0.45 + 0.4 * clampf(shield, 0.0, 1.0))
+	var k := 1.0
+	draw_colored_polygon(PackedVector2Array([rc + Vector2(-9, -10) * k, rc + Vector2(0, -12) * k, rc + Vector2(9, -10) * k,
+		rc + Vector2(8, 1) * k, rc + Vector2(0, 11) * k, rc + Vector2(-8, 1) * k]), glyph)
+	pop_t(self)
 
 
 # The best line's flag: an amber pill (the goal / prize colour) on a thin
