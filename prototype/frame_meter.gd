@@ -341,14 +341,22 @@ func _ready() -> void:
 	add_child(tail)
 	BlackBox.start()
 	if BlackBox.last_session != "":
+		# ONE LINE, not the last session's 30 (2026-10-23, Milko: a wall of
+		# red over the menu, "some shit showed up"). An app stopped by Xcode
+		# while it is on screen ends exactly like a crash -- no pause, the
+		# session marker still set -- so this fires on every such reinstall.
+		# The lines themselves stay in the console and in blackbox.log, where
+		# they are read (xcrun devicectl ... copy from).
+		var lines := BlackBox.last_session.strip_edges().split("\n")
+		var last_t := lines[lines.size() - 1].strip_edges().split(" ")[0] if lines.size() > 0 else "?"
 		_box_label = Label.new()
 		_box_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		_box_label.position = Vector2(622.0 - 980.0, 130.0)
-		_box_label.size = Vector2(980.0, 400.0)
+		_box_label.position = Vector2(622.0 - 430.0, 110.0)
+		_box_label.size = Vector2(430.0, 20.0)
 		_box_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		_box_label.add_theme_font_size_override("font_size", 11)
-		_box_label.add_theme_color_override("font_color", Color(1.0, 0.45, 0.4, 0.95))
-		_box_label.text = "LAST SESSION ENDED AT:\n" + BlackBox.last_session
+		_box_label.add_theme_color_override("font_color", Color(1.0, 0.45, 0.4, 0.8))
+		_box_label.text = "last session did not close (a crash, or Xcode stopped it) at %s · blackbox.log" % last_t
 		add_child(_box_label)
 		print("BLACK BOX, last session:\n" + BlackBox.last_session)
 	taps = url_param("taps") == "1"
