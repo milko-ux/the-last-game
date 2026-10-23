@@ -12,7 +12,7 @@
 | 2 | Native iPhone build (TestFlight) | DONE 2026-10-15 |
 | 3 | Look, round 3 (canyon, time of day, hero, scarf) | DONE 2026-10-22 |
 | 4 | Feel and UI (sounds, hearts, menu, UI kit, motion, season card) | DONE 2026-10-23 |
-| **5** | **The share screen — NEXT** | not started |
+| **5** | **The share screen — IN PROGRESS** | part 1 built 2026-10-23 (`62fd305`) |
 | 6 | Soft launch (20–50 testers; seasons with an end date; colour-blind check) | — |
 | 7 | Launch, then money (prizes after the legal / tax / Apple checklist; the golden top hat) | — |
 
@@ -22,6 +22,8 @@
 - from the research pass: **RETRY stays the biggest element**, the share button beside it; **"38 m to beat #12" / "62 m to your best"** on the screen; **no ads here, ever**.
 - **the best line, labelled** (Milko 2026-10-23, "keep it and label it"): the amber line across the track at your best distance (`track_test.gd` `_best_line`) looked like a glitch — add a small "BEST 92 m" flag at the runway's side, and the NEW BEST fanfare when it is crossed (today: only the rims flash amber, `motion.on_best_crossed`). The cyan line behind the player is the back edge (it kills) — unchanged.
 - **Done when:** a friend who has never seen the game shares their result without being asked.
+- **Built (part 1, `62fd305`, cable app 14:51):** the best line's amber "BEST 92 m" flag at the runway's rim (only while the line is on screen), the NEW BEST fanfare the moment it is crossed, and the end screen's "62 m TO YOUR BEST" / EQUALLED YOUR BEST when a run falls short.
+- **Still to build:** the **share button** — Godot has no share-sheet API, so a small native iOS plugin (ObjC/Swift, UIActivityViewController) has to be written and tested on the phone: its own session; the **screenshot moment** (capture the frame at death for the share image); the **roast lines** — Milko's voice: Code drafts, Milko edits; "38 m to beat #12" (needs the board entry above the player — the run already posts and gets its rank).
 - Today's end screen (`hud.gd` `_draw_end_screen`): the distance counting up, NEW BEST with a burst and `best.wav`, the rank line, RETRY (green, biggest), MENU, JOIN. Step 5 builds on it.
 
 **State of the repo:** everything is **pushed by Milko up to `3d70d57`** (2026-10-23); after it only README notes. The cable app in `../the-last-game-build/ios/` is exported from the latest code (14:11).
