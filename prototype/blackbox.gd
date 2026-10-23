@@ -139,7 +139,8 @@ static func _start_native() -> void:
 		_file.store_line("--- session %s" % Time.get_datetime_string_from_system(false, true))
 	_set_open(true)
 	_last_win = DisplayServer.window_get_size()
-	record("session start %s %s %s %dx%d  %s" % [OS.get_name(), OS.get_version(), OS.get_model_name(), _last_win.x, _last_win.y, renderer_name()])
+	record("session start %s %s %s %dx%d  %s  %s  share sheet %s" % [OS.get_name(), OS.get_version(), OS.get_model_name(), _last_win.x, _last_win.y,
+		renderer_name(), device_state(), "on" if Engine.has_singleton("NativeShare") else "off"])
 
 
 # Which renderer and driver are drawing: "compat opengl3" (the web, and the
@@ -206,8 +207,17 @@ static func heartbeat(delta: float, bar: int, frame_ms: float, drift_ms: float) 
 	if _since_beat < HEARTBEAT_S:
 		return
 	_since_beat = 0.0
-	record("bar %d  %.1f ms  deaths %d seeks %d  drift %+d ms  tex %d MB buf %d MB objs %d  win %dx%d" % [bar, frame_ms,
+	record("bar %d  %.1f ms  deaths %d seeks %d  drift %+d ms  tex %d MB buf %d MB objs %d  win %dx%d  %s" % [bar, frame_ms,
 		deaths, seeks, int(drift_ms),
 		int(Performance.get_monitor(Performance.RENDER_TEXTURE_MEM_USED) / 1048576.0),
 		int(Performance.get_monitor(Performance.RENDER_BUFFER_MEM_USED) / 1048576.0),
-		int(Performance.get_monitor(Performance.OBJECT_COUNT)), win.x, win.y])
+		int(Performance.get_monitor(Performance.OBJECT_COUNT)), win.x, win.y, device_state()])
+
+
+# The phone's heat state and Low Power Mode ("thermal fair, LOW POWER"),
+# from the native code (native/share/share.mm); "" where it is not loaded
+# (the web). A throttled phone reads like a slow build: this tells them apart.
+static func device_state() -> String:
+	if not Engine.has_singleton("NativeShare"):
+		return ""
+	return str(Engine.get_singleton("NativeShare").device_state())

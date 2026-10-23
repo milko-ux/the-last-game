@@ -6,6 +6,7 @@ import os
 
 env = SConscript(os.path.join(os.environ["GODOT_CPP"], "SConstruct"))
 env.Append(CCFLAGS=["-fobjc-arc"])
+env.Append(LINKFLAGS=["-framework", "Foundation"])
 if env["platform"] == "ios":
-	env.Append(LINKFLAGS=["-framework", "UIKit", "-framework", "Foundation", "-framework", "CoreGraphics"])
+	env.Append(LINKFLAGS=["-framework", "UIKit", "-framework", "CoreGraphics"])
 Default(env.SharedLibrary("bin/libshare.%s.dylib" % env["platform"], source=["share.mm"]))

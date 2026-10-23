@@ -14,6 +14,11 @@
 // picked a target and it went through; activity = which one, e.g.
 // "com.apple.UIKit.activity.Message"; "" when cancelled).
 //
+// Also device_state() (2026-10-23): the phone's own heat state and Low
+// Power Mode, e.g. "thermal fair" or "thermal serious, LOW POWER" -- the
+// black box writes it on every readout line. Godot has no way to read
+// either, and a hot or throttled phone looks exactly like a slow build.
+//
 // Built by tools/build_share.sh (godot-cpp) for the iPhone and the Mac.
 // The Mac build only exists so the Mac's headless tools load the project
 // without an error: there share() returns false. The web has none: there
@@ -26,6 +31,7 @@
 #include <godot_cpp/godot.hpp>
 
 #include <TargetConditionals.h>
+#import <Foundation/Foundation.h>
 #if TARGET_OS_IOS
 #import <UIKit/UIKit.h>
 #endif
@@ -38,12 +44,27 @@ class NativeShare : public Object {
 protected:
 	static void _bind_methods() {
 		ClassDB::bind_method(D_METHOD("share", "text", "image_path"), &NativeShare::share);
+		ClassDB::bind_method(D_METHOD("device_state"), &NativeShare::device_state);
 		ADD_SIGNAL(MethodInfo("closed", PropertyInfo(Variant::BOOL, "completed"), PropertyInfo(Variant::STRING, "activity")));
 	}
 
 public:
 	bool share(const String &p_text, const String &p_image_path);
+	String device_state();
 };
+
+String NativeShare::device_state() {
+	static const char *names[] = { "nominal", "fair", "serious", "critical" };
+	NSProcessInfo *info = NSProcessInfo.processInfo;
+	int t = (int)info.thermalState;
+	String out = String("thermal ") + ((t >= 0 && t < 4) ? names[t] : "?");
+	if (@available(macOS 12.0, iOS 9.0, *)) {
+		if (info.isLowPowerModeEnabled) {
+			out += ", LOW POWER";
+		}
+	}
+	return out;
+}
 
 #if TARGET_OS_IOS
 static NSString *ns(const String &p_s) {

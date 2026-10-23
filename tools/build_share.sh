@@ -21,8 +21,9 @@ if [ ! -x "$GODOT_CPP/.venv/bin/scons" ]; then
 fi
 
 cd native/share
-for platform in ios macos; do
-	GODOT_CPP="$GODOT_CPP" "$GODOT_CPP/.venv/bin/scons" platform=$platform arch=arm64 target=template_release -j8
-	rm -f share.os    # the object file: only the .dylib is kept
-done
+# iOS 15: the oldest iOS Godot 4.7's apps run on (the export's own minimum).
+GODOT_CPP="$GODOT_CPP" "$GODOT_CPP/.venv/bin/scons" platform=ios ios_min_version=15.0 arch=arm64 target=template_release -j8
+rm -f share.os    # the object file: only the .dylib is kept
+GODOT_CPP="$GODOT_CPP" "$GODOT_CPP/.venv/bin/scons" platform=macos arch=arm64 target=template_release -j8
+rm -f share.os
 ls -la bin/
