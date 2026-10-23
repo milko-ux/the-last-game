@@ -57,10 +57,13 @@ The game ships as an app, so we test what players will actually run instead of S
 
 **Done when:** every screen looks designed, and every action has a sound.
 
+**Built (2026-10-22/23):** synthesised sounds tuned to the song (EFFECTS / MUSIC switches), clay hearts, the menu after the mockup, one UI kit for every screen with pressed and disabled states, buttons that act on the finger's lift. Then the research pass (Milko 2026-10-23: "okay is not GREAT"): motion on every screen (pop-ins, squash and spring, PLAY breathes, the end screen counts up and bursts on a new best), PLAY alone with cyan only for a screen's main action, the season card on the menu (rank and gap, or #1 to beat; a red dot when passed), one profile button, and the first launch straight into a run. Waiting for Milko's phone verdict.
+
 ## 5. The share screen
 The roast-style death/run-over screen people want to post. It's how the game spreads for free.
 - Distance, best, a roast line, and a screenshot moment.
 - A share button that opens the phone's own share sheet (image + link).
+- From the research pass (2026-10-23): RETRY stays the biggest element, the share button beside it; "38 m to beat #12" / "62 m to your best" on the screen (how close it was); no ads here, ever.
 
 **Done when:** a friend who has never seen the game shares their result without being asked.
 
@@ -71,6 +74,9 @@ The roast-style death/run-over screen people want to post. It's how the game spr
 - Store pages: icon, screenshots, a short video, privacy policy. GDPR consent is already built.
 - Before release: `Progress.UNLOCK_ALL = false`, bump the version, keep the MCP plugin off.
 
+- From the research pass (2026-10-23): a colour-blindness check of a normal frame (deuteranopia / protanopia) -- magenta against cyan must never be the only cue (Game Accessibility Guidelines: no essential information by colour alone).
+- **The season, framed from the soft launch:** a season with a start and an end date (today the season is only a seed, 20260901, with no end), a countdown on the menu's season card, and the board reset each season -- so testers already play for a place, before any prize exists.
+
 **Done when:** testers keep coming back, and there are no known crashes.
 
 ## 7. Launch, then money
@@ -78,5 +84,12 @@ The roast-style death/run-over screen people want to post. It's how the game spr
 - Rewarded video ads only, **never on death**.
 - Later: character skins/outfits — the scarf (`prototype/scarf.gd`, 1 km) is the first item and the slot outfits use; some earned by distance, some bought.
 - **Options discussed 2026-10-21, to decide at soft launch with real player numbers** (the rule above stands until then): a "watch an ad to continue" once per run; a "remove ads" or supporter purchase; occasional interstitials only with limits (never before a session's first run, never on day one, at most one per ~3 game overs, never after a new best). Milko asked about a short ad before every run and after every game over; Code advised against (the top reason players delete runners; ad length is the network's, 5–30 s, not 3–5).
-- Later: monthly sponsored leaderboard prizes (top 3 globally and top 3 per country) once there are players.
+- Later: monthly sponsored leaderboard prizes (top 3 globally and top 3 per country) once there are players. **Milko 2026-10-23: real-life prizes are the game's standout feature.** Before the first prize (research 2026-10-23, verify each with the source / an accountant):
+  - Sweden: a contest decided by skill and free to enter is not gambling (no Spelinspektionen licence); the marketing law applies -- clear rules: the prizes, how winners are chosen, the same conditions for all.
+  - Tax: a prize above 3 % of the prisbasbelopp (1 800 kr in 2026) is taxable; the organiser may have to withhold tax and file a kontrolluppgift. Ask the accountant before choosing prizes.
+  - Apple: the developer must be the sponsor; the official rules inside the app, available at all times, saying Apple is not involved. A free prediction app with prizes was flagged as gambling (5.3.4): book an App Review consultation.
+  - Google Play is stricter on prizes: read its Real-Money Gambling, Games and Contests policy before Android.
+  - Nothing paid may help a prize run (a paid continue or an ad that adds score could count as a stake).
+  - The cheat check (the crown item below) before any prize; the rules say winners' runs are checked.
+  - Email (optional today) becomes required for prize eligibility only.
 - **The crown item: a golden top hat for the top 3 of the leaderboard, lost when you drop out of the top 3** (Milko, 2026-10-22). The scarf is the distance prize; the hat is the leaders' prize. Before it is built, the leaderboard needs a server-side plausibility check — today it trusts whatever the phone posts (a phone call carried a run to a fake 1097 m on 2026-10-22, fixed in `4154376`), and a prize only three people can hold is the first thing cheaters aim at. Every entry already carries `run_seconds` for that check. To decide when it is built: global or per country, and how often the top 3 is read (Talo caches listings 600 s).
