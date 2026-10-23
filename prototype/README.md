@@ -2,7 +2,13 @@
 
 ## Where we are (2026-10-22) — start here
 
-### START HERE (2026-10-23, afternoon): THE RESEARCH PASS BUILT — MOTION, THE NEW MENU, THE FIRST LAUNCH; MILKO'S PHONE VERDICT CLOSES STEP 4
+### START HERE (2026-10-23, late afternoon): STEP 4 DONE — NEXT IS STEP 5, THE SHARE / FAIL SCREEN
+
+Milko's last note: the season card top left and smaller, so PLAY stands alone and is the biggest thing on the menu (`0954f41`) — "Then we can close step 4." **Step 4 is ticked DONE in `docs/ROADMAP.md`.** Cable app exported with it.
+
+**Next: step 5, the share screen** (`docs/ROADMAP.md`): the run-over screen people want to post — distance, best, a roast line, a screenshot moment, a share button on the phone's own share sheet; from the research pass: RETRY stays the biggest element with share beside it, "38 m to beat #12" / "62 m to your best". Open questions for Milko: the song's real key (the sounds assume Bb); delete the unused grey building models?
+
+### (2026-10-23, afternoon) THE RESEARCH PASS BUILT — MOTION, THE NEW MENU, THE FIRST LAUNCH; MILKO'S PHONE VERDICT CLOSES STEP 4
 
 Milko on the kit build: "everything looks okey, but im not really feeling its GREAT". He researched top games (Clash Royale, Monument Valley, Supercell, Candy Crush, Subway Surfers, PUBG) with Claude desktop; Code checked it against sources and proposed three steps, all built (`ebfa649`, `57e5a6b`), cable app exported 13:48:
 1. **Motion** (`Hud.intro_k` / `zoom` / `push`, `press.gd` `scale()` + a haptic tick): every sheet pops in, buttons squash and spring, PLAY breathes; the end screen counts the distance up and a NEW BEST lands with a spark burst and its own fanfare (`best.wav`); RETRY is the biggest element.

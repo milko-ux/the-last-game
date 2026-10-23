@@ -47,7 +47,7 @@ The game ships as an app, so we test what players will actually run instead of S
 
 **Result (2026-10-22):** Milko called it done after the long phone run: frame avg / worst 16.7 / 17.5, the `3D` scale held at 0.75 (the frame governor never had to step down), sunset readable from 330–340 m, the scarf at 1 km. The walk stays as it is (Milko: "the walk is fine"). Last piece: the scarf, round 2 (`f1f194d`). The run also showed a phone call could carry a run to a fake 1097 m — fixed (`4154376`): the run pauses when the phone takes over, and a checkpoint needs the player to have reached it.
 
-## 4. Feel and UI
+## 4. Feel and UI — DONE 2026-10-23
 - Sound effects: jump, land, death, near-miss, shield charge and shield use, menu clicks.
 - The main menu styled like the approved mockup: Start Game, Leaderboard, Settings, Nickname, Register.
 - Clay hearts for lives.
@@ -57,7 +57,7 @@ The game ships as an app, so we test what players will actually run instead of S
 
 **Done when:** every screen looks designed, and every action has a sound.
 
-**Built (2026-10-22/23):** synthesised sounds tuned to the song (EFFECTS / MUSIC switches), clay hearts, the menu after the mockup, one UI kit for every screen with pressed and disabled states, buttons that act on the finger's lift. Then the research pass (Milko 2026-10-23: "okay is not GREAT"): motion on every screen (pop-ins, squash and spring, PLAY breathes, the end screen counts up and bursts on a new best), PLAY alone with cyan only for a screen's main action, the season card on the menu (rank and gap, or #1 to beat; a red dot when passed), one profile button, and the first launch straight into a run. Waiting for Milko's phone verdict.
+**Built (2026-10-22/23):** synthesised sounds tuned to the song (EFFECTS / MUSIC switches), clay hearts, the menu after the mockup, one UI kit for every screen with pressed and disabled states, buttons that act on the finger's lift. Then the research pass (Milko 2026-10-23: "okay is not GREAT"): motion on every screen (pop-ins, squash and spring, PLAY breathes, the end screen counts up and bursts on a new best), PLAY alone with cyan only for a screen's main action, the season card on the menu (rank and gap, or #1 to beat; a red dot when passed), one profile button, and the first launch straight into a run. Then Milko's notes on the phone: the main action in the scarf's dark green instead of cyan ("cyan feels too much like AI-slop"; the scarf teaser took the cyan), the season card top left and smaller so PLAY stands alone and biggest. **Milko closed step 4 on 2026-10-23** ("Then we can close step 4").
 
 ## 5. The share screen
 The roast-style death/run-over screen people want to post. It's how the game spreads for free.
