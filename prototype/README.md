@@ -20,6 +20,7 @@
 - distance, best, a roast line, a screenshot moment;
 - a share button that opens the phone's own share sheet (image + link);
 - from the research pass: **RETRY stays the biggest element**, the share button beside it; **"38 m to beat #12" / "62 m to your best"** on the screen; **no ads here, ever**.
+- **the best line, labelled** (Milko 2026-10-23, "keep it and label it"): the amber line across the track at your best distance (`track_test.gd` `_best_line`) looked like a glitch — add a small "BEST 92 m" flag at the runway's side, and the NEW BEST fanfare when it is crossed (today: only the rims flash amber, `motion.on_best_crossed`). The cyan line behind the player is the back edge (it kills) — unchanged.
 - **Done when:** a friend who has never seen the game shares their result without being asked.
 - Today's end screen (`hud.gd` `_draw_end_screen`): the distance counting up, NEW BEST with a burst and `best.wav`, the rank line, RETRY (green, biggest), MENU, JOIN. Step 5 builds on it.
 

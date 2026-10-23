@@ -64,6 +64,7 @@ The roast-style death/run-over screen people want to post. It's how the game spr
 - Distance, best, a roast line, and a screenshot moment.
 - A share button that opens the phone's own share sheet (image + link).
 - From the research pass (2026-10-23): RETRY stays the biggest element, the share button beside it; "38 m to beat #12" / "62 m to your best" on the screen (how close it was); no ads here, ever.
+- **The best line, labelled** (Milko 2026-10-23: "keep it and label it"): the thin amber line across the track at the player's best distance (`track_test.gd` `_best_line`, since 2026-09-20) read as a glitch. Give it a small "BEST 92 m" flag standing at the side of the runway, and play the NEW BEST fanfare (`best.wav`) the moment it is crossed (today only the runway rims flash amber, `motion.on_best_crossed`).
 
 **Done when:** a friend who has never seen the game shares their result without being asked.
 
